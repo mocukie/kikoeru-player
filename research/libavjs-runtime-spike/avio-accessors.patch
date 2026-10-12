@@ -1,0 +1,30 @@
+diff -ru a/funcs.json b/funcs.json
+--- a/funcs.json	2026-10-12 17:19:10.521665652 +0000
++++ b/funcs.json	2026-10-12 17:19:10.536628248 +0000
+@@ -341,6 +341,10 @@
+                 "start_timehi",
+                 {"name": "time_base", "rational": true}
+             ]],
++            ["AVIOContext", [
++                "eof_reached",
++                "error"
++            ]],
+             ["AVChapter", [
+                 "end",
+                 "endhi",
+diff -ru a/src/b-avformat.c b/src/b-avformat.c
+--- a/src/b-avformat.c	2026-10-12 17:19:10.523791643 +0000
++++ b/src/b-avformat.c	2026-10-12 17:19:10.536518616 +0000
+@@ -57,6 +57,12 @@
+ 
+ RAT(AVChapter, time_base)
+ 
++/* AVIOContext：中止 read 後要重設 error／eof_reached 才能 seek 繼續讀（#17） */
++#define B(type, field) A(AVIOContext, type, field)
++B(int, eof_reached)
++B(int, error)
++#undef B
++
+ int avformat_seek_file_min(
+     AVFormatContext *s, int stream_index, int64_t ts, int flags
+ ) {
