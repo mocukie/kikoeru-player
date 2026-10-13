@@ -169,7 +169,7 @@ export interface Engine extends EventTarget {
    */
   setAudioOffset(trackId: string, offset: number): Promise<void>;
 
-  /** 卸載當前媒體、回到 idle，保留 AudioContext 與 Worker，供之後 load() 使用。 */
+  /** 卸載當前媒體、回到 idle，保留 AudioContext，供之後 load() 使用；media Worker 會被 terminate（ADR-0002）。 */
   unload(): Promise<void>;
 
   /**
