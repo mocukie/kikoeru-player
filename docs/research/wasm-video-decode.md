@@ -157,3 +157,47 @@ decode-only fps（Chromium／WebKit／Firefox）：
 - wasm threads 需要 `SharedArrayBuffer`，也就是頁面必須 cross-origin isolated。Safari 15.2 起支援 COOP／COEP 並重新開放 `SharedArrayBuffer` 與 wasm threads [WebKit「New WebKit Features in Safari 15.2」；BCD `webassembly/threads-and-atomics`：Chrome 74、Firefox 79、Safari 15.2]。
 - COEP `credentialless` 在 Safari 仍不支援（BCD：`safari: false`），所以在 Safari 上要 isolation，就只能全站送 `require-corp`。這正是 ADR-0001 否決 SAB 的理由。
 - 本次的 harness 必須讓**所有** response（頁面、Worker script、pthread Worker 的 glue、wasm、媒體）都帶 COOP／COEP／CORP，才能在三個引擎都取得 isolation。
+
+## 6. 由 I420 buffer 建立 VideoFrame（以 WebKit 為主）
+
+**8-bit I420 很便宜；10-bit 不能直接建，WebKit 與 Firefox 都要先轉成 8-bit，而在 JS 轉很貴** [實測：`data/vfcost.json`、`data/pipeline.json`]。
+
+`new VideoFrame(buffer, init)` 的同步耗時（Worker 內，ms p50／p95；WebKit 的計時解析度是 1 ms）：
+
+| 尺寸 | 格式 | Chromium | WebKit | Firefox |
+|---|---|---|---|---|
+| 1280×720 | I420 | 0.1／0.2 | 0／1 | 1／1 |
+| 1280×720 | I420＋`transfer` | 0／0.1 | 0／1 | 0／1 |
+| 1280×720 | NV12 | 0.1／0.2 | 0／1 | 1／1 |
+| 1280×720 | I420P10 | 0.2／0.4 | **TypeError** | **NotSupportedError** |
+| 1920×1080 | I420 | 0.2／1.5 | 1／1 | 1／2 |
+| 1920×1080 | I420＋`transfer` | 0／0.1 | 1／1 | 1／2 |
+| 1920×1080 | NV12 | 0.2／0.4 | 0／1 | 1／2 |
+| 1920×1080 | I420P10 | 0.6／3.4 | **TypeError** | **NotSupportedError** |
+
+在 JS 從 wasm heap 取出（模擬 dav1d 的 stride 對齊）的成本，ms p50：
+
+| 尺寸 | 8-bit：逐列 `set` 成緊密 I420 | 10-bit：逐 sample 右移 2 位轉 8-bit |
+|---|---|---|
+| 1280×720 | 0.6／1／0（Chromium／WebKit／Firefox） | 4.5／4／3 |
+| 1920×1080 | 1.2／1／1 | 10.1／9／10 |
+
+- **WebKit 的 10-bit**：buffer 建構子遇到高 bit depth 格式，先檢查 `webCodecsHighBitDepthEnabled`，關閉時丟 `TypeError`；就算打開，switch 也只實作 NV12、RGBA／RGBX、BGRA／BGRX、I420、I420A，其餘丟 `NotSupportedError`。這個 pref 是 `testable`，預設 false [原始碼：WebKit `WebCodecsVideoFrame.cpp` 的 `create(…, BufferInit)`、`UnifiedWebPreferences.yaml`]。所以 Safari 上 10-bit AV1 一定要轉成 8-bit 才能交給 `VideoFrame`。
+- **Firefox 155** 也不接受 I420P10 的 buffer（`NotSupportedError`），Chromium 可以。
+- **Safari 的 I420 會再轉一次**：Cocoa 上 `VideoFrame::createI420` 呼叫 libwebrtc 的 `createPixelBufferFromI420Buffer`，建一個 NV12 的 `CVPixelBuffer`（沒有指定 IOSurface 屬性）再把 I420 複製並交錯成 NV12 [原始碼：`VideoFrameCV.mm`、`webkit_sdk/WebKit/WebKitUtilities.mm`]。Linux WPE 的數字量不到這段，實機要另外量。直接給 NV12 理論上可以省掉交錯，但交錯只是換到 wasm／JS 端做 [推論]。
+- **完整路徑**（Worker 解碼 → 取出 → VideoFrame → transfer → 主執行緒 `drawImage` 到 1280×720 canvas，不限速）：
+
+| 檔案 | flavor | pipeline fps（Chromium／WebKit／Firefox） | 取出 ms p50 | VideoFrame ms p50 | drawImage ms p50 |
+|---|---|---|---|---|---|
+| bbb-1080-8-2M | oz | 23.2／21.2／21.3 | 1.4／2／1 | 0.5／1／1 | 7.1／4／6 |
+| bbb-1080-8-2M | o3s-noasy | 39.3／38.0／39.7 | 1.4／2／1 | 0.5／1／1 | 7.0／3／6 |
+| bbb-1080-10-2M | oz | 16.8／16.8／17.3 | 11.3／7／9 | 0.5／1／1 | 7.1／4／6 |
+| bbb-1080-10-2M | o3s-noasy | **25.3／27.8／26.8** | 11.3／7／9 | 0.5／1／1 | 7.2／4／7 |
+| bbb-720-8-1M | oz | 50.2／45.3／46.1 | 0.6／1／1 | 0.2／0／1 | 2.3／2／2 |
+| bbb-720-8-1M | o3s-noasy | 79.5／81.3／85.7 | 0.7／1／1 | 0.2／0／0 | 2.3／2／2 |
+| bbb-720-10-1M | oz | 37.3／37.6／37.4 | 5.1／3／4 | 0.2／0／1 | 2.4／3／2 |
+| bbb-720-10-1M | o3s-noasy | 53.8／61.1／58.9 | 5.1／3／4 | 0.2／0／0 | 2.3／2／2 |
+
+  - 8-bit 的取出加 VideoFrame 每張 1.5–3 ms，約佔 1080p 解碼時間的 7–10%；`drawImage` 在主執行緒，不佔 Worker。
+  - **10-bit 的 JS 轉換每張 7–11 ms（1080p）**，讓 `o3s` 的 1080p 10-bit 從 decode-only 37 fps 掉到 25–28 fps，**從可即時變成跟不上**。這段應該放進 wasm 做（C 迴圈加 `-msimd128`，或在 dav1d wasm 內加一個小的轉換函式），預期可降到接近 8-bit 取出的 1–2 ms [推論，未實作]。用 libswscale 也可以，但 variant 要多帶 swscale。
+  - transfer 延遲 p50 ≤ 1 ms（Chromium 偶爾 2.5 ms），與 #17 相同。WebKit 的 1px readback 約 3–4 ms，也與 #17 相同（軟體繪製）。
