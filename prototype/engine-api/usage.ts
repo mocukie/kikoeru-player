@@ -37,7 +37,7 @@ async function openWork(fileUrl: string) {
   try {
     const media = await engine.load(
       { kind: 'http', url: fileUrl },
-      { paused: false, preferredLanguages: { audio: ['jpn'], subtitle: ['zho', 'chi'] } },
+      { paused: false, preferredLanguages: { audio: ['ja'], subtitle: ['zh-Hant', 'zh'] } },
     );
     document.title = `${media.format} ${formatTime(media.duration)}`;
   } catch (e) {

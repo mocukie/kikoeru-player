@@ -27,8 +27,17 @@ export interface EngineOptions {
     /** 解碼前封包佇列上限，秒。 */
     packetQueueSeconds?: number;
   };
-  /** 卡住偵測：buffering 超過此毫秒數就嘗試恢復並發出 `stall`，預設 8000。 */
+  /**
+   * 讀取失敗的自動重試：只針對 5xx 與網路錯誤，以指數退避重試；401／403／404 不重試、直接回報。
+   * 預設 { attempts: 3, baseDelayMs: 500 }。
+   */
+  retry?: { attempts?: number; baseDelayMs?: number };
+  /** 卡住偵測：buffering 超過此毫秒數就中止讀取、從目前位置重新 seek，並發出 `stall`。預設 8000。 */
   stallTimeout?: number;
+  /** 卡住後自動恢復的次數上限，用完仍卡住就以最後一次的讀取錯誤進入 'error'。預設 2。 */
+  stallAttempts?: number;
+  /** 預設的偏好語言（BCP 47），load() 的 preferredLanguages 會覆蓋。 */
+  preferredLanguages?: { audio?: string[]; subtitle?: string[] };
   /** 背景（document.hidden）時停止解碼影片、只播聲音，回前景時從 keyframe 重新同步。預設 true。 */
   suspendVideoWhenHidden?: boolean;
   /** 診斷用 log hook；未設定時 Engine 不輸出任何 log。 */
@@ -49,7 +58,7 @@ export interface EngineOptions {
 export type EngineState =
   | 'idle' //      沒有載入任何媒體（初始、unload() 之後）
   | 'loading' //   load() 進行中：開檔、probe、填第一段緩衝
-  | 'ready' //     載入完成、還沒開始播放過（Q2：要不要併進 paused）
+  | 'ready' //     載入完成、還沒開始播放過
   | 'playing' //   音訊時鐘在走
   | 'paused' //    使用者暫停
   | 'buffering' // 想播但資料不夠，時鐘停住
@@ -70,7 +79,7 @@ export interface Engine {
 
   readonly state: EngineState;
   /**
-   * 使用者的播放意圖，與 state 分開（Q3）。seeking／buffering／loading 結束後
+   * 使用者的播放意圖，與 state 分開。seeking／buffering／loading 結束後
    * 依此回到 playing 或 paused。play() 設為 false、pause() 設為 true。
    */
   readonly paused: boolean;
@@ -89,7 +98,7 @@ export interface Engine {
   /** 影片的顯示尺寸（已套用旋轉與 SAR）；沒有影片軌時為 null。 */
   readonly videoSize: VideoSize | null;
 
-  // ── 同步設定（Q4：即時生效、最後一次勝出，不經過指令佇列） ──
+  // ── 同步設定（即時生效、最後一次勝出，不經過指令佇列） ──
 
   /** 0–1，套用時有 gain ramp。 */
   volume: number;
@@ -136,6 +145,7 @@ export interface Engine {
   /**
    * 精準 seek（影片到 frame、音訊到 sample）。連續呼叫時只有最後一個會執行，
    * 被取代的以 AbortError 結束。resolve 實際落點（會被夾在 [0, duration]）。
+   * loading 期間呼叫時改寫該次 load 的起點，於 load 完成時一起 resolve。
    */
   seek(time: number): Promise<number>;
 
@@ -148,7 +158,8 @@ export interface Engine {
   /**
    * 以另一個來源加入外掛音軌，回傳新的 AudioTrack（origin: 'external'）。
    * 不會自動選用；要用 selectTracks({ audio: track.id }) 切過去。
-   * 外掛音軌屬於當前媒體，下一次 load()／unload() 時一併移除。
+   * 外掛音軌屬於當前媒體，下一次 load()／unload() 時一併移除，reload() 時保留。
+   * 載入失敗時 reject 非致命的 EngineError（fatal: false），主媒體繼續播放。
    */
   addExternalAudio(source: Source, options?: { offset?: number; label?: string }): Promise<AudioTrack>;
   removeExternalAudio(trackId: string): Promise<void>;
@@ -180,7 +191,7 @@ export interface Engine {
   // ── 字幕 ──
 
   /**
-   * Q8：整條內嵌字幕軌一次取出。是否由 Engine 提供待「內嵌字幕整軌取出的歸屬」定案；
+   * 整條內嵌字幕軌一次取出。是否由 Engine 提供待「內嵌字幕整軌取出的歸屬」定案；
    * 若保留，形狀如下：可取消、有進度、不影響播放。
    */
   extractSubtitles?(
@@ -205,10 +216,11 @@ export interface LoadOptions {
   /** false 時載入完成後直接播放（等同 load 完再 play()）。預設 true：停在 ready。 */
   paused?: boolean;
   /**
-   * 初始軌道選擇。未指定的 kind 依偏好語言、再依容器的 default 旗標選；
-   * 字幕預設只在 forced 或 preferredLanguages 命中時開啟（Q6）。
+   * 初始軌道選擇。未指定的 kind：音軌依偏好語言 → default 旗標 → 第一條；
+   * 字幕只在 forced 或命中偏好語言時開啟。
    */
   tracks?: Partial<TrackSelection>;
+  /** 偏好語言（BCP 47），覆蓋 EngineOptions.preferredLanguages。 */
   preferredLanguages?: { audio?: string[]; subtitle?: string[] };
   /** 外部取消；效果等同被下一個 load() 取代。 */
   signal?: AbortSignal;
@@ -217,10 +229,10 @@ export interface LoadOptions {
 // ───────────────────────────── 來源 ─────────────────────────────
 
 /**
- * 檔案來源（Q1）。用可序列化的描述而不是物件，讓 Engine 能在任何執行緒重建讀取器；
- * 測試用 'bytes'，本機檔案用 'blob'。'custom' 是逃生口：每次讀取都回到主執行緒呼叫，較慢。
+ * 檔案來源。用可序列化的描述而不是物件，讓 Engine 能在任何執行緒重建讀取器；
+ * 測試用 'bytes'，本機檔案用 'blob'。之後若需要 App 自訂讀法，再加入新的 kind。
  */
-export type Source = HttpSource | BytesSource | BlobSource | CustomSource;
+export type Source = HttpSource | BytesSource | BlobSource;
 
 export interface HttpSource {
   kind: 'http';
@@ -244,13 +256,6 @@ export interface BlobSource {
   blob: Blob;
 }
 
-export interface CustomSource {
-  kind: 'custom';
-  name?: string;
-  size(signal: AbortSignal): Promise<number>;
-  /** 回傳 [offset, offset + length) 的資料；到檔尾時可以較短。必須遵守 signal。 */
-  read(offset: number, length: number, signal: AbortSignal): Promise<Uint8Array>;
-}
 
 // ───────────────────────────── 媒體與軌道 ─────────────────────────────
 
@@ -279,8 +284,10 @@ export interface TrackBase {
   /** false 時無法選用；原因見 unsupportedReason。 */
   supported: boolean;
   unsupportedReason?: 'codec' | 'platform' | 'bitmap-subtitle';
-  /** BCP 47 或容器原值（ISO 639-2，例如 'jpn'）。Q7：要不要正規化。 */
+  /** 正規化為 BCP 47，例如 'ja'、'zh'；容器標 'und' 或無法對照時為 undefined。 */
   language?: string;
+  /** 容器內的原值，例如 'jpn'、'chi'。 */
+  rawLanguage?: string;
   title?: string;
   default: boolean;
   forced: boolean;

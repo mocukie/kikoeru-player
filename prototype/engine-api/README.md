@@ -48,19 +48,22 @@
 - getter 顯示已生效的值（`paused` 例外，它是意圖）。
 - tracks 在 load 後只因指令改變；播放中才出現的 stream 只記 log。
 
+## 已定案
+
+- Q1 來源：可序列化描述 `http`／`bytes`／`blob`，不提供 `custom`（之後可加新 kind）。
+- Q2 保留 `ready`。
+- Q3 `paused`（意圖）與 `state`（實際狀況）分開。
+- Q4 `volume`、`muted`、`playbackRate` 為同步屬性；seek、切軌、offset 為 async 指令。
+- Q5 `reload()`：同一份媒體重新開檔，保留位置、paused、選軌、外掛音軌、offset；track id 不變；stream 結構不同時 `SOURCE_CHANGED`。
+- Q6 預設選軌：音軌依偏好語言 → default 旗標 → 第一條；字幕只在 forced 或命中偏好語言時開啟。偏好語言可在 `createEngine()` 設預設值、`load()` 覆蓋。
+- Q7 `language` 正規化為 BCP 47，另附 `rawLanguage`。
+- Q8 先保留 `extractSubtitles()` 的形狀，是否實作由「內嵌字幕整軌取出的歸屬」決定。
+- Q11 Engine 設定 `canvas.width/height` 為影片顯示尺寸，縮放交給 App 的 CSS。
+- Q12 外掛音軌屬於當前媒體（`load()`／`unload()` 移除、`reload()` 保留），加入後不自動選用，載入失敗為非致命錯誤。
+- Q13 重試可設定：5xx／網路錯誤預設指數退避 3 次（base 500ms）；401／403／404 不重試；卡住 8 秒後中止讀取並重新 seek，最多 2 次。
+- Q14 loading 期間的 `seek()` 改寫該次 load 的起點，與 load 一起 resolve。
+
 ## 待定案的問題
 
-我的建議寫在每題後面，等你改或推翻。
-
-1. **Q1 來源的形狀**：可序列化的描述（`http`／`bytes`／`blob`）加一個 `custom` 逃生口，而不是讓 App 傳讀檔物件。理由：讀檔在 Worker 內執行，物件傳不過去。建議：採用；`custom` 要不要留？
-2. **Q2 `ready` 要不要獨立**：與 `paused` 的差別只在「還沒播過」。建議：保留，App 可以用它決定要不要顯示大的播放鍵。
-3. **Q3 `paused` 與 `state` 分開**：比照 `HTMLMediaElement.paused`。建議：採用，否則 seeking／buffering 結束後要回哪個狀態無從表達。
-4. **Q4 同步屬性與非同步指令的分界**：音量、靜音、速度做成同步屬性；offset 因為要重新同步，做成指令。建議：採用。
-5. ~~Q5 session 失效後的接續~~ **已定**：`engine.reload()` 以同一份媒體重新開檔，保留位置、paused、選軌、外掛音軌、offset；track id 不變；stream 結構不同時 `SOURCE_CHANGED`。
-6. **Q6 預設選軌**：依 `preferredLanguages`，再依容器 default 旗標；字幕只在 forced 或語言命中時開啟。
-7. **Q7 language 正規化**：容器給 ISO 639-2（`jpn`）、MP4 可能是別的。要不要統一成 BCP 47（`ja`）？
-8. **Q8 `extractSubtitles()`**：只留形狀，是否提供由「內嵌字幕整軌取出的歸屬」決定。
-9. **Q9 行動裝置**：`mobile` 選項只留位置，由「行動裝置支援的歸屬」決定。
-10. **Q10 事件 API**：`on()` 回傳 unsubscribe，而不是繼承 `EventTarget`。理由：payload 有型別、不用 `CustomEvent`。
-11. **Q11 canvas 尺寸**：Engine 設定 `canvas.width/height` 為影片顯示尺寸，縮放交給 CSS。替代方案：App 決定 canvas 大小，Engine 依其縮放繪製（高 DPI 時畫面較清楚，但 Engine 要監聽 resize）。
-12. **Q12 外掛音軌的生命週期**：屬於當前媒體，`load()`／`unload()` 時移除；加入後不自動選用。
+- Q9 行動裝置：Engine 選項（A）還是 hook（B）。
+- Q10 事件 API：`on()`／`off()` 還是繼承 `EventTarget`。
