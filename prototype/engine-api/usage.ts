@@ -121,18 +121,10 @@ function handleEngineError(error: EngineError) {
 
 engine.on('error', ({ error }) => handleEngineError(error)); // 播放途中的致命錯誤也走同一條
 
-async function resumeAfterLogin(error: EngineError) {
-  // 記下失效前的狀態：Engine 進入 error 後 tracks／selectedTracks 仍保留到下次 load。
-  const position = error.position;
-  const wasPlaying = !engine.paused;
-  const selection: TrackSelection = { ...engine.selectedTracks };
-  const source = currentSource();
-
+async function resumeAfterLogin(_error: EngineError) {
   await session.reLogin(); // App 的 session 失效流程
-  await engine
-    .load(source, { startTime: position, paused: !wasPlaying, tracks: selection })
-    .catch(ignoreAbort);
-  // Q5：外掛音軌與 offset 不會自動回來，App 要自己重加——要不要讓 Engine 提供 reload()？
+  // 位置、播放意圖、選軌、外掛音軌與 offset 都由 Engine 保留，原地接續。
+  await engine.reload().catch(ignoreAbort);
 }
 
 // ─── 8. 診斷 ───

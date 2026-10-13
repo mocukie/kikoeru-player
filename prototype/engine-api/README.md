@@ -13,6 +13,7 @@
 | 從 | 觸發 | 到 |
 | --- | --- | --- |
 | 任何（destroy 前） | `load()` | loading |
+| ready 以後、error | `reload()` | loading → 依保留的 `paused` 回 ready／paused／playing |
 | loading | probe 完成、起點的資料備妥 | ready（`paused`）／playing |
 | loading | 失敗 | error |
 | ready、paused | `play()` | playing（資料不夠時 buffering） |
@@ -31,14 +32,21 @@
 
 ## 指令佇列
 
-- 指令：`load`、`play`、`pause`、`seek`、`selectTracks`、`addExternalAudio`、`removeExternalAudio`、`setAudioOffset`、`unload`、`destroy`。一律回傳 Promise，依呼叫順序執行。
+- 指令：`load`、`reload`、`play`、`pause`、`seek`、`selectTracks`、`addExternalAudio`、`removeExternalAudio`、`setAudioOffset`、`unload`、`destroy`。一律回傳 Promise，依呼叫順序執行。
 - 取代規則：
-  - `load()`／`unload()`／`destroy()` 取代所有尚未完成的指令。
+  - `load()`／`reload()`／`unload()`／`destroy()` 取代所有尚未完成的指令。
   - `seek()` 取代尚未完成的 `seek()`（包括執行中的，讀取會被中止）。
   - `selectTracks()` 同一 kind 只保留最後一個。
   - `play()` 與 `pause()` 互相取代。
 - 被取代的指令 reject `DOMException('AbortError')`；App 用 `isAbortError()` 忽略。
 - `volume`、`muted`、`playbackRate` 是同步屬性，不進佇列。
+
+## 同步 getter 的規則
+
+- 主執行緒保留鏡像，Worker 在值改變時推送；持續變動、只存在於 Worker 的數字放 `getStats()`。
+- 順序保證：指令 resolve 時 getter 已是新值、事件已發出。
+- getter 顯示已生效的值（`paused` 例外，它是意圖）。
+- tracks 在 load 後只因指令改變；播放中才出現的 stream 只記 log。
 
 ## 待定案的問題
 
@@ -48,7 +56,7 @@
 2. **Q2 `ready` 要不要獨立**：與 `paused` 的差別只在「還沒播過」。建議：保留，App 可以用它決定要不要顯示大的播放鍵。
 3. **Q3 `paused` 與 `state` 分開**：比照 `HTMLMediaElement.paused`。建議：採用，否則 seeking／buffering 結束後要回哪個狀態無從表達。
 4. **Q4 同步屬性與非同步指令的分界**：音量、靜音、速度做成同步屬性；offset 因為要重新同步，做成指令。建議：採用。
-5. **Q5 session 失效後的接續**：草稿是 App 用 `load(source, { startTime, paused, tracks })` 重新載入，外掛音軌與 offset 要自己重加。替代方案：`engine.reload()` 保留外掛音軌、offset 與位置重新開檔，或在 401 時停在 buffering 等 `retry()`。
+5. ~~Q5 session 失效後的接續~~ **已定**：`engine.reload()` 以同一份媒體重新開檔，保留位置、paused、選軌、外掛音軌、offset；track id 不變；stream 結構不同時 `SOURCE_CHANGED`。
 6. **Q6 預設選軌**：依 `preferredLanguages`，再依容器 default 旗標；字幕只在 forced 或語言命中時開啟。
 7. **Q7 language 正規化**：容器給 ISO 639-2（`jpn`）、MP4 可能是別的。要不要統一成 BCP 47（`ja`）？
 8. **Q8 `extractSubtitles()`**：只留形狀，是否提供由「內嵌字幕整軌取出的歸屬」決定。

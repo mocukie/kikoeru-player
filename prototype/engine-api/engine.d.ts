@@ -58,7 +58,15 @@ export type EngineState =
   | 'error'; //    當前媒體發生致命錯誤，見 `engine.error`；load() 可重新開始
 
 export interface Engine {
-  // ── 唯讀狀態（同步讀取，值以主執行緒最後得知的為準） ──
+  // ── 唯讀狀態 ──
+  //
+  // 同步讀取：主執行緒保留鏡像，由 Worker 在值改變時推送；持續變動又只存在於 Worker 的數字放在 getStats()。
+  // 規則：
+  // - 順序保證：指令的 Promise resolve 時，相關 getter 已是新值，對應事件也已發出。
+  // - getter 顯示「已生效」的值：例如 selectTracks() 進行中，selectedTracks 仍是舊軌，新軌出聲後才更新。
+  //   唯一例外是 paused，它是使用者意圖，play()／pause() 呼叫當下就改變。
+  // - tracks 在 load() 之後只因指令改變（addExternalAudio、removeExternalAudio、setAudioOffset、
+  //   selectTracks 發現 codec 實際不支援）。播放中才出現的 stream 只記 log、不加入。
 
   readonly state: EngineState;
   /**
@@ -107,6 +115,14 @@ export interface Engine {
    * 失敗時 reject EngineError，state 變為 'error'。
    */
   load(source: Source, options?: LoadOptions): Promise<MediaInfo>;
+
+  /**
+   * 以同一份媒體重新開檔，用於 session 失效等錯誤之後的接續；ready 以後的任何狀態與 'error' 都可呼叫。
+   * 保留：位置（error 時取 error.position）、paused、軌道選擇、外掛音軌、各音軌 offset、音量與速度。
+   * track id 不變。重新開檔後 stream 結構與先前不同時 reject EngineError('SOURCE_CHANGED')。
+   * 取代規則與 load() 相同。
+   */
+  reload(): Promise<MediaInfo>;
 
   /**
    * 設定 paused = false。resolve 於 state 真正進入 playing（音訊開始輸出）。
@@ -250,7 +266,7 @@ export type Track = AudioTrack | VideoTrack | SubtitleTrack;
 export type TrackKind = Track['kind'];
 
 export interface TrackBase {
-  /** Engine 內唯一、跨 load 不重複，例如 'a:1'、'ext:3'。 */
+  /** Engine 內唯一、跨 load 不重複（reload() 保留），例如 'a:1'、'ext:3'。 */
   id: string;
   /** 'container'：容器內的 stream；'external'：addExternalAudio() 加入的來源。 */
   origin: 'container' | 'external';
@@ -377,7 +393,7 @@ export type EngineErrorCode =
   | 'SOURCE_SERVER' //           5xx（已自動重試後仍失敗）
   | 'SOURCE_NETWORK' //          網路中斷、CORS、DNS（已自動重試後仍失敗）
   | 'SOURCE_RANGE_UNSUPPORTED' // 伺服器不回 206
-  | 'SOURCE_CHANGED' //          [延] 讀到一半檔案被換掉（ETag／If-Range），先保留代碼
+  | 'SOURCE_CHANGED' //          reload() 時 stream 結構不同；[延] 讀到一半檔案被換掉（ETag／If-Range）
   // 格式與解碼
   | 'FORMAT_UNSUPPORTED' //      probe 失敗、不認得的容器
   | 'FORMAT_CORRUPT' //          demux 途中資料損毀
