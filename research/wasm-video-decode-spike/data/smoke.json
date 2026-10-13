@@ -1,0 +1,555 @@
+{
+ "decode {\"file\":\"bbb-1080-8-2M.mp4\",\"frames\":60}": {
+  "chromium": {
+   "ok": true,
+   "result": {
+    "file": "bbb-1080-8-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "none",
+    "packets": 60,
+    "frames": 60,
+    "keys": 2,
+    "fmt": 0,
+    "loadMs": 30,
+    "wallMs": 1583,
+    "flushMs": 0,
+    "decodeFps": 37.9,
+    "perPacketDecodeMs": {
+     "n": 50,
+     "mean": 18.25,
+     "p50": 12.5,
+     "p95": 71,
+     "p99": 138.3,
+     "max": 138.3
+    },
+    "copyMs": null,
+    "videoFrameMs": null,
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32
+   },
+   "ms": 1748,
+   "version": "153.0.8010.12"
+  },
+  "webkit": {
+   "ok": true,
+   "result": {
+    "file": "bbb-1080-8-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "none",
+    "packets": 60,
+    "frames": 60,
+    "keys": 2,
+    "fmt": 0,
+    "loadMs": 38,
+    "wallMs": 1699,
+    "flushMs": 0,
+    "decodeFps": 35.3,
+    "perPacketDecodeMs": {
+     "n": 50,
+     "mean": 18.88,
+     "p50": 12,
+     "p95": 69,
+     "p99": 149,
+     "max": 149
+    },
+    "copyMs": null,
+    "videoFrameMs": null,
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 8
+   },
+   "ms": 1896,
+   "version": "26.6"
+  }
+ },
+ "decode {\"file\":\"bbb-1080-10-2M.mp4\",\"frames\":60,\"out\":\"vf\"}": {
+  "chromium": {
+   "ok": true,
+   "result": {
+    "file": "bbb-1080-10-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "vf",
+    "packets": 60,
+    "frames": 60,
+    "keys": 2,
+    "fmt": "62/I420/1920x1080",
+    "loadMs": 31,
+    "wallMs": 2744,
+    "flushMs": 0,
+    "decodeFps": 21.9,
+    "perPacketDecodeMs": {
+     "n": 50,
+     "mean": 24.92,
+     "p50": 21.4,
+     "p95": 88.3,
+     "p99": 167.3,
+     "max": 167.3
+    },
+    "copyMs": {
+     "n": 60,
+     "mean": 11.41,
+     "p50": 11.2,
+     "p95": 12.9,
+     "p99": 12.9,
+     "max": 12.9
+    },
+    "videoFrameMs": {
+     "n": 60,
+     "mean": 0.6,
+     "p50": 0.3,
+     "p95": 2.5,
+     "p99": 8.2,
+     "max": 8.2
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32
+   },
+   "ms": 2918,
+   "version": "153.0.8010.12"
+  },
+  "webkit": {
+   "ok": true,
+   "result": {
+    "file": "bbb-1080-10-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "vf",
+    "packets": 60,
+    "frames": 60,
+    "keys": 2,
+    "fmt": "62/I420/1920x1080",
+    "loadMs": 31,
+    "wallMs": 2502,
+    "flushMs": 0,
+    "decodeFps": 24,
+    "perPacketDecodeMs": {
+     "n": 50,
+     "mean": 24.38,
+     "p50": 20,
+     "p95": 86,
+     "p99": 176,
+     "max": 176
+    },
+    "copyMs": {
+     "n": 60,
+     "mean": 7.3,
+     "p50": 7,
+     "p95": 9,
+     "p99": 13,
+     "max": 13
+    },
+    "videoFrameMs": {
+     "n": 60,
+     "mean": 0.8,
+     "p50": 1,
+     "p95": 1,
+     "p99": 18,
+     "max": 18
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 8
+   },
+   "ms": 2690,
+   "version": "26.6"
+  }
+ },
+ "m-pipeline {\"file\":\"bbb-1080-8-2M.mp4\",\"frames\":60}": {
+  "chromium": {
+   "ok": true,
+   "result": {
+    "file": "bbb-1080-8-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 60,
+    "frames": 60,
+    "keys": 2,
+    "fmt": "0/I420/1920x1080",
+    "loadMs": 31,
+    "wallMs": 1983,
+    "flushMs": 11,
+    "decodeFps": 30.3,
+    "perPacketDecodeMs": {
+     "n": 50,
+     "mean": 22.7,
+     "p50": 14.1,
+     "p95": 97.4,
+     "p99": 199.4,
+     "max": 199.4
+    },
+    "copyMs": {
+     "n": 60,
+     "mean": 1.68,
+     "p50": 1.4,
+     "p95": 3.2,
+     "p99": 5,
+     "max": 5
+    },
+    "videoFrameMs": {
+     "n": 60,
+     "mean": 0.55,
+     "p50": 0.5,
+     "p95": 1.2,
+     "p99": 2.6,
+     "max": 2.6
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 60,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 60,
+     "mean": 2.6,
+     "p50": 0.5,
+     "p95": 8.8,
+     "p99": 11.8,
+     "max": 11.8
+    },
+    "drawImageMs": {
+     "n": 60,
+     "mean": 7.08,
+     "p50": 6.2,
+     "p95": 12.9,
+     "p99": 14.2,
+     "max": 14.2
+    },
+    "readback1pxMs": {
+     "n": 6,
+     "mean": 1.02,
+     "p50": 0.1,
+     "p95": 5.6,
+     "p99": 5.6,
+     "max": 5.6
+    },
+    "pipelineFps": 33.2
+   },
+   "ms": 2157,
+   "version": "153.0.8010.12"
+  },
+  "webkit": {
+   "ok": true,
+   "result": {
+    "file": "bbb-1080-8-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 60,
+    "frames": 60,
+    "keys": 2,
+    "fmt": "0/I420/1920x1080",
+    "loadMs": 32,
+    "wallMs": 1843,
+    "flushMs": 11,
+    "decodeFps": 32.6,
+    "perPacketDecodeMs": {
+     "n": 50,
+     "mean": 18.94,
+     "p50": 13,
+     "p95": 68,
+     "p99": 147,
+     "max": 147
+    },
+    "copyMs": {
+     "n": 60,
+     "mean": 1.75,
+     "p50": 2,
+     "p95": 3,
+     "p99": 5,
+     "max": 5
+    },
+    "videoFrameMs": {
+     "n": 60,
+     "mean": 0.82,
+     "p50": 1,
+     "p95": 2,
+     "p99": 12,
+     "max": 12
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 8,
+    "drawn": 60,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 60,
+     "mean": 5.32,
+     "p50": 1,
+     "p95": 47,
+     "p99": 70,
+     "max": 70
+    },
+    "drawImageMs": {
+     "n": 60,
+     "mean": 4.17,
+     "p50": 3,
+     "p95": 6,
+     "p99": 19,
+     "max": 19
+    },
+    "readback1pxMs": {
+     "n": 6,
+     "mean": 22.33,
+     "p50": 5,
+     "p95": 105,
+     "p99": 105,
+     "max": 105
+    },
+    "pipelineFps": 36.1
+   },
+   "ms": 2036,
+   "version": "26.6"
+  }
+ },
+ "decode {\"file\":\"bbb-1080-8-2M.mp4\",\"frames\":60,\"target\":\"thr\",\"threads\":4,\"pool\":5,\"coi\":true}": {
+  "chromium": {
+   "ok": false,
+   "error": "page.evaluate: Error: worker error: Uncaught [object Event]\n    at w.onerror (http://127.0.0.1:44929/main.mjs:9:30)",
+   "ms": 166,
+   "version": "153.0.8010.12"
+  }
+ },
+ "vfcost {\"n\":30}": {
+  "chromium": {
+   "ok": true,
+   "result": [
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 30,
+      "mean": 0.13,
+      "p50": 0.1,
+      "p95": 0.2,
+      "p99": 0.7,
+      "max": 0.7
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420",
+     "transfer": true,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 30,
+      "mean": 0.03,
+      "p50": 0,
+      "p95": 0.1,
+      "p99": 0.6,
+      "max": 0.6
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "NV12",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "NV12",
+     "newVideoFrameMs": {
+      "n": 30,
+      "mean": 0.14,
+      "p50": 0.1,
+      "p95": 0.2,
+      "p99": 0.7,
+      "max": 0.7
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420P10",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420P10",
+     "newVideoFrameMs": {
+      "n": 30,
+      "mean": 0.41,
+      "p50": 0.3,
+      "p95": 1.1,
+      "p99": 4.3,
+      "max": 4.3
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420P10",
+     "transfer": true,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420P10",
+     "newVideoFrameMs": {
+      "n": 30,
+      "mean": 0.01,
+      "p50": 0,
+      "p95": 0.1,
+      "p99": 0.1,
+      "max": 0.1
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "copyStrided8To_I420Ms": {
+      "n": 30,
+      "mean": 0.62,
+      "p50": 0.6,
+      "p95": 1,
+      "p99": 1.7,
+      "max": 1.7
+     },
+     "convert10to8Ms": {
+      "n": 30,
+      "mean": 4.73,
+      "p50": 4.5,
+      "p95": 6.5,
+      "p99": 9.2,
+      "max": 9.2
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 30,
+      "mean": 0.59,
+      "p50": 0.3,
+      "p95": 1.8,
+      "p99": 6.9,
+      "max": 6.9
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420",
+     "transfer": true,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 30,
+      "mean": 0.01,
+      "p50": 0,
+      "p95": 0.1,
+      "p99": 0.1,
+      "max": 0.1
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "NV12",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "NV12",
+     "newVideoFrameMs": {
+      "n": 30,
+      "mean": 0.38,
+      "p50": 0.3,
+      "p95": 1.5,
+      "p99": 2.1,
+      "max": 2.1
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420P10",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420P10",
+     "newVideoFrameMs": {
+      "n": 30,
+      "mean": 1,
+      "p50": 0.6,
+      "p95": 3.7,
+      "p99": 4.2,
+      "max": 4.2
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420P10",
+     "transfer": true,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420P10",
+     "newVideoFrameMs": {
+      "n": 30,
+      "mean": 0.03,
+      "p50": 0,
+      "p95": 0.1,
+      "p99": 0.1,
+      "max": 0.1
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "copyStrided8To_I420Ms": {
+      "n": 30,
+      "mean": 1.31,
+      "p50": 1.2,
+      "p95": 2.3,
+      "p99": 3.3,
+      "max": 3.3
+     },
+     "convert10to8Ms": {
+      "n": 30,
+      "mean": 11.22,
+      "p50": 10.2,
+      "p95": 13.7,
+      "p99": 26.7,
+      "max": 26.7
+     }
+    }
+   ],
+   "ms": 859,
+   "version": "153.0.8010.12"
+  }
+ }
+}

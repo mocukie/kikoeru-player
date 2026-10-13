@@ -1,0 +1,38 @@
+diff -ru a/funcs.json b/funcs.json
+--- a/funcs.json	2026-10-12 14:09:38.221710193 +0000
++++ b/funcs.json	2026-10-12 14:09:38.238373695 +0000
+@@ -333,9 +333,12 @@
+             ["AVStream", [
+                 "codecpar",
+                 "discard",
++                "disposition",
+                 "duration",
+                 "durationhi",
+                 "metadata",
++                "start_time",
++                "start_timehi",
+                 {"name": "time_base", "rational": true}
+             ]],
+             ["AVChapter", [
+@@ -461,6 +464,7 @@
+             ["avfilter_graph_create_filter_js", "number", ["number", "string", "string", "number", "number"]],
+             ["avfilter_graph_free", null, ["number"]],
+             ["avfilter_graph_parse", "number", ["number", "string", "number", "number", "number"]],
++            ["avfilter_graph_send_command", "number", ["number", "string", "string", "string", "number", "number", "number"]],
+             ["avfilter_inout_alloc", "number", []],
+             ["avfilter_inout_free", null, ["number"]],
+             ["avfilter_link", "number", ["number", "number", "number", "number"]],
+diff -ru a/src/b-avformat.c b/src/b-avformat.c
+--- a/src/b-avformat.c	2026-10-12 14:09:38.220569014 +0000
++++ b/src/b-avformat.c	2026-10-12 14:09:38.238276142 +0000
+@@ -36,8 +36,10 @@
+ #define BL(type, field) AL(AVStream, type, field)
+ B(AVCodecParameters *, codecpar)
+ B(enum AVDiscard, discard)
++B(int, disposition)
+ BL(int64_t, duration)
+ B(AVDictionary *, metadata)
++BL(int64_t, start_time)
+ #undef B
+ #undef BL
+ 

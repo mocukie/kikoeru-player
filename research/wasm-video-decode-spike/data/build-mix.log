@@ -1,0 +1,46 @@
+mix kikoeru-afv: build 100s
+mix kikoeru-dav1d: build 96s
+total 30092
+drwxrwxr-x 2 sa sa     860 Oct 13 17:07 .
+drwxrwxr-x 9 sa sa     200 Oct 13 17:07 ..
+-rw-r--r-- 1 sa sa  291148 Oct 13 16:12 libav-6.10.9.0-kikoeru-af-oz.wasm.mjs
+-rw-r--r-- 1 sa sa 2086913 Oct 13 15:52 libav-6.10.9.0-kikoeru-af-oz.wasm.wasm
+-rw-r--r-- 1 sa sa   29153 Oct 13 15:52 libav-6.10.9.0-kikoeru-af.mjs
+-rw-rw-r-- 1 sa sa  293066 Oct 13 17:05 libav-6.10.9.0-kikoeru-afv-mix.wasm.mjs
+-rw-r--r-- 1 sa sa 2858052 Oct 13 17:05 libav-6.10.9.0-kikoeru-afv-mix.wasm.wasm
+-rw-r--r-- 1 sa sa  293063 Oct 13 16:12 libav-6.10.9.0-kikoeru-afv-oz.wasm.mjs
+-rw-r--r-- 1 sa sa 2659744 Oct 13 15:53 libav-6.10.9.0-kikoeru-afv-oz.wasm.wasm
+-rw-r--r-- 1 sa sa   29155 Oct 13 17:05 libav-6.10.9.0-kikoeru-afv.mjs
+-rw-rw-r-- 1 sa sa  235807 Oct 13 17:07 libav-6.10.9.0-kikoeru-dav1d-mix-noasy.thr.mjs
+-rw-r--r-- 1 sa sa 1025757 Oct 13 17:07 libav-6.10.9.0-kikoeru-dav1d-mix-noasy.thr.wasm
+-rw-rw-r-- 1 sa sa  219994 Oct 13 17:07 libav-6.10.9.0-kikoeru-dav1d-mix-noasy.wasm.mjs
+-rw-r--r-- 1 sa sa  997739 Oct 13 17:07 libav-6.10.9.0-kikoeru-dav1d-mix-noasy.wasm.wasm
+-rw-rw-r-- 1 sa sa  241827 Oct 13 17:07 libav-6.10.9.0-kikoeru-dav1d-mix.thr.mjs
+-rw-r--r-- 1 sa sa 1380940 Oct 13 17:07 libav-6.10.9.0-kikoeru-dav1d-mix.thr.wasm
+-rw-rw-r-- 1 sa sa  227879 Oct 13 17:07 libav-6.10.9.0-kikoeru-dav1d-mix.wasm.mjs
+-rw-r--r-- 1 sa sa 1293407 Oct 13 17:07 libav-6.10.9.0-kikoeru-dav1d-mix.wasm.wasm
+-rw-rw-r-- 1 sa sa  236373 Oct 13 16:12 libav-6.10.9.0-kikoeru-dav1d-o3-noasy.thr.mjs
+-rw-r--r-- 1 sa sa 1037650 Oct 13 15:59 libav-6.10.9.0-kikoeru-dav1d-o3-noasy.thr.wasm
+-rw-rw-r-- 1 sa sa  220389 Oct 13 16:12 libav-6.10.9.0-kikoeru-dav1d-o3-noasy.wasm.mjs
+-rw-r--r-- 1 sa sa 1007986 Oct 13 15:59 libav-6.10.9.0-kikoeru-dav1d-o3-noasy.wasm.wasm
+-rw-r--r-- 1 sa sa  242282 Oct 13 16:12 libav-6.10.9.0-kikoeru-dav1d-o3.thr.mjs
+-rw-r--r-- 1 sa sa 1400562 Oct 13 15:59 libav-6.10.9.0-kikoeru-dav1d-o3.thr.wasm
+-rw-r--r-- 1 sa sa  228274 Oct 13 16:12 libav-6.10.9.0-kikoeru-dav1d-o3.wasm.mjs
+-rw-r--r-- 1 sa sa 1309886 Oct 13 15:59 libav-6.10.9.0-kikoeru-dav1d-o3.wasm.wasm
+-rw-rw-r-- 1 sa sa  236377 Oct 13 16:12 libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.thr.mjs
+-rw-r--r-- 1 sa sa 1116668 Oct 13 16:01 libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.thr.wasm
+-rw-rw-r-- 1 sa sa  220392 Oct 13 16:12 libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.wasm.mjs
+-rw-r--r-- 1 sa sa 1086998 Oct 13 16:01 libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.wasm.wasm
+-rw-r--r-- 1 sa sa  242286 Oct 13 16:12 libav-6.10.9.0-kikoeru-dav1d-o3s.thr.mjs
+-rw-r--r-- 1 sa sa 1480977 Oct 13 16:01 libav-6.10.9.0-kikoeru-dav1d-o3s.thr.wasm
+-rw-r--r-- 1 sa sa  228277 Oct 13 16:12 libav-6.10.9.0-kikoeru-dav1d-o3s.wasm.mjs
+-rw-r--r-- 1 sa sa 1390142 Oct 13 16:01 libav-6.10.9.0-kikoeru-dav1d-o3s.wasm.wasm
+-rw-rw-r-- 1 sa sa  235803 Oct 13 16:12 libav-6.10.9.0-kikoeru-dav1d-oz-noasy.thr.mjs
+-rw-r--r-- 1 sa sa  839523 Oct 13 15:55 libav-6.10.9.0-kikoeru-dav1d-oz-noasy.thr.wasm
+-rw-rw-r-- 1 sa sa  219991 Oct 13 16:12 libav-6.10.9.0-kikoeru-dav1d-oz-noasy.wasm.mjs
+-rw-r--r-- 1 sa sa  811381 Oct 13 15:55 libav-6.10.9.0-kikoeru-dav1d-oz-noasy.wasm.wasm
+-rw-r--r-- 1 sa sa  241823 Oct 13 16:12 libav-6.10.9.0-kikoeru-dav1d-oz.thr.mjs
+-rw-r--r-- 1 sa sa 1183277 Oct 13 15:55 libav-6.10.9.0-kikoeru-dav1d-oz.thr.wasm
+-rw-r--r-- 1 sa sa  227876 Oct 13 16:12 libav-6.10.9.0-kikoeru-dav1d-oz.wasm.mjs
+-rw-r--r-- 1 sa sa 1095201 Oct 13 15:55 libav-6.10.9.0-kikoeru-dav1d-oz.wasm.wasm
+-rw-r--r-- 1 sa sa   25711 Oct 13 17:07 libav-6.10.9.0-kikoeru-dav1d.mjs

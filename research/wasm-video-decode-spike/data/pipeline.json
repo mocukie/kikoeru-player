@@ -1,0 +1,1962 @@
+{
+ "m-pipeline {\"file\":\"bbb-1080-8-2M.mp4\",\"flavor\":\"oz\",\"noasy\":false}": {
+  "chromium": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 24.3,
+    "realtimeFactor": 0.81,
+    "prerollMsDecodeOnly": 4752,
+    "prerollMsWithOutput": 5950,
+    "file": "bbb-1080-8-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "0/I420/1920x1080",
+    "loadMs": 33,
+    "wallMs": 26075,
+    "flushMs": 7,
+    "decodeFps": 23,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 40.67,
+     "p50": 17.1,
+     "p95": 164.3,
+     "p99": 379.9,
+     "max": 518.3
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 1.48,
+     "p50": 1.4,
+     "p95": 1.8,
+     "p99": 2,
+     "max": 3.7
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.52,
+     "p50": 0.5,
+     "p95": 0.6,
+     "p99": 4.9,
+     "max": 6.7
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 2.4,
+     "p50": 0.1,
+     "p95": 6.3,
+     "p99": 7.2,
+     "max": 9.3
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 7.18,
+     "p50": 7.1,
+     "p95": 7.8,
+     "p99": 11.9,
+     "max": 15.3
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.04,
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.3,
+     "max": 0.3
+    },
+    "pipelineFps": 23.2
+   },
+   "ms": 26252,
+   "version": "153.0.8010.12"
+  },
+  "webkit": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 22.4,
+    "realtimeFactor": 0.75,
+    "prerollMsDecodeOnly": 6840,
+    "prerollMsWithOutput": 8448,
+    "file": "bbb-1080-8-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "0/I420/1920x1080",
+    "loadMs": 31,
+    "wallMs": 28501,
+    "flushMs": 6,
+    "decodeFps": 21.1,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 44.15,
+     "p50": 17,
+     "p95": 182,
+     "p99": 416,
+     "max": 562
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 1.96,
+     "p50": 2,
+     "p95": 3,
+     "p99": 4,
+     "max": 4
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.73,
+     "p50": 1,
+     "p95": 1,
+     "p99": 2,
+     "max": 12
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 8,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 1.1,
+     "p50": 0,
+     "p95": 4,
+     "p99": 6,
+     "max": 70
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 3.62,
+     "p50": 4,
+     "p95": 5,
+     "p99": 6,
+     "max": 18
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 5.53,
+     "p50": 4,
+     "p95": 5,
+     "p99": 102,
+     "max": 102
+    },
+    "pipelineFps": 21.2
+   },
+   "ms": 28705,
+   "version": "26.6"
+  },
+  "firefox": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 22.7,
+    "realtimeFactor": 0.76,
+    "prerollMsDecodeOnly": 6532,
+    "prerollMsWithOutput": 8066,
+    "file": "bbb-1080-8-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "0/I420/1920x1080",
+    "loadMs": 26,
+    "wallMs": 28318,
+    "flushMs": 7,
+    "decodeFps": 21.2,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 43.58,
+     "p50": 18,
+     "p95": 178,
+     "p99": 422,
+     "max": 570
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 1.4,
+     "p50": 1,
+     "p95": 2,
+     "p99": 3,
+     "max": 3
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 1.17,
+     "p50": 1,
+     "p95": 2,
+     "p99": 2,
+     "max": 3
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 2.27,
+     "p50": 1,
+     "p95": 6,
+     "p99": 6,
+     "max": 8
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 6.48,
+     "p50": 6,
+     "p95": 7,
+     "p99": 7,
+     "max": 14
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.2,
+     "p50": 0,
+     "p95": 1,
+     "p99": 6,
+     "max": 6
+    },
+    "pipelineFps": 21.3
+   },
+   "ms": 28599,
+   "version": "155.0"
+  }
+ },
+ "m-pipeline {\"file\":\"bbb-1080-8-2M.mp4\",\"flavor\":\"o3s\",\"noasy\":true}": {
+  "chromium": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 42.9,
+    "realtimeFactor": 1.43,
+    "prerollMsDecodeOnly": 264,
+    "prerollMsWithOutput": 271,
+    "file": "bbb-1080-8-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "0/I420/1920x1080",
+    "loadMs": 30,
+    "wallMs": 15373,
+    "flushMs": 7,
+    "decodeFps": 39,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 22.92,
+     "p50": 7.9,
+     "p95": 97.3,
+     "p99": 260.9,
+     "max": 308
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 1.46,
+     "p50": 1.4,
+     "p95": 1.8,
+     "p99": 1.9,
+     "max": 2.8
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.58,
+     "p50": 0.5,
+     "p95": 0.6,
+     "p99": 5,
+     "max": 7.2
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 3.38,
+     "p50": 2.5,
+     "p95": 9.6,
+     "p99": 22.1,
+     "max": 23.2
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 7.04,
+     "p50": 7,
+     "p95": 7.7,
+     "p99": 11.4,
+     "max": 12
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.05,
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.3,
+     "max": 0.3
+    },
+    "pipelineFps": 39.3
+   },
+   "ms": 15540,
+   "version": "153.0.8010.12"
+  },
+  "webkit": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 42.1,
+    "realtimeFactor": 1.4,
+    "prerollMsDecodeOnly": 254,
+    "prerollMsWithOutput": 271,
+    "file": "bbb-1080-8-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "0/I420/1920x1080",
+    "loadMs": 30,
+    "wallMs": 15921,
+    "flushMs": 6,
+    "decodeFps": 37.7,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 23.42,
+     "p50": 7,
+     "p95": 100,
+     "p99": 264,
+     "max": 322
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 1.9,
+     "p50": 2,
+     "p95": 3,
+     "p99": 4,
+     "max": 5
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.71,
+     "p50": 1,
+     "p95": 1,
+     "p99": 2,
+     "max": 13
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 8,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 1.15,
+     "p50": 1,
+     "p95": 4,
+     "p99": 6,
+     "max": 11
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 3.42,
+     "p50": 3,
+     "p95": 4,
+     "p99": 6,
+     "max": 17
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 3.97,
+     "p50": 4,
+     "p95": 5,
+     "p99": 7,
+     "max": 7
+    },
+    "pipelineFps": 38
+   },
+   "ms": 16115,
+   "version": "26.6"
+  },
+  "firefox": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 45,
+    "realtimeFactor": 1.5,
+    "prerollMsDecodeOnly": 254,
+    "prerollMsWithOutput": 260,
+    "file": "bbb-1080-8-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "0/I420/1920x1080",
+    "loadMs": 25,
+    "wallMs": 15231,
+    "flushMs": 8,
+    "decodeFps": 39.4,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 21.86,
+     "p50": 7,
+     "p95": 95,
+     "p99": 238,
+     "max": 307
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 1.41,
+     "p50": 1,
+     "p95": 2,
+     "p99": 3,
+     "max": 3
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 1.2,
+     "p50": 1,
+     "p95": 2,
+     "p99": 2,
+     "max": 3
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 2.52,
+     "p50": 1,
+     "p95": 6,
+     "p99": 10,
+     "max": 12
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 6.36,
+     "p50": 6,
+     "p95": 7,
+     "p99": 8,
+     "max": 8
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.03,
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1
+    },
+    "pipelineFps": 39.7
+   },
+   "ms": 15420,
+   "version": "155.0"
+  }
+ },
+ "m-pipeline {\"file\":\"bbb-1080-10-2M.mp4\",\"flavor\":\"oz\",\"noasy\":false}": {
+  "chromium": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 21.1,
+    "realtimeFactor": 0.7,
+    "prerollMsDecodeOnly": 8566,
+    "prerollMsWithOutput": 15734,
+    "file": "bbb-1080-10-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "62/I420/1920x1080",
+    "loadMs": 29,
+    "wallMs": 35869,
+    "flushMs": 8,
+    "decodeFps": 16.7,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 46.98,
+     "p50": 22.2,
+     "p95": 190.2,
+     "p99": 423.7,
+     "max": 531.6
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 11.46,
+     "p50": 11.3,
+     "p95": 12.7,
+     "p99": 13.6,
+     "max": 19.2
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.54,
+     "p50": 0.5,
+     "p95": 0.6,
+     "p99": 3.4,
+     "max": 6
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 0.1,
+     "p50": 0,
+     "p95": 0.2,
+     "p99": 0.4,
+     "max": 39
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 7.11,
+     "p50": 7.1,
+     "p95": 7.7,
+     "p99": 8,
+     "max": 56.6
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.05,
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.3,
+     "max": 0.3
+    },
+    "pipelineFps": 16.8
+   },
+   "ms": 36038,
+   "version": "153.0.8010.12"
+  },
+  "webkit": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 19.5,
+    "realtimeFactor": 0.65,
+    "prerollMsDecodeOnly": 10796,
+    "prerollMsWithOutput": 15793,
+    "file": "bbb-1080-10-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "62/I420/1920x1080",
+    "loadMs": 32,
+    "wallMs": 35882,
+    "flushMs": 7,
+    "decodeFps": 16.7,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 50.71,
+     "p50": 22,
+     "p95": 201,
+     "p99": 462,
+     "max": 573
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 7.52,
+     "p50": 7,
+     "p95": 9,
+     "p99": 10,
+     "max": 14
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.84,
+     "p50": 1,
+     "p95": 1,
+     "p99": 2,
+     "max": 12
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 8,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": -0.41,
+     "p50": 0,
+     "p95": 1,
+     "p99": 3,
+     "max": 3
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 3.76,
+     "p50": 4,
+     "p95": 5,
+     "p99": 5,
+     "max": 18
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 3.7,
+     "p50": 4,
+     "p95": 5,
+     "p99": 7,
+     "max": 7
+    },
+    "pipelineFps": 16.8
+   },
+   "ms": 36078,
+   "version": "26.6"
+  },
+  "firefox": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 21.2,
+    "realtimeFactor": 0.71,
+    "prerollMsDecodeOnly": 8439,
+    "prerollMsWithOutput": 14652,
+    "file": "bbb-1080-10-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "62/I420/1920x1080",
+    "loadMs": 26,
+    "wallMs": 34892,
+    "flushMs": 8,
+    "decodeFps": 17.2,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 46.7,
+     "p50": 18,
+     "p95": 190,
+     "p99": 453,
+     "max": 579
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 9.22,
+     "p50": 9,
+     "p95": 11,
+     "p99": 11,
+     "max": 12
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 1.18,
+     "p50": 1,
+     "p95": 2,
+     "p99": 2,
+     "max": 3
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 0.01,
+     "p50": 0,
+     "p95": 1,
+     "p99": 1,
+     "max": 1
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 6.48,
+     "p50": 6,
+     "p95": 7,
+     "p99": 8,
+     "max": 8
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.02,
+     "p50": 0,
+     "p95": 0,
+     "p99": 1,
+     "max": 1
+    },
+    "pipelineFps": 17.3
+   },
+   "ms": 35079,
+   "version": "155.0"
+  }
+ },
+ "m-pipeline {\"file\":\"bbb-1080-10-2M.mp4\",\"flavor\":\"o3s\",\"noasy\":true}": {
+  "chromium": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 36.5,
+    "realtimeFactor": 1.22,
+    "prerollMsDecodeOnly": 303,
+    "prerollMsWithOutput": 3774,
+    "file": "bbb-1080-10-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "62/I420/1920x1080",
+    "loadMs": 29,
+    "wallMs": 23833,
+    "flushMs": 7,
+    "decodeFps": 25.2,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 26.95,
+     "p50": 11.5,
+     "p95": 112.2,
+     "p99": 283.1,
+     "max": 348.3
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 11.46,
+     "p50": 11.3,
+     "p95": 12.8,
+     "p99": 13.3,
+     "max": 16.4
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.67,
+     "p50": 0.5,
+     "p95": 0.7,
+     "p99": 6.2,
+     "max": 7
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 0.06,
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.2,
+     "max": 26.6
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 7.44,
+     "p50": 7.2,
+     "p95": 7.8,
+     "p99": 8,
+     "max": 131.3
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.05,
+     "p50": 0.1,
+     "p95": 0.1,
+     "p99": 0.2,
+     "max": 0.2
+    },
+    "pipelineFps": 25.3
+   },
+   "ms": 23998,
+   "version": "153.0.8010.12"
+  },
+  "webkit": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 35.8,
+    "realtimeFactor": 1.19,
+    "prerollMsDecodeOnly": 280,
+    "prerollMsWithOutput": 1705,
+    "file": "bbb-1080-10-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "62/I420/1920x1080",
+    "loadMs": 29,
+    "wallMs": 21742,
+    "flushMs": 6,
+    "decodeFps": 27.6,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 27.54,
+     "p50": 12,
+     "p95": 113,
+     "p99": 271,
+     "max": 336
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 7.35,
+     "p50": 7,
+     "p95": 8,
+     "p99": 9,
+     "max": 14
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.77,
+     "p50": 1,
+     "p95": 1,
+     "p99": 2,
+     "max": 13
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 8,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": -0.23,
+     "p50": 0,
+     "p95": 1,
+     "p99": 2,
+     "max": 4
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 4.52,
+     "p50": 4,
+     "p95": 6,
+     "p99": 7,
+     "max": 20
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 4.28,
+     "p50": 4,
+     "p95": 6,
+     "p99": 7,
+     "max": 7
+    },
+    "pipelineFps": 27.8
+   },
+   "ms": 21939,
+   "version": "26.6"
+  },
+  "firefox": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 37.6,
+    "realtimeFactor": 1.25,
+    "prerollMsDecodeOnly": 302,
+    "prerollMsWithOutput": 2309,
+    "file": "bbb-1080-10-2M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "62/I420/1920x1080",
+    "loadMs": 25,
+    "wallMs": 22509,
+    "flushMs": 8,
+    "decodeFps": 26.7,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 26.2,
+     "p50": 8,
+     "p95": 112,
+     "p99": 263,
+     "max": 362
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 9.29,
+     "p50": 9,
+     "p95": 11,
+     "p99": 12,
+     "max": 15
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 1.15,
+     "p50": 1,
+     "p95": 2,
+     "p99": 2,
+     "max": 3
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": -0.85,
+     "p50": -1,
+     "p95": 0,
+     "p99": 0,
+     "max": 0
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 6.52,
+     "p50": 7,
+     "p95": 7,
+     "p99": 8,
+     "max": 8
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.05,
+     "p50": 0,
+     "p95": 1,
+     "p99": 1,
+     "max": 1
+    },
+    "pipelineFps": 26.8
+   },
+   "ms": 22697,
+   "version": "155.0"
+  }
+ },
+ "m-pipeline {\"file\":\"bbb-720-8-1M.mp4\",\"flavor\":\"oz\",\"noasy\":false}": {
+  "chromium": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 52.7,
+    "realtimeFactor": 1.76,
+    "prerollMsDecodeOnly": 176,
+    "prerollMsWithOutput": 179,
+    "file": "bbb-720-8-1M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "0/I420/1280x720",
+    "loadMs": 25,
+    "wallMs": 12046,
+    "flushMs": 4,
+    "decodeFps": 49.8,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 18.77,
+     "p50": 7.7,
+     "p95": 77.5,
+     "p99": 184.7,
+     "max": 236.9
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 0.7,
+     "p50": 0.6,
+     "p95": 0.9,
+     "p99": 2.2,
+     "max": 2.9
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.32,
+     "p50": 0.2,
+     "p95": 0.3,
+     "p99": 3.9,
+     "max": 4.4
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 0.75,
+     "p50": 0.1,
+     "p95": 2.5,
+     "p99": 2.8,
+     "max": 4.3
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 2.36,
+     "p50": 2.3,
+     "p95": 2.9,
+     "p99": 3.8,
+     "max": 4.5
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.04,
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.2,
+     "max": 0.2
+    },
+    "pipelineFps": 50.2
+   },
+   "ms": 12202,
+   "version": "153.0.8010.12"
+  },
+  "webkit": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 47.8,
+    "realtimeFactor": 1.59,
+    "prerollMsDecodeOnly": 181,
+    "prerollMsWithOutput": 197,
+    "file": "bbb-720-8-1M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "0/I420/1280x720",
+    "loadMs": 31,
+    "wallMs": 13340,
+    "flushMs": 5,
+    "decodeFps": 45,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 20.7,
+     "p50": 8,
+     "p95": 85,
+     "p99": 196,
+     "max": 260
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 0.94,
+     "p50": 1,
+     "p95": 2,
+     "p99": 2,
+     "max": 4
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.29,
+     "p50": 0,
+     "p95": 1,
+     "p99": 1,
+     "max": 12
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 8,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 1.43,
+     "p50": 1,
+     "p95": 4,
+     "p99": 5,
+     "max": 6
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 2.5,
+     "p50": 2,
+     "p95": 3,
+     "p99": 4,
+     "max": 14
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 2.77,
+     "p50": 3,
+     "p95": 4,
+     "p99": 6,
+     "max": 6
+    },
+    "pipelineFps": 45.3
+   },
+   "ms": 13519,
+   "version": "26.6"
+  },
+  "firefox": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 48.8,
+    "realtimeFactor": 1.63,
+    "prerollMsDecodeOnly": 188,
+    "prerollMsWithOutput": 191,
+    "file": "bbb-720-8-1M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "0/I420/1280x720",
+    "loadMs": 25,
+    "wallMs": 13121,
+    "flushMs": 2,
+    "decodeFps": 45.7,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 20.28,
+     "p50": 8,
+     "p95": 82,
+     "p99": 197,
+     "max": 261
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 0.55,
+     "p50": 1,
+     "p95": 1,
+     "p99": 2,
+     "max": 2
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.56,
+     "p50": 1,
+     "p95": 1,
+     "p99": 2,
+     "max": 3
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 0.9,
+     "p50": 1,
+     "p95": 2,
+     "p99": 3,
+     "max": 4
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 1.96,
+     "p50": 2,
+     "p95": 3,
+     "p99": 3,
+     "max": 4
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.08,
+     "p50": 0,
+     "p95": 1,
+     "p99": 2,
+     "max": 2
+    },
+    "pipelineFps": 46.1
+   },
+   "ms": 13300,
+   "version": "155.0"
+  }
+ },
+ "m-pipeline {\"file\":\"bbb-720-8-1M.mp4\",\"flavor\":\"o3s\",\"noasy\":true}": {
+  "chromium": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 86.4,
+    "realtimeFactor": 2.88,
+    "prerollMsDecodeOnly": 126,
+    "prerollMsWithOutput": 129,
+    "file": "bbb-720-8-1M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "0/I420/1280x720",
+    "loadMs": 28,
+    "wallMs": 7623,
+    "flushMs": 3,
+    "decodeFps": 78.7,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 11.4,
+     "p50": 3.7,
+     "p95": 50.1,
+     "p99": 114.4,
+     "max": 164.7
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 0.71,
+     "p50": 0.7,
+     "p95": 1,
+     "p99": 2.1,
+     "max": 2.7
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.28,
+     "p50": 0.2,
+     "p95": 0.4,
+     "p99": 3.8,
+     "max": 7
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 0.89,
+     "p50": 0.2,
+     "p95": 2.5,
+     "p99": 3.2,
+     "max": 14.5
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 2.38,
+     "p50": 2.3,
+     "p95": 2.9,
+     "p99": 5.1,
+     "max": 9.7
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.05,
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.2,
+     "max": 0.2
+    },
+    "pipelineFps": 79.5
+   },
+   "ms": 7775,
+   "version": "153.0.8010.12"
+  },
+  "webkit": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 89.5,
+    "realtimeFactor": 2.98,
+    "prerollMsDecodeOnly": 121,
+    "prerollMsWithOutput": 136,
+    "file": "bbb-720-8-1M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "0/I420/1280x720",
+    "loadMs": 32,
+    "wallMs": 7456,
+    "flushMs": 5,
+    "decodeFps": 80.5,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 10.98,
+     "p50": 3,
+     "p95": 48,
+     "p99": 117,
+     "max": 158
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 0.84,
+     "p50": 1,
+     "p95": 2,
+     "p99": 2,
+     "max": 3
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.33,
+     "p50": 0,
+     "p95": 1,
+     "p99": 1,
+     "max": 13
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 8,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 1.8,
+     "p50": 1,
+     "p95": 6,
+     "p99": 10,
+     "max": 13
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 2.42,
+     "p50": 2,
+     "p95": 3,
+     "p99": 4,
+     "max": 16
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 3.03,
+     "p50": 3,
+     "p95": 5,
+     "p99": 7,
+     "max": 7
+    },
+    "pipelineFps": 81.3
+   },
+   "ms": 7633,
+   "version": "26.6"
+  },
+  "firefox": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 95.8,
+    "realtimeFactor": 3.19,
+    "prerollMsDecodeOnly": 113,
+    "prerollMsWithOutput": 117,
+    "file": "bbb-720-8-1M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "0/I420/1280x720",
+    "loadMs": 24,
+    "wallMs": 7068,
+    "flushMs": 2,
+    "decodeFps": 84.9,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 10.26,
+     "p50": 3,
+     "p95": 46,
+     "p99": 111,
+     "max": 151
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 0.58,
+     "p50": 1,
+     "p95": 1,
+     "p99": 2,
+     "max": 2
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.53,
+     "p50": 0,
+     "p95": 1,
+     "p99": 2,
+     "max": 2
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 0.76,
+     "p50": 1,
+     "p95": 2,
+     "p99": 3,
+     "max": 4
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 1.89,
+     "p50": 2,
+     "p95": 3,
+     "p99": 4,
+     "max": 4
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.05,
+     "p50": 0,
+     "p95": 1,
+     "p99": 1,
+     "max": 1
+    },
+    "pipelineFps": 85.7
+   },
+   "ms": 7237,
+   "version": "155.0"
+  }
+ },
+ "m-pipeline {\"file\":\"bbb-720-10-1M.mp4\",\"flavor\":\"oz\",\"noasy\":false}": {
+  "chromium": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 46.7,
+    "realtimeFactor": 1.56,
+    "prerollMsDecodeOnly": 195,
+    "prerollMsWithOutput": 207,
+    "file": "bbb-720-10-1M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "62/I420/1280x720",
+    "loadMs": 26,
+    "wallMs": 16203,
+    "flushMs": 3,
+    "decodeFps": 37,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 21.17,
+     "p50": 9.2,
+     "p95": 90.6,
+     "p99": 206.5,
+     "max": 273.9
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 5.17,
+     "p50": 5.1,
+     "p95": 5.6,
+     "p99": 6.7,
+     "max": 14.7
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.32,
+     "p50": 0.2,
+     "p95": 0.3,
+     "p99": 6.4,
+     "max": 7.1
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 0.21,
+     "p50": 0.2,
+     "p95": 0.3,
+     "p99": 0.4,
+     "max": 0.5
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 2.45,
+     "p50": 2.4,
+     "p95": 2.9,
+     "p99": 3.1,
+     "max": 5.7
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.04,
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.3,
+     "max": 0.3
+    },
+    "pipelineFps": 37.3
+   },
+   "ms": 16353,
+   "version": "153.0.8010.12"
+  },
+  "webkit": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 43.5,
+    "realtimeFactor": 1.45,
+    "prerollMsDecodeOnly": 201,
+    "prerollMsWithOutput": 227,
+    "file": "bbb-720-10-1M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "62/I420/1280x720",
+    "loadMs": 32,
+    "wallMs": 16077,
+    "flushMs": 7,
+    "decodeFps": 37.3,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 22.74,
+     "p50": 9,
+     "p95": 92,
+     "p99": 226,
+     "max": 296
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 3.3,
+     "p50": 3,
+     "p95": 4,
+     "p99": 5,
+     "max": 8
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.39,
+     "p50": 0,
+     "p95": 1,
+     "p99": 1,
+     "max": 12
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 8,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 0.76,
+     "p50": 1,
+     "p95": 2,
+     "p99": 3,
+     "max": 3
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 2.82,
+     "p50": 3,
+     "p95": 4,
+     "p99": 4,
+     "max": 15
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 2.87,
+     "p50": 3,
+     "p95": 4,
+     "p99": 7,
+     "max": 7
+    },
+    "pipelineFps": 37.6
+   },
+   "ms": 16253,
+   "version": "26.6"
+  },
+  "firefox": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 45.7,
+    "realtimeFactor": 1.52,
+    "prerollMsDecodeOnly": 210,
+    "prerollMsWithOutput": 220,
+    "file": "bbb-720-10-1M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-oz.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "62/I420/1280x720",
+    "loadMs": 25,
+    "wallMs": 16139,
+    "flushMs": 3,
+    "decodeFps": 37.2,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 21.62,
+     "p50": 8,
+     "p95": 88,
+     "p99": 221,
+     "max": 301
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 4.14,
+     "p50": 4,
+     "p95": 5,
+     "p99": 6,
+     "max": 6
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.55,
+     "p50": 1,
+     "p95": 1,
+     "p99": 1,
+     "max": 2
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": -0.13,
+     "p50": 0,
+     "p95": 1,
+     "p99": 1,
+     "max": 1
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 2.12,
+     "p50": 2,
+     "p95": 3,
+     "p99": 4,
+     "max": 4
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.07,
+     "p50": 0,
+     "p95": 1,
+     "p99": 1,
+     "max": 1
+    },
+    "pipelineFps": 37.4
+   },
+   "ms": 16318,
+   "version": "155.0"
+  }
+ },
+ "m-pipeline {\"file\":\"bbb-720-10-1M.mp4\",\"flavor\":\"o3s\",\"noasy\":true}": {
+  "chromium": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 76,
+    "realtimeFactor": 2.53,
+    "prerollMsDecodeOnly": 132,
+    "prerollMsWithOutput": 144,
+    "file": "bbb-720-10-1M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "62/I420/1280x720",
+    "loadMs": 28,
+    "wallMs": 11227,
+    "flushMs": 2,
+    "decodeFps": 53.4,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 12.97,
+     "p50": 4.9,
+     "p95": 57.5,
+     "p99": 143.2,
+     "max": 184.5
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 5.13,
+     "p50": 5.1,
+     "p95": 5.5,
+     "p99": 6.8,
+     "max": 7.2
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.28,
+     "p50": 0.2,
+     "p95": 0.3,
+     "p99": 5.8,
+     "max": 8
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": 0.11,
+     "p50": 0.1,
+     "p95": 0.2,
+     "p99": 0.6,
+     "max": 0.8
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 2.34,
+     "p50": 2.3,
+     "p95": 2.7,
+     "p99": 3,
+     "max": 4.7
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.04,
+     "p50": 0,
+     "p95": 0.1,
+     "p99": 0.2,
+     "max": 0.2
+    },
+    "pipelineFps": 53.8
+   },
+   "ms": 11378,
+   "version": "153.0.8010.12"
+  },
+  "webkit": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 79.2,
+    "realtimeFactor": 2.64,
+    "prerollMsDecodeOnly": 120,
+    "prerollMsWithOutput": 146,
+    "file": "bbb-720-10-1M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "62/I420/1280x720",
+    "loadMs": 30,
+    "wallMs": 9903,
+    "flushMs": 6,
+    "decodeFps": 60.6,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 12.45,
+     "p50": 5,
+     "p95": 55,
+     "p99": 125,
+     "max": 180
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 3.35,
+     "p50": 3,
+     "p95": 4,
+     "p99": 5,
+     "max": 8
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.41,
+     "p50": 0,
+     "p95": 1,
+     "p99": 2,
+     "max": 12
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 8,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": -0.27,
+     "p50": 0,
+     "p95": 1,
+     "p99": 2,
+     "max": 3
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 2.46,
+     "p50": 2,
+     "p95": 3,
+     "p99": 4,
+     "max": 15
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 2.68,
+     "p50": 3,
+     "p95": 3,
+     "p99": 7,
+     "max": 7
+    },
+    "pipelineFps": 61.1
+   },
+   "ms": 10078,
+   "version": "26.6"
+  },
+  "firefox": {
+   "ok": true,
+   "result": {
+    "contentFps": 30,
+    "decodeOnlyFps": 82.1,
+    "realtimeFactor": 2.74,
+    "prerollMsDecodeOnly": 130,
+    "prerollMsWithOutput": 140,
+    "file": "bbb-720-10-1M.mp4",
+    "wasm": "libav-6.10.9.0-kikoeru-dav1d-o3s-noasy.wasm",
+    "threads": 1,
+    "maxFrameDelay": 0,
+    "skip": null,
+    "grain": null,
+    "out": "post",
+    "packets": 600,
+    "frames": 600,
+    "keys": 9,
+    "fmt": "62/I420/1280x720",
+    "loadMs": 24,
+    "wallMs": 10262,
+    "flushMs": 3,
+    "decodeFps": 58.5,
+    "perPacketDecodeMs": {
+     "n": 590,
+     "mean": 11.97,
+     "p50": 4,
+     "p95": 53,
+     "p99": 128,
+     "max": 188
+    },
+    "copyMs": {
+     "n": 600,
+     "mean": 4.15,
+     "p50": 4,
+     "p95": 5,
+     "p99": 5,
+     "max": 6
+    },
+    "videoFrameMs": {
+     "n": 600,
+     "mean": 0.51,
+     "p50": 0,
+     "p95": 1,
+     "p99": 2,
+     "max": 2
+    },
+    "vfErr": null,
+    "crossOriginIsolated": false,
+    "hardwareConcurrency": 32,
+    "drawn": 600,
+    "drawnFormat": "I420",
+    "transferLatencyMs": {
+     "n": 600,
+     "mean": -0.09,
+     "p50": 0,
+     "p95": 1,
+     "p99": 1,
+     "max": 1
+    },
+    "drawImageMs": {
+     "n": 600,
+     "mean": 2.03,
+     "p50": 2,
+     "p95": 3,
+     "p99": 4,
+     "max": 4
+    },
+    "readback1pxMs": {
+     "n": 60,
+     "mean": 0.08,
+     "p50": 0,
+     "p95": 1,
+     "p99": 1,
+     "max": 1
+    },
+    "pipelineFps": 58.9
+   },
+   "ms": 10437,
+   "version": "155.0"
+  }
+ }
+}

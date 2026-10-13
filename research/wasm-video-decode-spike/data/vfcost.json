@@ -1,0 +1,599 @@
+{
+ "vfcost {\"n\":300}": {
+  "chromium": {
+   "ok": true,
+   "result": [
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.2,
+      "p50": 0.1,
+      "p95": 0.2,
+      "p99": 4.3,
+      "max": 4.3
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420",
+     "transfer": true,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.01,
+      "p50": 0,
+      "p95": 0.1,
+      "p99": 0.1,
+      "max": 0.1
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "NV12",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "NV12",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.16,
+      "p50": 0.1,
+      "p95": 0.2,
+      "p99": 3.6,
+      "max": 5.3
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420P10",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420P10",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.35,
+      "p50": 0.2,
+      "p95": 0.4,
+      "p99": 3.5,
+      "max": 5.4
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420P10",
+     "transfer": true,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420P10",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.01,
+      "p50": 0,
+      "p95": 0.1,
+      "p99": 0.1,
+      "max": 0.1
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "copyStrided8To_I420Ms": {
+      "n": 300,
+      "mean": 0.67,
+      "p50": 0.6,
+      "p95": 1.4,
+      "p99": 1.6,
+      "max": 4.5
+     },
+     "convert10to8Ms": {
+      "n": 300,
+      "mean": 4.69,
+      "p50": 4.5,
+      "p95": 5.1,
+      "p99": 8,
+      "max": 9
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.39,
+      "p50": 0.2,
+      "p95": 1.5,
+      "p99": 3.7,
+      "max": 3.7
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420",
+     "transfer": true,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.01,
+      "p50": 0,
+      "p95": 0.1,
+      "p99": 0.1,
+      "max": 0.1
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "NV12",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "NV12",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.37,
+      "p50": 0.2,
+      "p95": 0.4,
+      "p99": 3.4,
+      "max": 4.7
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420P10",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420P10",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.83,
+      "p50": 0.6,
+      "p95": 3.4,
+      "p99": 3.5,
+      "max": 5.3
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420P10",
+     "transfer": true,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420P10",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.02,
+      "p50": 0,
+      "p95": 0.1,
+      "p99": 0.1,
+      "max": 2.9
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "copyStrided8To_I420Ms": {
+      "n": 300,
+      "mean": 1.33,
+      "p50": 1.2,
+      "p95": 2.1,
+      "p99": 2.3,
+      "max": 2.5
+     },
+     "convert10to8Ms": {
+      "n": 300,
+      "mean": 10.35,
+      "p50": 10.1,
+      "p95": 11.3,
+      "p99": 13.9,
+      "max": 14.6
+     }
+    }
+   ],
+   "ms": 7962,
+   "version": "153.0.8010.12"
+  },
+  "webkit": {
+   "ok": true,
+   "result": [
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.3,
+      "p50": 0,
+      "p95": 1,
+      "p99": 2,
+      "max": 15
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420",
+     "transfer": true,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.26,
+      "p50": 0,
+      "p95": 1,
+      "p99": 1,
+      "max": 1
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "NV12",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "NV12",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.22,
+      "p50": 0,
+      "p95": 1,
+      "p99": 1,
+      "max": 1
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420P10",
+     "transfer": false,
+     "ok": false,
+     "err": "TypeError: Type error",
+     "resultFormat": null,
+     "newVideoFrameMs": null
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420P10",
+     "transfer": true,
+     "ok": false,
+     "err": "TypeError: Type error",
+     "resultFormat": null,
+     "newVideoFrameMs": null
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "copyStrided8To_I420Ms": {
+      "n": 300,
+      "mean": 0.68,
+      "p50": 1,
+      "p95": 1,
+      "p99": 1,
+      "max": 2
+     },
+     "convert10to8Ms": {
+      "n": 300,
+      "mean": 4.1,
+      "p50": 4,
+      "p95": 5,
+      "p99": 6,
+      "max": 13
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.58,
+      "p50": 1,
+      "p95": 1,
+      "p99": 2,
+      "max": 2
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420",
+     "transfer": true,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.62,
+      "p50": 1,
+      "p95": 1,
+      "p99": 2,
+      "max": 2
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "NV12",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "NV12",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.48,
+      "p50": 0,
+      "p95": 1,
+      "p99": 2,
+      "max": 2
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420P10",
+     "transfer": false,
+     "ok": false,
+     "err": "TypeError: Type error",
+     "resultFormat": null,
+     "newVideoFrameMs": null
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420P10",
+     "transfer": true,
+     "ok": false,
+     "err": "TypeError: Type error",
+     "resultFormat": null,
+     "newVideoFrameMs": null
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "copyStrided8To_I420Ms": {
+      "n": 300,
+      "mean": 1.5,
+      "p50": 1,
+      "p95": 2,
+      "p99": 3,
+      "max": 4
+     },
+     "convert10to8Ms": {
+      "n": 300,
+      "mean": 9.02,
+      "p50": 9,
+      "p95": 9,
+      "p99": 12,
+      "max": 21
+     }
+    }
+   ],
+   "ms": 6323,
+   "version": "26.6"
+  },
+  "firefox": {
+   "ok": true,
+   "result": [
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.57,
+      "p50": 1,
+      "p95": 1,
+      "p99": 5,
+      "max": 7
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420",
+     "transfer": true,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.58,
+      "p50": 0,
+      "p95": 1,
+      "p99": 8,
+      "max": 8
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "NV12",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "NV12",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 0.62,
+      "p50": 1,
+      "p95": 1,
+      "p99": 6,
+      "max": 7
+     }
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420P10",
+     "transfer": false,
+     "ok": false,
+     "err": "NotSupportedError: VideoFrame constructor: I420P10 is unsupported",
+     "resultFormat": null,
+     "newVideoFrameMs": null
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "format": "I420P10",
+     "transfer": true,
+     "ok": false,
+     "err": "NotSupportedError: VideoFrame constructor: I420P10 is unsupported",
+     "resultFormat": null,
+     "newVideoFrameMs": null
+    },
+    {
+     "w": 1280,
+     "h": 720,
+     "copyStrided8To_I420Ms": {
+      "n": 300,
+      "mean": 0.48,
+      "p50": 0,
+      "p95": 1,
+      "p99": 2,
+      "max": 2
+     },
+     "convert10to8Ms": {
+      "n": 300,
+      "mean": 2.92,
+      "p50": 3,
+      "p95": 4,
+      "p99": 11,
+      "max": 12
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 1.28,
+      "p50": 1,
+      "p95": 2,
+      "p99": 7,
+      "max": 8
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420",
+     "transfer": true,
+     "ok": true,
+     "err": null,
+     "resultFormat": "I420",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 1.32,
+      "p50": 1,
+      "p95": 2,
+      "p99": 8,
+      "max": 8
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "NV12",
+     "transfer": false,
+     "ok": true,
+     "err": null,
+     "resultFormat": "NV12",
+     "newVideoFrameMs": {
+      "n": 300,
+      "mean": 1.39,
+      "p50": 1,
+      "p95": 2,
+      "p99": 8,
+      "max": 8
+     }
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420P10",
+     "transfer": false,
+     "ok": false,
+     "err": "NotSupportedError: VideoFrame constructor: I420P10 is unsupported",
+     "resultFormat": null,
+     "newVideoFrameMs": null
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "format": "I420P10",
+     "transfer": true,
+     "ok": false,
+     "err": "NotSupportedError: VideoFrame constructor: I420P10 is unsupported",
+     "resultFormat": null,
+     "newVideoFrameMs": null
+    },
+    {
+     "w": 1920,
+     "h": 1080,
+     "copyStrided8To_I420Ms": {
+      "n": 300,
+      "mean": 1.11,
+      "p50": 1,
+      "p95": 2,
+      "p99": 2,
+      "max": 6
+     },
+     "convert10to8Ms": {
+      "n": 300,
+      "mean": 10.37,
+      "p50": 10,
+      "p95": 17,
+      "p99": 18,
+      "max": 18
+     }
+    }
+   ],
+   "ms": 7166,
+   "version": "155.0"
+  }
+ }
+}

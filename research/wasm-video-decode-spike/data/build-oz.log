@@ -1,0 +1,21 @@
+oz kikoeru-af: build 68s
+oz kikoeru-afv: build 78s
+oz kikoeru-dav1d: build 78s
+total 10064
+drwxrwxr-x 2 sa sa     340 Oct 13 15:55 .
+drwxrwxr-x 5 sa sa     100 Oct 13 15:51 ..
+-rw-r--r-- 1 sa sa  291139 Oct 13 15:52 libav-6.10.9.0-kikoeru-af-oz.wasm.mjs
+-rw-r--r-- 1 sa sa 2086913 Oct 13 15:52 libav-6.10.9.0-kikoeru-af-oz.wasm.wasm
+-rw-r--r-- 1 sa sa   29153 Oct 13 15:52 libav-6.10.9.0-kikoeru-af.mjs
+-rw-r--r-- 1 sa sa  293054 Oct 13 15:53 libav-6.10.9.0-kikoeru-afv-oz.wasm.mjs
+-rw-r--r-- 1 sa sa 2659744 Oct 13 15:53 libav-6.10.9.0-kikoeru-afv-oz.wasm.wasm
+-rw-r--r-- 1 sa sa   29155 Oct 13 15:53 libav-6.10.9.0-kikoeru-afv.mjs
+-rw-rw-r-- 1 sa sa  235767 Oct 13 15:55 libav-6.10.9.0-kikoeru-dav1d-oz-noasy.thr.mjs
+-rw-r--r-- 1 sa sa  839523 Oct 13 15:55 libav-6.10.9.0-kikoeru-dav1d-oz-noasy.thr.wasm
+-rw-rw-r-- 1 sa sa  219964 Oct 13 15:55 libav-6.10.9.0-kikoeru-dav1d-oz-noasy.wasm.mjs
+-rw-r--r-- 1 sa sa  811381 Oct 13 15:55 libav-6.10.9.0-kikoeru-dav1d-oz-noasy.wasm.wasm
+-rw-r--r-- 1 sa sa  241811 Oct 13 15:55 libav-6.10.9.0-kikoeru-dav1d-oz.thr.mjs
+-rw-r--r-- 1 sa sa 1183277 Oct 13 15:55 libav-6.10.9.0-kikoeru-dav1d-oz.thr.wasm
+-rw-r--r-- 1 sa sa  227867 Oct 13 15:55 libav-6.10.9.0-kikoeru-dav1d-oz.wasm.mjs
+-rw-r--r-- 1 sa sa 1095201 Oct 13 15:55 libav-6.10.9.0-kikoeru-dav1d-oz.wasm.wasm
+-rw-r--r-- 1 sa sa   25711 Oct 13 15:55 libav-6.10.9.0-kikoeru-dav1d.mjs

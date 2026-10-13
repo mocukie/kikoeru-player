@@ -1,0 +1,34 @@
+bbb-1080-8-2M: 102s 5219094 bytes
+bbb-1080-8-6M: 153s 15578356 bytes
+bbb-1080-10-2M: 130s 5257713 bytes
+bbb-1080-10-6M: 188s 15437449 bytes
+bbb-720-8-1M: 61s 2656705 bytes
+bbb-720-8-3M: 111s 7840403 bytes
+bbb-720-10-1M: 61s 2643472 bytes
+bbb-720-10-3M: 91s 7818286 bytes
+tos-800-8-3M: 134s 7480048 bytes
+tos-800-10-3M: 173s 7571906 bytes
+tos-534-8-1.5M: 53s 3795194 bytes
+bbb-1080-8-2M-tiles: 70s 5234728 bytes
+tos-800-8-3M-grain: 304s 7502826 bytes
+tiny-8: 1s 39598 bytes
+tiny-10: 2s 37778 bytes
+total 91940
+drwxrwxr-x  3 sa sa      360 Oct 13 16:20 .
+drwx------ 10 sa sa      440 Oct 13 16:14 ..
+-rw-r--r--  1 sa sa  5257713 Oct 13 15:59 bbb-1080-10-2M.mp4
+-rw-r--r--  1 sa sa 15437449 Oct 13 16:02 bbb-1080-10-6M.mp4
+-rw-r--r--  1 sa sa  5234728 Oct 13 16:15 bbb-1080-8-2M-tiles.mp4
+-rw-r--r--  1 sa sa  5219094 Oct 13 15:54 bbb-1080-8-2M.mp4
+-rw-r--r--  1 sa sa 15578356 Oct 13 15:57 bbb-1080-8-6M.mp4
+-rw-r--r--  1 sa sa  2643472 Oct 13 16:06 bbb-720-10-1M.mp4
+-rw-r--r--  1 sa sa  7818286 Oct 13 16:08 bbb-720-10-3M.mp4
+-rw-r--r--  1 sa sa  2656705 Oct 13 16:03 bbb-720-8-1M.mp4
+-rw-r--r--  1 sa sa  7840403 Oct 13 16:05 bbb-720-8-3M.mp4
+drwxrwxr-x  2 sa sa      120 Oct 13 15:53 src
+-rw-r--r--  1 sa sa    37778 Oct 13 16:20 tiny-10.mp4
+-rw-r--r--  1 sa sa    39598 Oct 13 16:20 tiny-8.mp4
+-rw-r--r--  1 sa sa  3795194 Oct 13 16:14 tos-534-8-1.5M.mp4
+-rw-r--r--  1 sa sa  7571906 Oct 13 16:13 tos-800-10-3M.mp4
+-rw-r--r--  1 sa sa  7502826 Oct 13 16:20 tos-800-8-3M-grain.mp4
+-rw-r--r--  1 sa sa  7480048 Oct 13 16:10 tos-800-8-3M.mp4
