@@ -59,3 +59,41 @@
   1. dav1d 的編譯選項跟著全域的 `OPTFLAGS`（預設 `-Oz`），而且 `-Denable_asm=false`。速度差很多（§3），要用 `-O3 -msimd128` 就得改 `mk/libdav1d.mk` 一行（或整個 variant 改 `OPTFLAGS`）。這屬於 build 設定，不必改 libav.js 的程式。
   2. libav.js 的 `base` target 一律連結 emfiberthreads（用 fiber 模擬 pthread），dav1d 在非 threaded build 也能呼叫 `pthread_create`。FFmpeg 的 `libdav1d` wrapper 以 `AVCodecContext.thread_count`（預設 1）決定 `n_threads`，所以預設就是單執行緒；**不可以把 `threads` 設成 0（auto）或大於 1**，否則在 fiber 上跑多個「執行緒」只會更慢 [原始碼：`libavcodec/libdav1d.c` L206–229；libav.js `docs/API.md` 對 emfiberthreads 的說明]。
 - **dav1d 沒有 wasm 的手寫 SIMD**：dav1d 1.5.4 與 master 的 `src/` 只有 `arm`、`x86`、`ppc`、`loongarch`、`riscv` 的組語，沒有 wasm；VideoLAN GitLab 上與 wasm 有關的 MR 只有 CI 與 build 修正（!1239、!1491、!1492），2019 年的 emscripten 最佳化 MR !606 已關閉 [已查證]。所以 wasm 的 SIMD 只能靠編譯器 auto-vectorization（`-msimd128`）。ogv.js 的 dav1d build 正是用 `-O3 -msimd128`、`-Denable_asm=false`，另外只開 8-bit（`-Dbitdepths=['8']`）[已查證：ogv.js `buildscripts/compileDav1dWasm.sh`、`dav1d-wasm-cross.txt`]。本次確認 `o3s` 的 wasm 裡有約 1.29 萬個 SIMD 指令，`oz`／`o3` 是 0 [實測：`wasm-dis` 計數]。
+
+## 2. 單執行緒的速度
+
+**Engine 現在的條件（Worker、Asyncify、libav.js 預設 `-Oz`）下，1080p 在這台機器就跟不上 30 fps；把 dav1d 改用 `-O3 -msimd128` 後，1080p 動畫勉強可以，實拍不行，720p 有 2–3 倍餘裕** [實測]。
+
+decode-only fps（Chromium／WebKit／Firefox），括號內是即時倍數的範圍：
+
+| 檔案 | 內容 fps | `oz`（Engine 條件） | `o3s-noasy`（最佳） | `o3s-noasy` 的 preroll（ms） |
+|---|---|---|---|---|
+| bbb-1080-8-2M | 30 | 24.7／22.8／23.0（0.76–0.82×） | 43.4／43.1／46.0（1.44–1.53×） | 251–266 |
+| bbb-1080-8-6M | 30 | 21.9／20.7／20.5（0.68–0.73×） | 36.8／36.6／37.2（1.22–1.24×） | 307–326 |
+| bbb-1080-10-2M | 30 | 21.3／19.8／21.2（0.66–0.71×） | 37.2／36.5／38.1（1.22–1.27×） | 277–299 |
+| bbb-1080-10-6M | 30 | 19.9／18.6／19.5（0.62–0.66×） | 33.2／33.6／33.0（1.10–1.12×） | 315–334 |
+| bbb-720-8-1M | 30 | 53.2／49.1／49.2（1.64–1.77×） | 89.1／92.2／97.8（2.97–3.26×） | 112–123 |
+| bbb-720-8-3M | 30 | 44.5／41.7／41.8（1.39–1.48×） | 71.7／73.4／76.1（2.39–2.54×） | 140–156 |
+| bbb-720-10-1M | 30 | 47.5／44.0／46.3（1.47–1.58×） | 77.5／82.2／84.6（2.58–2.82×） | 118–132 |
+| bbb-720-10-3M | 30 | 42.3／39.5／41.2（1.32–1.41×） | 67.3／69.3／69.4（2.24–2.31×） | 142–160 |
+| tos-800-8-3M | 24 | 13.4／12.5／12.2（0.51–0.56×） | 23.5／22.8／23.7（0.95–0.99×） | 551–1311（跟不上） |
+| tos-800-10-3M | 24 | 12.8／11.8／11.9（0.49–0.53×） | 22.2／22.1／20.7（0.86–0.93×） | 1813–3302（跟不上） |
+| tos-534-8-1.5M | 24 | 29.8／27.7／27.2（1.13–1.24×） | 46.6／47.9／50.8（1.94–2.11×） | 73–81 |
+| bbb-1080-8-2M-tiles | 30 | 24.3／22.6／22.6（0.75–0.81×） | 43.4／42.4／45.5（1.41–1.52×） | 255–262 |
+| tos-800-8-3M-grain | 24 | 11.4／10.8／10.6（0.44–0.47×） | 18.6／17.9／18.7（0.75–0.78×） | 5734–6911（跟不上） |
+
+- **三個引擎的差距在 10% 內**，JavaScriptCore 並沒有特別慢。
+- **內容比解析度更重要**：同樣「1080p 級」，實拍的 ToS（1920×800，像素只有 BBB 的 74%）每個 frame 比 BBB 動畫慢約 1.8 倍。bitrate 從 2 到 6 Mbps 慢 15–18%；10-bit 比 8-bit 慢 10–15%。
+- **2×2 tiles 對單執行緒沒有影響**（只影響多執行緒，§4）。
+- **film grain synthesis 很貴**：同一段 ToS，帶 grain 參數的檔案慢 20%，關掉 grain 合成（`export_side_data=film_grain`，由 decoder 輸出參數、不套用）就回到 22.4–23.0 fps（§7）。
+- **封包的耗時兩極化**：libaom 的 alt-ref 結構讓少數 temporal unit 很貴。`bbb-1080-8-2M` 的 `o3s-noasy` 每個封包 p50 7 ms，p95 94–100 ms，max 306–321 ms；`oz` 的 max 達 517–568 ms。所以「平均跟得上」還不夠，**播放前要先解好約 250–330 ms（1080p）或 110–160 ms（720p）**，否則遇到 alt-ref 就掉格。
+- **跟原生 dav1d 比**（同一台機器，單執行緒）[實測：`data/native.tsv`]：
+
+| 檔案 | 原生 asm（AVX2） | 原生 C（`--cpumask 0`） | wasm `o3s-noasy`（Chromium） | wasm `oz`（Chromium） |
+|---|---|---|---|---|
+| bbb-1080-8-2M | 200 fps | 62 fps | 43 fps | 25 fps |
+| bbb-1080-10-6M | 106 fps | 34 fps | 33 fps | 20 fps |
+| bbb-720-8-1M | 457 fps | 134 fps | 89 fps | 53 fps |
+| tos-800-8-3M | 131 fps | 36 fps | 24 fps | 13 fps |
+
+  wasm 加 auto-vectorization 大約是原生純 C 的 65–97%，但只有原生手寫組語的 18–31%。換句話說，**原生 dav1d 的速度大多來自手寫 SIMD，wasm 拿不到**，不能直接用原生 dav1d 的公開數據推估 wasm（§8）。
