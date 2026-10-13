@@ -151,7 +151,15 @@ function handleEngineError(error: EngineError) {
   }
 }
 
-engine.addEventListener('error', ({ error }) => handleEngineError(error), on); // 播放途中的致命錯誤也走同一條
+engine.addEventListener(
+  'error',
+  ({ error }) => {
+    // 非致命：播放中自動降級（例如影片解碼失敗、退回只播音訊），播放繼續。
+    if (!error.fatal) return showToast('影片無法解碼，改為只播放聲音');
+    handleEngineError(error); // 播放途中的致命錯誤也走同一條
+  },
+  on,
+);
 
 async function resumeAfterLogin(_error: EngineError) {
   await session.reLogin(); // App 的 session 失效流程

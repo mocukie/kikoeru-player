@@ -48,7 +48,7 @@
 - 主執行緒保留鏡像，Worker 在值改變時推送；持續變動、只存在於 Worker 的數字放 `getStats()`。
 - 順序保證：指令 resolve 時 getter 已是新值、事件已發出。
 - getter 顯示已生效的值（`paused` 例外，它是意圖）。
-- tracks 在 load 後只因指令改變；播放中才出現的 stream 只記 log。
+- tracks 在 load 後只因指令或降級（播放中影片解碼失敗、退回只播音訊）改變；播放中才出現的 stream 只記 log。
 
 ## 已定案
 
@@ -66,3 +66,11 @@
 - Q14 loading 期間的 `seek()` 改寫該次 load 的起點，與 load 一起 resolve。
 - Q9 行動裝置不放 core；A（Engine 選項）／B（hook）／C（選配模組，傾向）留給「行動裝置支援的歸屬」。core 必須提供：`statechange` 帶 `reason`；偵測外部對 AudioContext 的 suspend／resume 並反映到 `paused`；建立或 resume AudioContext 前同步發出 `beforeaudiostart`。
 - Q10 `Engine extends EventTarget`，每種事件一個帶型別欄位的 Event 子類別，`addEventListener` 有型別 overload，支援 `{ once, signal }`。
+
+## 之後的 ticket 帶來的修改
+
+- 「音訊解碼路線」（#12，ADR-0003）：
+  - 只要還有一條可播的音軌或影片軌，`load()` 就成功，不支援的影片軌只播音訊；完全沒有可播的軌才 `CODEC_UNSUPPORTED`。預設選軌只從 `supported` 的軌中選。
+  - `unsupportedReason`：`'codec'` 是 Engine 不支援，`'platform'` 是這個瀏覽器不支援。
+  - `isEngineSupported()` 不要求 WebCodecs。
+  - 播放中影片解碼失敗時退回只播音訊，發出 `fatal: false` 的 `error` 事件與 `trackschange`；音訊連續失敗超過 1 媒體秒才是致命的 `DECODE_FAILED`。

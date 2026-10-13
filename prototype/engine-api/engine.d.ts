@@ -7,7 +7,10 @@
 
 export declare function createEngine(options?: EngineOptions): Engine;
 
-/** 檢查目前瀏覽器能否執行 Engine（WebAssembly、AudioWorklet、Worker）。不檢查 codec。 */
+/**
+ * 檢查目前瀏覽器能否執行 Engine（WebAssembly、AudioWorklet、Worker）。不檢查 codec，也不要求 WebCodecs：
+ * 沒有 WebCodecs 時影片軌標為不支援，只播音訊（ADR-0003）。
+ */
 export declare function isEngineSupported(): boolean;
 
 export interface EngineOptions {
@@ -72,8 +75,8 @@ export interface Engine extends EventTarget {
   // - 順序保證：指令的 Promise resolve 時，相關 getter 已是新值，對應事件也已發出。
   // - getter 顯示「已生效」的值：例如 selectTracks() 進行中，selectedTracks 仍是舊軌，新軌出聲後才更新。
   //   唯一例外是 paused，它是使用者意圖，play()／pause() 呼叫當下就改變。
-  // - tracks 在 load() 之後只因指令改變（addExternalAudio、removeExternalAudio、setAudioOffset、
-  //   selectTracks 發現 codec 實際不支援）。播放中才出現的 stream 只記 log、不加入。
+  // - tracks 在 load() 之後只因指令或降級改變（addExternalAudio、removeExternalAudio、setAudioOffset、
+  //   selectTracks 發現 codec 實際不支援、播放中影片解碼失敗而退回只播音訊）。播放中才出現的 stream 只記 log、不加入。
 
   readonly state: EngineState;
   /**
@@ -121,6 +124,9 @@ export interface Engine extends EventTarget {
    * 載入新媒體。取代所有尚未完成的 load／seek／selectTracks／external audio 指令（以 AbortError 結束），
    * 並中止舊媒體的讀取。resolve 時 state 為 ready（或 options.paused === false 時為 playing）。
    * 失敗時 reject EngineError，state 變為 'error'。
+   * 只要還有一條可播的音軌或影片軌就成功；不支援的軌照樣列在 tracks（supported: false），
+   * 影片軌不支援或 configure 失敗時 selectedTracks.video 為 null、只播音訊。
+   * 沒有任何可播的軌時 reject EngineError('CODEC_UNSUPPORTED')。
    */
   load(source: Source, options?: LoadOptions): Promise<MediaInfo>;
 
@@ -151,6 +157,8 @@ export interface Engine extends EventTarget {
   /**
    * 播放中切換軌道，不重新載入、時間不跳。只帶要改的 kind；null 表示關閉該類軌道
    * （例如影片檔只播音訊、關掉字幕）。同一 kind 連續呼叫只保留最後一個。
+   * 選到 supported: false 的軌，或新軌 configure／首個 keyframe 失敗時，reject 非致命的
+   * EngineError('CODEC_UNSUPPORTED')，保留原本的軌；後者會把該軌改為 supported: false 並發出 trackschange。
    */
   selectTracks(selection: Partial<TrackSelection>): Promise<void>;
 
@@ -233,8 +241,8 @@ export interface LoadOptions {
   /** false 時載入完成後直接播放（等同 load 完再 play()）。預設 true：停在 ready。 */
   paused?: boolean;
   /**
-   * 初始軌道選擇。未指定的 kind：音軌依偏好語言 → default 旗標 → 第一條；
-   * 字幕只在 forced 或命中偏好語言時開啟。
+   * 初始軌道選擇。未指定的 kind 只從 supported 的軌中選：音軌依偏好語言 → default 旗標 → 第一條；
+   * 影片軌選 default 旗標 → 第一條；字幕只在 forced 或命中偏好語言時開啟。
    */
   tracks?: Partial<TrackSelection>;
   /** 偏好語言（BCP 47），覆蓋 EngineOptions.preferredLanguages。 */
@@ -297,8 +305,14 @@ export interface TrackBase {
   codec: string;
   /** WebCodecs codec string（只有影片軌），例如 'avc1.640028'。 */
   codecString?: string;
-  /** false 時無法選用；原因見 unsupportedReason。 */
+  /** false 時無法選用；原因見 unsupportedReason。播放中發現實際無法解碼時會改為 false 並發出 trackschange。 */
   supported: boolean;
+  /**
+   * - 'codec'：Engine 本身不支援，例如 wasm 沒有這個 decoder，或沒對應到 WebCodecs 的影片 codec。
+   * - 'platform'：Engine 支援、這個瀏覽器不支援，例如沒有 WebCodecs、isConfigSupported 為 false、
+   *   configure 或首個 keyframe 失敗。
+   * - 'bitmap-subtitle'：圖形字幕（PGS、DVD），Engine 不解碼。
+   */
   unsupportedReason?: 'codec' | 'platform' | 'bitmap-subtitle';
   /** 正規化為 BCP 47，例如 'ja'、'zh'；容器標 'und' 或無法對照時為 undefined。 */
   language?: string;
@@ -395,9 +409,12 @@ export interface EngineEventMap {
   durationchange: DurationChangeEvent;
   seeked: SeekedEvent;
   ended: Event;
-  /** 致命錯誤，state 同時變為 'error'。 */
+  /**
+   * fatal 時 state 同時變為 'error'。非致命的只在播放中自動降級時發出（例如影片解碼失敗、
+   * 退回只播音訊），state 不變；指令自己的失敗只出現在該指令的 reject，不另發事件。
+   */
   error: EngineErrorEvent;
-  /** 軌道清單或選擇改變（load 完成、加入外掛音軌、selectTracks 完成、offset 改變）。 */
+  /** 軌道清單或選擇改變（load 完成、加入外掛音軌、selectTracks 完成、offset 改變、影片解碼失敗退回只播音訊）。 */
   trackschange: TracksChangeEvent;
   bufferedchange: BufferedChangeEvent;
   videoresize: VideoResizeEvent;
@@ -487,8 +504,8 @@ export type EngineErrorCode =
   // 格式與解碼
   | 'FORMAT_UNSUPPORTED' //      probe 失敗、不認得的容器
   | 'FORMAT_CORRUPT' //          demux 途中資料損毀
-  | 'CODEC_UNSUPPORTED' //       沒有 wasm decoder、isConfigSupported false、configure 或首個 keyframe 失敗
-  | 'DECODE_FAILED' //           播放中解碼錯誤，重新設定後仍失敗
+  | 'CODEC_UNSUPPORTED' //       load()：沒有任何可播的軌；selectTracks()：選到不支援的軌、configure 或首個 keyframe 失敗
+  | 'DECODE_FAILED' //           播放中解碼錯誤：音訊連續失敗超過 1 媒體秒（致命）；影片重新設定後仍失敗（非致命，退回只播音訊）
   // 輸出與環境
   | 'AUDIO_LOCKED' //            沒有 user gesture 就要求播放
   | 'AUDIO_OUTPUT' //            AudioContext／AudioWorklet 無法啟動或恢復
@@ -503,7 +520,10 @@ export type EngineErrorCode =
 export declare class EngineError extends Error {
   readonly name: 'EngineError';
   readonly code: EngineErrorCode;
-  /** 致命錯誤會讓 state 進入 'error'；非致命的只出現在指令的 reject（例如外掛音軌載入失敗）。 */
+  /**
+   * 致命錯誤會讓 state 進入 'error'。非致命的出現在指令的 reject（例如外掛音軌載入失敗），
+   * 或播放中自動降級時的 error 事件（例如影片解碼失敗、退回只播音訊）。
+   */
   readonly fatal: boolean;
   /** 發生時的播放位置，供重新載入時接續。 */
   readonly position: number;
