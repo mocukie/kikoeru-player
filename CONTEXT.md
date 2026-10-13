@@ -57,7 +57,7 @@ _Avoid_: 操作、request、action
 _Avoid_: 取消、cancel（取消指由 App 主動中止）
 
 **播放意圖（Playback intent）**:
-使用者要播還是要停，與 Engine 實際所處的狀態分開記錄。
+使用者要播還是要停，與 Engine 實際所處的狀態分開記錄；程式中以 boolean `paused` 表示（true 表示要停），沿用 `HTMLMediaElement.paused`。
 _Avoid_: 播放狀態、state（指意圖時）
 
 **卡住（Stall）**:
