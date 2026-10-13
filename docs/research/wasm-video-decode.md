@@ -35,3 +35,27 @@
 | `tos-800-8-3M-grain` | 同上，film grain synthesis（`-denoise-noise-level 10`） | 1920×800 | 24 | 8 | 3 Mbps |
 
 - 每個量測只跑一次（每次 480–600 個 frame）。三個瀏覽器的同組數字差距多在 ±10% 內，可以當作重複性的參考。
+
+## 1. libav.js 的 dav1d（「2026-08 加入的 dav1d variant」）
+
+**存在，但只在 master，沒有任何 release 含它** [已查證]。
+
+- PR [#108「Add dav1d AV1 decoder variant」](https://github.com/Yahweasel/libav.js/pull/108)（外部貢獻者，2026-08-20 開，**2026-08-30 merge**），兩個 commit：`f8f1e84`（新增）、`430ae83`（整理：改名為 `decoder-dav1d`、對齊其他 library 的 build 規則）。之後 `c05a676`（2026-08-31）在 CI 加了 `apt install meson`，該 commit 的 CI「Build and test」通過。
+- 最新的 tag 是 `v6.10.9.0`（2026-08-18，早於 PR），npm 的 `libav.js` 最新版也是 6.10.9，`@libav.js/variant-decoder-dav1d` 不存在（npm 404）。所以「可以直接用」的意思只能是：**釘 master 的 commit 自己 build**。我們本來就自己 build（ADR-0001），差別只在釘 commit 而不是 tag。`v6.10.9.0..c05a676` 只有 dav1d 與 CI 的改動，產物版本字串仍是 `6.10.9.0`。
+- 維護者在 PR 裡表示 dav1d「應該是預設的 AV1 decoder，而不是 AOM」。README 對既有的 `av1-opus`（libaom）variant 仍寫著「AV1 在 WebAssembly 即使開 threads 也慢到實際上無法使用」，這句話指的是 libaom。
+
+**內容** [原始碼，`c05a676`]：
+
+| 項目 | 內容 |
+|---|---|
+| 預建 config | `configs/configs/decoder-dav1d`：`["avcodec","parser-av1","decoder-libdav1d"]`，`noAll`（不進 release 的 variant 清單） |
+| fragment | `configs/fragments/decoder-libdav1d`：`--enable-libdav1d --enable-decoder=libdav1d`，**另外固定開 `av1_metadata` 與 `extract_extradata` 兩個 bsf**；`license.js` 帶 dav1d 的 BSD-2 條文 |
+| dav1d 版本 | `mk/libdav1d.mk`：`DAV1D_VERSION=1.5.4`，從 code.videolan.org 下載 tarball（**不驗證 hash**，跟其他依賴一樣，要自己先放好並核對 sha256） |
+| dav1d 的 build | meson（`mk/emscripten.meson.cross`），`--buildtype=release -Dc_args="$(OPTFLAGS) …" -Denable_asm=false`，tools／tests 關閉；`base` 與 `thr` 兩個 target 各 build 一次 |
+| patch | `patches/dav1d.diff`：emscripten 時不加 `threads` 依賴、不對 wasm 強加 atomics flag（避免非 threaded build 帶進 pthread flag） |
+
+- **對我們的意義**：可以直接把 `"decoder-libdav1d"` 加進自訂 variant 的 fragment 清單（本次的 `kikoeru-afv`、`kikoeru-dav1d` 就是這樣 build），不需要 fork 或另寫 build 規則。#10 的 build 環境只要多裝 `meson`、`ninja-build`。
+- **兩個要自己處理的地方**：
+  1. dav1d 的編譯選項跟著全域的 `OPTFLAGS`（預設 `-Oz`），而且 `-Denable_asm=false`。速度差很多（§3），要用 `-O3 -msimd128` 就得改 `mk/libdav1d.mk` 一行（或整個 variant 改 `OPTFLAGS`）。這屬於 build 設定，不必改 libav.js 的程式。
+  2. libav.js 的 `base` target 一律連結 emfiberthreads（用 fiber 模擬 pthread），dav1d 在非 threaded build 也能呼叫 `pthread_create`。FFmpeg 的 `libdav1d` wrapper 以 `AVCodecContext.thread_count`（預設 1）決定 `n_threads`，所以預設就是單執行緒；**不可以把 `threads` 設成 0（auto）或大於 1**，否則在 fiber 上跑多個「執行緒」只會更慢 [原始碼：`libavcodec/libdav1d.c` L206–229；libav.js `docs/API.md` 對 emfiberthreads 的說明]。
+- **dav1d 沒有 wasm 的手寫 SIMD**：dav1d 1.5.4 與 master 的 `src/` 只有 `arm`、`x86`、`ppc`、`loongarch`、`riscv` 的組語，沒有 wasm；VideoLAN GitLab 上與 wasm 有關的 MR 只有 CI 與 build 修正（!1239、!1491、!1492），2019 年的 emscripten 最佳化 MR !606 已關閉 [已查證]。所以 wasm 的 SIMD 只能靠編譯器 auto-vectorization（`-msimd128`）。ogv.js 的 dav1d build 正是用 `-O3 -msimd128`、`-Denable_asm=false`，另外只開 8-bit（`-Dbitdepths=['8']`）[已查證：ogv.js `buildscripts/compileDav1dWasm.sh`、`dav1d-wasm-cross.txt`]。本次確認 `o3s` 的 wasm 裡有約 1.29 萬個 SIMD 指令，`oz`／`o3` 是 0 [實測：`wasm-dis` 計數]。
