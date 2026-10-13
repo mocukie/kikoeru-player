@@ -125,4 +125,35 @@ decode-only fps（Chromium／WebKit／Firefox）：
 | bbb-720-8-1M | 52.8／49.1／49.2 | 85.6／87.2／94.7 | 89.1／92.3／98.0 | 89.5／92.6／97.7 |
 | tos-800-8-3M | 13.5／12.4／12.3 | 22.4／21.7／22.8 | 23.1／22.5／23.8 | 23.5／22.8／23.7 |
 
-  主 variant 內的 dav1d（mix、Asyncify）是最佳組合的 95–97%。也就是說，**選項 A 與選項 B 的速度差只有 3–5%**，選擇要看體積、載入時機與執行緒配置（§5、§9）。
+  主 variant 內的 dav1d（mix、Asyncify）是最佳組合的 94–97%。也就是說，**選項 A 與選項 B 的速度差只有 3–6%**，選擇要看體積、載入時機與執行緒配置（§5、§9）。
+
+## 4. wasm threads
+
+**開 threads 很有效：2 threads 約 1.6–1.75 倍，4 threads 約 2–2.6 倍（有 tiles 時 3.1 倍），但前提是 `crossOriginIsolated`** [實測：`data/threads.json`]。
+
+`kikoeru-dav1d` o3s-noasy 的 `thr` build，頁面與所有 script 都帶 COOP `same-origin`／COEP `require-corp`，libav.js direct 模式，`thread_count = N`（dav1d 依 N 自動決定同時解幾個 frame：2–4 threads 為 2 個、5–9 為 3 個 [原始碼：dav1d `src/lib.c` 的 `fc_lut`]），pthread pool = N＋1。wall-clock fps（Chromium／WebKit／Firefox）：
+
+| 檔案 | 1 | 2 | 3 | 4 | 6 | 8 |
+|---|---|---|---|---|---|---|
+| bbb-1080-8-2M | 43.6／43.3／45.1 | 71.0／71.2／72.0 | 86.9／90.0／90.8 | 92.9／96.8／97.7 | 130.5／136.4／137.9 | 131.1／136.8／134.3 |
+| bbb-1080-10-6M | 33.2／33.6／32.2 | 52.6／53.3／50.8 | 62.7／64.5／68.4 | 67.4／67.5／65.9 | 90.9／93.8／89.0 | 87.8／91.0／89.1 |
+| bbb-1080-8-2M-tiles | 43.4／42.7／44.7 | 76.6／73.9／78.2 | 109.5／105.1／113.9 | 133.8／134.0／139.4 | 199.7／203.2／202.8 | 223.2／242.1／244.9 |
+| tos-800-8-3M | 23.5／22.8／23.4 | 40.5／40.2／40.8 | 52.7／52.4／55.5 | 60.0／60.2／62.1 | 88.5／90.3／90.9 | 89.9／91.0／91.6 |
+
+- 三個引擎（含 WebKit）的 threads 都能用，scaling 也一樣。
+- 沒有 tiles 時，scaling 在 frame 數換檔處跳一階（4 → 6 threads 從 2 個 frame 變 3 個），4 threads 之後要靠 tiles 才繼續變快。
+- **要幾條 thread 才即時**（這台機器、`o3s`）：BBB 1080p 1 條就夠；實拍 ToS（1920×800、24 fps）要 2 條（40 fps，1.7 倍）；10-bit 6 Mbps 的 1080p 2 條有 1.75 倍。手機核心慢多少，就要再乘上去（§8）。
+- **測試機有 32 核，threads 之間沒有互搶**。手機只有 2 個效能核心加 4 個節能核心，第 3 條以後會落到節能核心，scaling 會比上表差 [推論]。
+
+**發現的問題：threaded build 在 direct 模式下，memory grow 之後 JS 端的 heap view 不會更新** [實測]。
+
+- 第一輪量測（`data/threads-run1.json`）中，Chromium 的 2、6、8 threads 都丟出 `RangeError: offset is out of bounds`（`ff_set_packet` → `Module.HEAPU8.set`）。Node 也能重現，`oz`、`o3s`、有無 Asyncify 都一樣。
+- 原因：`thr` build 的 memory 是 `SharedArrayBuffer`，dav1d 的 worker thread 呼叫 `malloc` 讓 memory grow 時，只有該 thread 的 view 會更新；libav.js 的 JS 程式直接用 `Module.HEAPU8`，在呼叫端 thread 看到的仍是舊長度。emsdk 6.0.5 產生的 glue 裡沒有 `GROWABLE_HEAP_*` 的檢查 [原始碼：產物 `updateMemoryViews`]。
+- 繞過方式：量測時把 shared memory 的初始大小開到 512 MiB（`t-decode.mjs` 包一層 `WebAssembly.Memory`），之後全部通過，表內是第二輪的數字。正式做法可以是 build 時設較大的 `INITIAL_MEMORY`（thread 版才需要）、每次呼叫前比對 `buffer` 並重建 view，或者向 upstream 回報。
+- 另一個觀察：pthread Worker 的 script URL 寫錯（改檔名但沒改 glue 內的檔名）時，WebKit 不會報錯而是一直卡住，Chromium 則是 `worker error`。threaded build 的初始化要有 timeout。
+
+**`crossOriginIsolated` 的前提** [已查證]：
+
+- wasm threads 需要 `SharedArrayBuffer`，也就是頁面必須 cross-origin isolated。Safari 15.2 起支援 COOP／COEP 並重新開放 `SharedArrayBuffer` 與 wasm threads [WebKit「New WebKit Features in Safari 15.2」；BCD `webassembly/threads-and-atomics`：Chrome 74、Firefox 79、Safari 15.2]。
+- COEP `credentialless` 在 Safari 仍不支援（BCD：`safari: false`），所以在 Safari 上要 isolation，就只能全站送 `require-corp`。這正是 ADR-0001 否決 SAB 的理由。
+- 本次的 harness 必須讓**所有** response（頁面、Worker script、pthread Worker 的 glue、wasm、媒體）都帶 COOP／COEP／CORP，才能在三個引擎都取得 isolation。
