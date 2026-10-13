@@ -64,6 +64,5 @@
 - Q12 外掛音軌屬於當前媒體（`load()`／`unload()` 移除、`reload()` 保留），加入後不自動選用，載入失敗為非致命錯誤。
 - Q13 重試可設定：5xx／網路錯誤預設指數退避 3 次（base 500ms）；401／403／404 不重試；卡住 8 秒後中止讀取並重新 seek，最多 2 次。
 - Q14 loading 期間的 `seek()` 改寫該次 load 的起點，與 load 一起 resolve。
-
 - Q9 行動裝置不放 core；A（Engine 選項）／B（hook）／C（選配模組，傾向）留給「行動裝置支援的歸屬」。core 必須提供：`statechange` 帶 `reason`；偵測外部對 AudioContext 的 suspend／resume 並反映到 `paused`；建立或 resume AudioContext 前同步發出 `beforeaudiostart`。
 - Q10 `Engine extends EventTarget`，每種事件一個帶型別欄位的 Event 子類別，`addEventListener` 有型別 overload，支援 `{ once, signal }`。
