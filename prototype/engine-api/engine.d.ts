@@ -44,13 +44,6 @@ export interface EngineOptions {
   log?: LogHook;
   /** 送進 log hook 的最低等級，預設 'warn'。 */
   logLevel?: LogLevel;
-  /** Q9：行動裝置的處理放 Engine 還是 App，待「行動裝置支援的歸屬」定案；這裡只先留位置。 */
-  mobile?: {
-    /** iOS：在解鎖音訊時設定 `navigator.audioSession.type = "playback"`。 */
-    audioSessionPlayback?: boolean;
-    /** Android：同步播放狀態的靜音 anchor `<audio>`。 */
-    anchorAudio?: HTMLAudioElement;
-  };
 }
 
 // ───────────────────────────── Engine ─────────────────────────────
@@ -66,7 +59,12 @@ export type EngineState =
   | 'ended' //     播到結尾
   | 'error'; //    當前媒體發生致命錯誤，見 `engine.error`；load() 可重新開始
 
-export interface Engine {
+/**
+ * 行動裝置（iOS audioSession、靜音 anchor `<audio>`）不在 core：歸屬由「行動裝置支援的歸屬」決定。
+ * core 只提供所需的時機點與狀態：`beforeaudiostart` 事件、帶 reason 的 statechange、
+ * 以及偵測外部對 AudioContext 的 suspend／resume。
+ */
+export interface Engine extends EventTarget {
   // ── 唯讀狀態 ──
   //
   // 同步讀取：主執行緒保留鏡像，由 Worker 在值改變時推送；持續變動又只存在於 Worker 的數字放在 getStats()。
@@ -112,6 +110,7 @@ export interface Engine {
    * 在 user gesture 的同步段內呼叫，建立或 resume AudioContext。
    * play() 若在 user gesture 內被呼叫也會自動解鎖，所以多數 App 不需要直接呼叫。
    * 若之後沒有 gesture 就 play()，會以 AUDIO_LOCKED 拒絕。
+   * 建立或 resume AudioContext 之前會同步發出 `beforeaudiostart`。
    */
   unlockAudio(): void;
   readonly audioUnlocked: boolean;
@@ -199,16 +198,34 @@ export interface Engine {
     options?: { signal?: AbortSignal; onProgress?: (fraction: number) => void },
   ): Promise<SubtitleCue[]>;
 
-  // ── 事件與診斷 ──
+  // ── 事件（標準 EventTarget；支援 { once, signal }） ──
 
-  on<K extends keyof EngineEventMap>(type: K, listener: (event: EngineEventMap[K]) => void): Unsubscribe;
-  off<K extends keyof EngineEventMap>(type: K, listener: (event: EngineEventMap[K]) => void): void;
+  addEventListener<K extends keyof EngineEventMap>(
+    type: K,
+    listener: (this: Engine, event: EngineEventMap[K]) => unknown,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  removeEventListener<K extends keyof EngineEventMap>(
+    type: K,
+    listener: (this: Engine, event: EngineEventMap[K]) => unknown,
+    options?: boolean | EventListenerOptions,
+  ): void;
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | EventListenerOptions,
+  ): void;
+
+  // ── 診斷 ──
 
   /** 取一次統計快照；非同步，因為大部分數字在 Worker 內。 */
   getStats(): Promise<EngineStats>;
 }
-
-export type Unsubscribe = () => void;
 
 export interface LoadOptions {
   /** 起始位置，預設 0。用於 session 失效後的重新載入。 */
@@ -255,7 +272,6 @@ export interface BlobSource {
   kind: 'blob';
   blob: Blob;
 }
-
 
 // ───────────────────────────── 媒體與軌道 ─────────────────────────────
 
@@ -369,25 +385,92 @@ export interface AssCue extends CueBase {
 
 // ───────────────────────────── 事件 ─────────────────────────────
 
+// 每種事件一個 Event 子類別，欄位直接放在事件上（不用 CustomEvent.detail）。
+// 事件一律在主執行緒同步 dispatch；指令 resolve 前，對應事件已經發出。
+
 export interface EngineEventMap {
-  statechange: { state: EngineState; previous: EngineState };
+  statechange: StateChangeEvent;
   /** 依 timeUpdateInterval 節流；seek 完成時一定會補發一次。 */
-  timeupdate: { currentTime: number };
-  durationchange: { duration: number };
-  seeked: { currentTime: number };
-  ended: Record<string, never>;
+  timeupdate: TimeUpdateEvent;
+  durationchange: DurationChangeEvent;
+  seeked: SeekedEvent;
+  ended: Event;
   /** 致命錯誤，state 同時變為 'error'。 */
-  error: { error: EngineError };
+  error: EngineErrorEvent;
   /** 軌道清單或選擇改變（load 完成、加入外掛音軌、selectTracks 完成、offset 改變）。 */
-  trackschange: { tracks: readonly Track[]; selected: Readonly<TrackSelection> };
-  bufferedchange: { buffered: readonly TimeRange[] };
-  videoresize: { size: VideoSize | null };
+  trackschange: TracksChangeEvent;
+  bufferedchange: BufferedChangeEvent;
+  videoresize: VideoResizeEvent;
   /** 一批新的內嵌字幕 cue（只送選中的字幕軌）。 */
-  cues: { trackId: string; cues: readonly SubtitleCue[] };
+  cues: CuesEvent;
   /** buffering 超過 stallTimeout，Engine 開始自動恢復。 */
-  stall: { since: number; position: number };
+  stall: StallEvent;
   /** 卡住後恢復播放。 */
-  stallrecovered: { stalledMs: number; attempts: number };
+  stallrecovered: StallRecoveredEvent;
+  /**
+   * 即將建立或 resume AudioContext（unlockAudio()、gesture 內的 play()、中斷後恢復）。
+   * 在 user gesture 的同步段內 dispatch；listener 必須同步完成，例如設定
+   * `navigator.audioSession.type = "playback"`、啟動靜音 anchor `<audio>`。
+   */
+  beforeaudiostart: BeforeAudioStartEvent;
+}
+
+/**
+ * state 或 paused 改變的原因。
+ * - 'command'：App 的指令（load、play、pause、seek、selectTracks…）。
+ * - 'media'：播放本身的進展（載入完成、緩衝用完或補上、seek 完成、播到結尾）。
+ * - 'stall'：卡住偵測與自動恢復。
+ * - 'error'：致命錯誤。
+ * - 'interrupted'：系統中斷音訊（iOS 來電、其他 App 搶走 audio session）；paused 變為 true，結束後不自動恢復。
+ * - 'external'：AudioContext 被 Engine 以外的人 suspend／resume（例如 iOS 鎖屏控制直接操作 AudioContext）；
+ *   paused 跟著變。
+ */
+export type StateChangeReason = 'command' | 'media' | 'stall' | 'error' | 'interrupted' | 'external';
+
+export declare class StateChangeEvent extends Event {
+  readonly state: EngineState;
+  readonly previous: EngineState;
+  readonly paused: boolean;
+  readonly reason: StateChangeReason;
+}
+export declare class TimeUpdateEvent extends Event {
+  readonly currentTime: number;
+}
+export declare class DurationChangeEvent extends Event {
+  readonly duration: number;
+}
+export declare class SeekedEvent extends Event {
+  readonly currentTime: number;
+}
+export declare class EngineErrorEvent extends Event {
+  readonly error: EngineError;
+}
+export declare class TracksChangeEvent extends Event {
+  readonly tracks: readonly Track[];
+  readonly selected: Readonly<TrackSelection>;
+}
+export declare class BufferedChangeEvent extends Event {
+  readonly buffered: readonly TimeRange[];
+}
+export declare class VideoResizeEvent extends Event {
+  readonly size: VideoSize | null;
+}
+export declare class CuesEvent extends Event {
+  readonly trackId: string;
+  readonly cues: readonly SubtitleCue[];
+}
+export declare class StallEvent extends Event {
+  /** 開始卡住的 performance.now() 時間。 */
+  readonly since: number;
+  readonly position: number;
+}
+export declare class StallRecoveredEvent extends Event {
+  readonly stalledMs: number;
+  readonly attempts: number;
+}
+export declare class BeforeAudioStartEvent extends Event {
+  /** 'unlock'：第一次建立或解鎖；'resume'：暫停或中斷後恢復。 */
+  readonly cause: 'unlock' | 'resume';
 }
 
 // ───────────────────────────── 錯誤 ─────────────────────────────

@@ -21,13 +21,37 @@ const engine: Engine = createEngine({
   logLevel: 'info',
 });
 
-engine.on('statechange', ({ state }) => renderPlayButton(state === 'playing' || state === 'buffering'));
-engine.on('timeupdate', ({ currentTime }) => renderSeekbar(currentTime, engine.duration));
-engine.on('bufferedchange', ({ buffered }) => renderBufferedBar(buffered));
-engine.on('trackschange', ({ tracks, selected }) => renderTrackMenu(tracks, selected));
-engine.on('stall', ({ position }) => showToast(`讀取卡住（${position.toFixed(1)}s），正在恢復…`));
-engine.on('stallrecovered', () => hideToast());
-engine.on('ended', () => playNextInQueue());
+// 播放頁卸載時用同一個 AbortController 移除所有 listener。
+const listeners = new AbortController();
+const on = { signal: listeners.signal };
+
+engine.addEventListener('statechange', (e) => renderPlayButton(!e.paused), on);
+engine.addEventListener('timeupdate', (e) => renderSeekbar(e.currentTime, engine.duration), on);
+engine.addEventListener('bufferedchange', (e) => renderBufferedBar(e.buffered), on);
+engine.addEventListener('trackschange', (e) => renderTrackMenu(e.tracks, e.selected), on);
+engine.addEventListener('stall', (e) => showToast(`讀取卡住（${e.position.toFixed(1)}s），正在恢復…`), on);
+engine.addEventListener('stallrecovered', () => hideToast(), on);
+engine.addEventListener('ended', () => playNextInQueue(), on);
+
+// Media Session 的 playbackState 跟著 paused 走；鎖屏控制或系統中斷造成的暫停也會反映在這裡。
+engine.addEventListener(
+  'statechange',
+  (e) => {
+    navigator.mediaSession.playbackState = e.paused ? 'paused' : 'playing';
+    if (e.reason === 'interrupted') showToast('播放被系統中斷');
+  },
+  on,
+);
+
+// iOS：音訊啟動前設定 audio session（歸屬待「行動裝置支援的歸屬」定案，這裡示範 App 自己做）。
+engine.addEventListener(
+  'beforeaudiostart',
+  () => {
+    const nav = navigator as Navigator & { audioSession?: { type: string } };
+    if (nav.audioSession) nav.audioSession.type = 'playback';
+  },
+  on,
+);
 
 // ─── 2. 開檔並播放（使用者點了一首曲目，是 user gesture） ───
 
@@ -90,19 +114,27 @@ async function useDubbedAudio(flacUrl: string) {
 
 const cueStore = new Map<string, SubtitleCue>();
 
-engine.on('trackschange', ({ tracks, selected }) => {
-  const sub = tracks.find((t) => t.id === selected.subtitle);
-  if (sub?.kind === 'subtitle' && sub.header) assRenderer.setHeader(sub.header);
-});
+engine.addEventListener(
+  'trackschange',
+  ({ tracks, selected }) => {
+    const sub = tracks.find((t) => t.id === selected.subtitle);
+    if (sub?.kind === 'subtitle' && sub.header) assRenderer.setHeader(sub.header);
+  },
+  on,
+);
 
-engine.on('cues', ({ cues }) => {
-  for (const cue of cues) {
-    if (cueStore.has(cue.id)) continue; // seek 後可能重送
-    cueStore.set(cue.id, cue);
-    if ('dialogue' in cue) assRenderer.addEvent(cue.dialogue);
-    else textRenderer.add(cue.start, cue.end, cue.text);
-  }
-});
+engine.addEventListener(
+  'cues',
+  ({ cues }) => {
+    for (const cue of cues) {
+      if (cueStore.has(cue.id)) continue; // seek 後可能重送
+      cueStore.set(cue.id, cue);
+      if ('dialogue' in cue) assRenderer.addEvent(cue.dialogue);
+      else textRenderer.add(cue.start, cue.end, cue.text);
+    }
+  },
+  on,
+);
 
 // ─── 7. session 失效：401 → 重新登入 → 從原位置接續 ───
 
@@ -119,7 +151,7 @@ function handleEngineError(error: EngineError) {
   }
 }
 
-engine.on('error', ({ error }) => handleEngineError(error)); // 播放途中的致命錯誤也走同一條
+engine.addEventListener('error', ({ error }) => handleEngineError(error), on); // 播放途中的致命錯誤也走同一條
 
 async function resumeAfterLogin(_error: EngineError) {
   await session.reLogin(); // App 的 session 失效流程
@@ -143,6 +175,7 @@ debugPanelButton.onclick = async () => {
 // ─── 9. 離開播放頁 ───
 
 async function leavePlayerPage() {
+  listeners.abort();
   await engine.destroy(); // 中止讀取、終止 Worker、關閉 AudioContext；未完成的指令 AbortError
 }
 

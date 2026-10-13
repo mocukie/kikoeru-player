@@ -23,6 +23,8 @@
 | buffering | 超過 `stallTimeout` | 仍是 buffering，發 `stall`，恢復後 `stallrecovered` |
 | ready、paused、playing、buffering、ended | `seek()`、改目前音軌的 offset | seeking → 依 `paused` 回 playing／paused |
 | playing | 播到結尾 | ended |
+| playing、buffering | 系統中斷（reason `interrupted`）或外部 suspend AudioContext（reason `external`） | paused（`paused` 變 true，不自動恢復） |
+| paused | 外部 resume AudioContext（reason `external`） | playing |
 | ended | `play()` | seeking(0) → playing |
 | 任何載入中或已載入 | 致命錯誤 | error |
 | 任何 | `unload()` | idle |
@@ -63,7 +65,5 @@
 - Q13 重試可設定：5xx／網路錯誤預設指數退避 3 次（base 500ms）；401／403／404 不重試；卡住 8 秒後中止讀取並重新 seek，最多 2 次。
 - Q14 loading 期間的 `seek()` 改寫該次 load 的起點，與 load 一起 resolve。
 
-## 待定案的問題
-
-- Q9 行動裝置：Engine 選項（A）還是 hook（B）。
-- Q10 事件 API：`on()`／`off()` 還是繼承 `EventTarget`。
+- Q9 行動裝置不放 core；A（Engine 選項）／B（hook）／C（選配模組，傾向）留給「行動裝置支援的歸屬」。core 必須提供：`statechange` 帶 `reason`；偵測外部對 AudioContext 的 suspend／resume 並反映到 `paused`；建立或 resume AudioContext 前同步發出 `beforeaudiostart`。
+- Q10 `Engine extends EventTarget`，每種事件一個帶型別欄位的 Event 子類別，`addEventListener` 有型別 overload，支援 `{ once, signal }`。
