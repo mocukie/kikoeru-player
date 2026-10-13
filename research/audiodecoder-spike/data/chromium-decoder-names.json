@@ -1,0 +1,209 @@
+{
+ "m-names {\"cdpMedia\":true}": {
+  "chromium": {
+   "ok": false,
+   "error": "page.evaluate: Error: Could not open source file\n    at http://127.0.0.1:39653/dist/libav-6.10.9.0-kikoeru-af.wasm.mjs:573:224291\n    at async openAudio (http://127.0.0.1:39653/audio.mjs:10:26)\n    at async Module.run (http://127.0.0.1:39653/m-names.mjs:12:15)\n    at async <anonymous>:337:30",
+   "ms": 2017,
+   "version": "153.0.8010.12",
+   "mediaLog": [
+    {
+     "player": "11144397DCF3ADEEDEF6A9AD3B1C26BC",
+     "props": [
+      {
+       "name": "kAudioDecoderName",
+       "value": "FFmpegAudioDecoder"
+      },
+      {
+       "name": "kFrameUrl",
+       "value": "http://127.0.0.1:39653/index.html"
+      },
+      {
+       "name": "kAudioTracks",
+       "value": "[{\"bytes per channel\":4,\"bytes per frame\":8,\"channel layout\":\"STEREO\",\"channels\":2,\"codec\":\"aac\",\"codec delay\":0,\"discard decoder delay\":true,\"encryption scheme\":\"Unencrypted\",\"has extra data\":true,\"profile\":\"unknown\",\"sample format\":\"Float 32-bit planar\",\"samples per second\":48000,\"seek preroll\":\"0us\"}]"
+      },
+      {
+       "name": "kFrameTitle",
+       "value": "libav.js runtime spike"
+      },
+      {
+       "name": "kIsPlatformAudioDecoder",
+       "value": "false"
+      }
+     ]
+    },
+    {
+     "player": "11144397DCF3ADEEDEF6A9AD3B1C26BC",
+     "msgs": [
+      "Cannot select SymphoniaAudioDecoder for audio decoding. status=DecoderStatus::Codes::kUnsupportedCodec",
+      "Cannot select IamfAudioDecoder for audio decoding. status=DecoderStatus::Codes::kUnsupportedCodec",
+      "Cannot select OpusAudioDecoder for audio decoding. status=DecoderStatus::Codes::kUnsupportedConfig",
+      "Initialized AudioDecoder: codec: aac, profile: unknown, bytes_per_channel: 4, channel_layout: STEREO, channels: 2, samples_per_second: 48000, sample_format: Float 32-bit planar, bytes_per_frame: 8, seek_preroll: 0us, codec_delay: 0, has extra data: true, encryption scheme: Unencrypted, discard decoder delay: true, target_output_channel_layout: NONE, target_output_sample_format: Unknown sample format"
+     ]
+    },
+    {
+     "player": "6D02B10B85B9E1572902323C5E734D24",
+     "props": [
+      {
+       "name": "kAudioDecoderName",
+       "value": "SymphoniaAudioDecoder"
+      },
+      {
+       "name": "kFrameUrl",
+       "value": "http://127.0.0.1:39653/index.html"
+      },
+      {
+       "name": "kAudioTracks",
+       "value": "[{\"bytes per channel\":4,\"bytes per frame\":8,\"channel layout\":\"STEREO\",\"channels\":2,\"codec\":\"mp3\",\"codec delay\":0,\"discard decoder delay\":true,\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"profile\":\"unknown\",\"sample format\":\"Float 32-bit planar\",\"samples per second\":44100,\"seek preroll\":\"0us\"}]"
+      },
+      {
+       "name": "kFrameTitle",
+       "value": "libav.js runtime spike"
+      },
+      {
+       "name": "kIsPlatformAudioDecoder",
+       "value": "false"
+      }
+     ]
+    },
+    {
+     "player": "6D02B10B85B9E1572902323C5E734D24",
+     "msgs": [
+      "Initialized AudioDecoder: codec: mp3, profile: unknown, bytes_per_channel: 4, channel_layout: STEREO, channels: 2, samples_per_second: 44100, sample_format: Float 32-bit planar, bytes_per_frame: 8, seek_preroll: 0us, codec_delay: 0, has extra data: false, encryption scheme: Unencrypted, discard decoder delay: true, target_output_channel_layout: NONE, target_output_sample_format: Unknown sample format"
+     ]
+    },
+    {
+     "player": "D79F9566FE5D7EF8490D19D4D955D593",
+     "props": [
+      {
+       "name": "kAudioDecoderName",
+       "value": "OpusAudioDecoder"
+      },
+      {
+       "name": "kFrameUrl",
+       "value": "http://127.0.0.1:39653/index.html"
+      },
+      {
+       "name": "kAudioTracks",
+       "value": "[{\"bytes per channel\":4,\"bytes per frame\":8,\"channel layout\":\"STEREO\",\"channels\":2,\"codec\":\"opus\",\"codec delay\":0,\"discard decoder delay\":true,\"encryption scheme\":\"Unencrypted\",\"has extra data\":true,\"profile\":\"unknown\",\"sample format\":\"Float 32-bit planar\",\"samples per second\":48000,\"seek preroll\":\"0us\"}]"
+      },
+      {
+       "name": "kFrameTitle",
+       "value": "libav.js runtime spike"
+      },
+      {
+       "name": "kIsPlatformAudioDecoder",
+       "value": "false"
+      }
+     ]
+    },
+    {
+     "player": "D79F9566FE5D7EF8490D19D4D955D593",
+     "msgs": [
+      "Cannot select SymphoniaAudioDecoder for audio decoding. status=DecoderStatus::Codes::kUnsupportedCodec",
+      "Cannot select IamfAudioDecoder for audio decoding. status=DecoderStatus::Codes::kUnsupportedCodec",
+      "Initialized AudioDecoder: codec: opus, profile: unknown, bytes_per_channel: 4, channel_layout: STEREO, channels: 2, samples_per_second: 48000, sample_format: Float 32-bit planar, bytes_per_frame: 8, seek_preroll: 0us, codec_delay: 0, has extra data: true, encryption scheme: Unencrypted, discard decoder delay: true, target_output_channel_layout: NONE, target_output_sample_format: Unknown sample format"
+     ]
+    },
+    {
+     "player": "5CA941F9863A296110BC29CBA74662E0",
+     "props": [
+      {
+       "name": "kAudioDecoderName",
+       "value": "SymphoniaAudioDecoder"
+      },
+      {
+       "name": "kFrameUrl",
+       "value": "http://127.0.0.1:39653/index.html"
+      },
+      {
+       "name": "kAudioTracks",
+       "value": "[{\"bytes per channel\":4,\"bytes per frame\":8,\"channel layout\":\"STEREO\",\"channels\":2,\"codec\":\"flac\",\"codec delay\":0,\"discard decoder delay\":true,\"encryption scheme\":\"Unencrypted\",\"has extra data\":true,\"profile\":\"unknown\",\"sample format\":\"Float 32-bit planar\",\"samples per second\":48000,\"seek preroll\":\"0us\"}]"
+      },
+      {
+       "name": "kFrameTitle",
+       "value": "libav.js runtime spike"
+      },
+      {
+       "name": "kIsPlatformAudioDecoder",
+       "value": "false"
+      }
+     ]
+    },
+    {
+     "player": "5CA941F9863A296110BC29CBA74662E0",
+     "msgs": [
+      "Initialized AudioDecoder: codec: flac, profile: unknown, bytes_per_channel: 4, channel_layout: STEREO, channels: 2, samples_per_second: 48000, sample_format: Float 32-bit planar, bytes_per_frame: 8, seek_preroll: 0us, codec_delay: 0, has extra data: true, encryption scheme: Unencrypted, discard decoder delay: true, target_output_channel_layout: NONE, target_output_sample_format: Unknown sample format"
+     ]
+    },
+    {
+     "player": "344052DDC252605E809DD78DF55015E6",
+     "props": [
+      {
+       "name": "kAudioDecoderName",
+       "value": "FFmpegAudioDecoder"
+      },
+      {
+       "name": "kFrameUrl",
+       "value": "http://127.0.0.1:39653/index.html"
+      },
+      {
+       "name": "kAudioTracks",
+       "value": "[{\"bytes per channel\":4,\"bytes per frame\":8,\"channel layout\":\"STEREO\",\"channels\":2,\"codec\":\"vorbis\",\"codec delay\":0,\"discard decoder delay\":true,\"encryption scheme\":\"Unencrypted\",\"has extra data\":true,\"profile\":\"unknown\",\"sample format\":\"Float 32-bit planar\",\"samples per second\":48000,\"seek preroll\":\"0us\"}]"
+      },
+      {
+       "name": "kFrameTitle",
+       "value": "libav.js runtime spike"
+      },
+      {
+       "name": "kIsPlatformAudioDecoder",
+       "value": "false"
+      }
+     ]
+    },
+    {
+     "player": "344052DDC252605E809DD78DF55015E6",
+     "msgs": [
+      "Cannot select SymphoniaAudioDecoder for audio decoding. status=DecoderStatus::Codes::kUnsupportedCodec",
+      "Cannot select IamfAudioDecoder for audio decoding. status=DecoderStatus::Codes::kUnsupportedCodec",
+      "Cannot select OpusAudioDecoder for audio decoding. status=DecoderStatus::Codes::kUnsupportedConfig",
+      "Initialized AudioDecoder: codec: vorbis, profile: unknown, bytes_per_channel: 4, channel_layout: STEREO, channels: 2, samples_per_second: 48000, sample_format: Float 32-bit planar, bytes_per_frame: 8, seek_preroll: 0us, codec_delay: 0, has extra data: true, encryption scheme: Unencrypted, discard decoder delay: true, target_output_channel_layout: NONE, target_output_sample_format: Unknown sample format"
+     ]
+    },
+    {
+     "player": "9AAB93EE9752C970D3EBE08BC1C21258",
+     "props": [
+      {
+       "name": "kAudioDecoderName",
+       "value": "FFmpegAudioDecoder"
+      },
+      {
+       "name": "kFrameUrl",
+       "value": "http://127.0.0.1:39653/index.html"
+      },
+      {
+       "name": "kAudioTracks",
+       "value": "[{\"bytes per channel\":4,\"bytes per frame\":8,\"channel layout\":\"STEREO\",\"channels\":2,\"codec\":\"pcm\",\"codec delay\":0,\"discard decoder delay\":true,\"encryption scheme\":\"Unencrypted\",\"has extra data\":false,\"profile\":\"unknown\",\"sample format\":\"Signed 24-bit\",\"samples per second\":96000,\"seek preroll\":\"0us\"}]"
+      },
+      {
+       "name": "kFrameTitle",
+       "value": "libav.js runtime spike"
+      },
+      {
+       "name": "kIsPlatformAudioDecoder",
+       "value": "false"
+      }
+     ]
+    },
+    {
+     "player": "9AAB93EE9752C970D3EBE08BC1C21258",
+     "msgs": [
+      "Cannot select SymphoniaAudioDecoder for audio decoding. status=DecoderStatus::Codes::kUnsupportedCodec",
+      "Cannot select IamfAudioDecoder for audio decoding. status=DecoderStatus::Codes::kUnsupportedCodec",
+      "Cannot select OpusAudioDecoder for audio decoding. status=DecoderStatus::Codes::kUnsupportedConfig",
+      "Initialized AudioDecoder: codec: pcm, profile: unknown, bytes_per_channel: 4, channel_layout: STEREO, channels: 2, samples_per_second: 96000, sample_format: Signed 24-bit, bytes_per_frame: 8, seek_preroll: 0us, codec_delay: 0, has extra data: false, encryption scheme: Unencrypted, discard decoder delay: true, target_output_channel_layout: NONE, target_output_sample_format: Unknown sample format"
+     ]
+    }
+   ]
+  }
+ }
+}

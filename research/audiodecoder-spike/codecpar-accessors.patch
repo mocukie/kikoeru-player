@@ -1,0 +1,48 @@
+diff -ru a/funcs.json b/funcs.json
+--- a/funcs.json	2026-10-13 14:06:42.554886183 +0000
++++ b/funcs.json	2026-10-13 14:07:13.713147837 +0000
+@@ -171,6 +171,9 @@
+             ]],
+             ["AVCodecParameters", [
+                 "bit_rate",
++                "bits_per_coded_sample",
++                "bits_per_raw_sample",
++                "block_align",
+                 "channel_layoutmask",
+                 "channels",
+                 "ch_layout_nb_channels",
+@@ -186,12 +189,16 @@
+                 "extradata",
+                 "extradata_size",
+                 "format",
++                "frame_size",
+                 {"name": "framerate", "rational": true},
+                 "height",
++                "initial_padding",
+                 "level",
+                 "nb_coded_side_data",
+                 "profile",
+                 "sample_rate",
++                "seek_preroll",
++                "trailing_padding",
+                 "width"
+             ]],
+             ["AVPacket", [
+diff -ru a/src/b-avcodec.c b/src/b-avcodec.c
+--- a/src/b-avcodec.c	2026-10-13 14:06:42.551425415 +0000
++++ b/src/b-avcodec.c	2026-10-13 14:07:13.713226889 +0000
+@@ -135,6 +135,14 @@
+ B(enum AVColorSpace, color_space)
+ B(enum AVChromaLocation, chroma_location)
+ B(int, sample_rate)
++/* encoder delay／padding 與 seek preroll：AudioDecoder 路線要自己裁 sample（#18） */
++B(int, initial_padding)
++B(int, trailing_padding)
++B(int, seek_preroll)
++B(int, frame_size)
++B(int, block_align)
++B(int, bits_per_coded_sample)
++B(int, bits_per_raw_sample)
+ 
+ #if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(60, 30, 100)
+ B(AVPacketSideData *, coded_side_data)

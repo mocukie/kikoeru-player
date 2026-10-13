@@ -1,0 +1,8083 @@
+{
+ "chromium": {
+  "support {\"files\":[\"acc-aac.m4a\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-aac.m4a": {
+       "config": {
+        "codec": "mp4a.40.2",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 5
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 940,
+        "samples": 962560,
+        "wasmSamples": 960576,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32-planar"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 233,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"acc-aac.aac\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-aac.aac": {
+       "config": {
+        "codec": "mp4a.40.2",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 940,
+        "samples": 962560,
+        "wasmSamples": 962560,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32-planar"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 237,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"acc-mp3.mp3\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-mp3.mp3": {
+       "config": {
+        "codec": "mp3",
+        "sampleRate": 44100,
+        "numberOfChannels": 2,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 768,
+        "samples": 884736,
+        "wasmSamples": 882542,
+        "outSr": 44100,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 252,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"acc-opus.opus\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-opus.opus": {
+       "config": {
+        "codec": "opus",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 19
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 1001,
+        "samples": 960648,
+        "wasmSamples": 960590,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 334,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"acc-opus.webm\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-opus.webm": {
+       "config": {
+        "codec": "opus",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 19
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 1001,
+        "samples": 960648,
+        "wasmSamples": 960590,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 322,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"acc-flac.flac\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-flac.flac": {
+       "config": {
+        "codec": "flac",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 42
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 209,
+        "samples": 960590,
+        "wasmSamples": 960590,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "s32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 221,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"acc-vorbis.ogg\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-vorbis.ogg": {
+       "config": {
+        "codec": "vorbis",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 4286
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 946,
+        "samples": 960640,
+        "wasmSamples": 960590,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32-planar"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 230,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"acc-vorbis.webm\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-vorbis.webm": {
+       "config": {
+        "codec": "vorbis",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 4351
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 946,
+        "samples": 960640,
+        "wasmSamples": 960640,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32-planar"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 240,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cs-aac-6ch.m4a\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-aac-6ch.m4a": {
+       "config": {
+        "codec": "mp4a.40.2",
+        "sampleRate": 48000,
+        "numberOfChannels": 6,
+        "description": 5
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 142,
+        "samples": 145408,
+        "wasmSamples": 144000,
+        "outSr": 48000,
+        "outCh": 6,
+        "format": "f32-planar"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 146,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cs-aac-96k.m4a\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-aac-96k.m4a": {
+       "config": {
+        "codec": "mp4a.40.2",
+        "sampleRate": 96000,
+        "numberOfChannels": 2,
+        "description": 5
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 283,
+        "samples": 289792,
+        "wasmSamples": 288000,
+        "outSr": 96000,
+        "outCh": 2,
+        "format": "f32-planar"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 136,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cs-opus-6ch.opus\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-opus-6ch.opus": {
+       "config": {
+        "codec": "opus",
+        "sampleRate": 48000,
+        "numberOfChannels": 6,
+        "description": 27
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 151,
+        "samples": 144648,
+        "wasmSamples": 144000,
+        "outSr": 48000,
+        "outCh": 6,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 188,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cs-flac-6ch.flac\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-flac-6ch.flac": {
+       "config": {
+        "codec": "flac",
+        "sampleRate": 48000,
+        "numberOfChannels": 6,
+        "description": 42
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 32,
+        "samples": 144000,
+        "wasmSamples": 144000,
+        "outSr": 48000,
+        "outCh": 6,
+        "format": "s32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 140,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cs-flac-192k24.flac\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-flac-192k24.flac": {
+       "config": {
+        "codec": "flac",
+        "sampleRate": 192000,
+        "numberOfChannels": 2,
+        "description": 42
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 36,
+        "samples": 576000,
+        "wasmSamples": 576000,
+        "outSr": 192000,
+        "outCh": 2,
+        "format": "s32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 139,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cs-flac-384k24.flac\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-flac-384k24.flac": {
+       "config": {
+        "codec": "flac",
+        "sampleRate": 384000,
+        "numberOfChannels": 2,
+        "description": 42
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 36,
+        "samples": 1152000,
+        "wasmSamples": 1152000,
+        "outSr": 384000,
+        "outCh": 2,
+        "format": "s32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 188,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cs-vorbis-6ch.ogg\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-vorbis-6ch.ogg": {
+       "config": {
+        "codec": "vorbis",
+        "sampleRate": 48000,
+        "numberOfChannels": 6,
+        "description": 9596
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 142,
+        "samples": 144064,
+        "wasmSamples": 144000,
+        "outSr": 48000,
+        "outCh": 6,
+        "format": "f32-planar"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 139,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cs-mp3-22k-mono.mp3\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-mp3-22k-mono.mp3": {
+       "config": {
+        "codec": "mp3",
+        "sampleRate": 22050,
+        "numberOfChannels": 1,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 117,
+        "samples": 67392,
+        "wasmSamples": 66150,
+        "outSr": 22050,
+        "outCh": 1,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 103,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cs-mp3-8k-mono.mp3\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-mp3-8k-mono.mp3": {
+       "config": {
+        "codec": "mp3",
+        "sampleRate": 8000,
+        "numberOfChannels": 1,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 44,
+        "samples": 25344,
+        "wasmSamples": 24000,
+        "outSr": 8000,
+        "outCh": 1,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 94,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cs-ac3-6ch.ac3\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-ac3-6ch.ac3": {
+       "error": "Error: Could not open source file\n    at http://127.0.0.1:33655/dist/libav-6.10.9.0-kikoeru-af.wasm.mjs:573:224291\n    at async openAudio (http://127.0.0.1:33655/audio.mjs:10:26)\n    at async Module.run (http://127.0.0.1:33655/t-support.mjs:31:17)\n    at async self.onmessage (http://127.0.0.1:33655/worker.mjs:11:20)"
+      }
+     }
+    },
+    "ms": 75,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cs-eac3-6ch.eac3\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-eac3-6ch.eac3": {
+       "error": "Error: Could not open source file\n    at http://127.0.0.1:33655/dist/libav-6.10.9.0-kikoeru-af.wasm.mjs:573:224291\n    at async openAudio (http://127.0.0.1:33655/audio.mjs:10:26)\n    at async Module.run (http://127.0.0.1:33655/t-support.mjs:31:17)\n    at async self.onmessage (http://127.0.0.1:33655/worker.mjs:11:20)"
+      }
+     }
+    },
+    "ms": 74,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cs-alac.m4a\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-alac.m4a": {
+       "config": {
+        "codec": "alac",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 36
+       },
+       "supported": false,
+       "decode": {
+        "error": "NotSupportedError: Unknown or ambiguous codec name.",
+        "outputs": 0,
+        "samples": 0,
+        "wasmSamples": 144000,
+        "format": null
+       },
+       "verdict": "unsupported"
+      }
+     }
+    },
+    "ms": 108,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cs-pcm-s24-96k.wav\"]}": {
+   "chromium": {
+    "ok": false,
+    "error": "page.evaluate: Target crashed ",
+    "ms": 213,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cs-pcm-f32.wav\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-pcm-f32.wav": {
+       "config": {
+        "codec": "pcm-f32",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 36,
+        "samples": 144000,
+        "wasmSamples": 144000,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 94,
+    "version": "153.0.8010.12"
+   }
+  }
+ },
+ "firefox": {
+  "support": {
+   "firefox": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "vorbis": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "flac": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-aac.m4a": {
+       "config": {
+        "codec": "mp4a.40.2",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 5
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 940,
+        "samples": 962560,
+        "wasmSamples": 960576,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "acc-aac.aac": {
+       "config": {
+        "codec": "mp4a.40.2",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 940,
+        "samples": 962560,
+        "wasmSamples": 962560,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "acc-mp3.mp3": {
+       "config": {
+        "codec": "mp3",
+        "sampleRate": 44100,
+        "numberOfChannels": 2,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 768,
+        "samples": 884736,
+        "wasmSamples": 882542,
+        "outSr": 44100,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "acc-opus.opus": {
+       "config": {
+        "codec": "opus",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 19
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 1001,
+        "samples": 960648,
+        "wasmSamples": 960590,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "acc-opus.webm": {
+       "config": {
+        "codec": "opus",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 19
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 1001,
+        "samples": 960648,
+        "wasmSamples": 960590,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "acc-flac.flac": {
+       "config": {
+        "codec": "flac",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 42
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 209,
+        "samples": 960590,
+        "wasmSamples": 960590,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "acc-vorbis.ogg": {
+       "config": {
+        "codec": "vorbis",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 4286
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 947,
+        "samples": 960640,
+        "wasmSamples": 960590,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "acc-vorbis.webm": {
+       "config": {
+        "codec": "vorbis",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 4351
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 947,
+        "samples": 960640,
+        "wasmSamples": 960640,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "cs-aac-6ch.m4a": {
+       "config": {
+        "codec": "mp4a.40.2",
+        "sampleRate": 48000,
+        "numberOfChannels": 6,
+        "description": 5
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 142,
+        "samples": 145408,
+        "wasmSamples": 144000,
+        "outSr": 48000,
+        "outCh": 6,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "cs-aac-96k.m4a": {
+       "config": {
+        "codec": "mp4a.40.2",
+        "sampleRate": 96000,
+        "numberOfChannels": 2,
+        "description": 5
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 283,
+        "samples": 289792,
+        "wasmSamples": 288000,
+        "outSr": 96000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "cs-opus-6ch.opus": {
+       "config": {
+        "codec": "opus",
+        "sampleRate": 48000,
+        "numberOfChannels": 6,
+        "description": 27
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 151,
+        "samples": 144648,
+        "wasmSamples": 144000,
+        "outSr": 48000,
+        "outCh": 6,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "cs-flac-6ch.flac": {
+       "config": {
+        "codec": "flac",
+        "sampleRate": 48000,
+        "numberOfChannels": 6,
+        "description": 42
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 32,
+        "samples": 144000,
+        "wasmSamples": 144000,
+        "outSr": 48000,
+        "outCh": 6,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "cs-flac-192k24.flac": {
+       "config": {
+        "codec": "flac",
+        "sampleRate": 192000,
+        "numberOfChannels": 2,
+        "description": 42
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 36,
+        "samples": 576000,
+        "wasmSamples": 576000,
+        "outSr": 192000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "cs-flac-384k24.flac": {
+       "config": {
+        "codec": "flac",
+        "sampleRate": 384000,
+        "numberOfChannels": 2,
+        "description": 42
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 36,
+        "samples": 1152000,
+        "wasmSamples": 1152000,
+        "outSr": 384000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "cs-vorbis-6ch.ogg": {
+       "config": {
+        "codec": "vorbis",
+        "sampleRate": 48000,
+        "numberOfChannels": 6,
+        "description": 9596
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 143,
+        "samples": 144064,
+        "wasmSamples": 144000,
+        "outSr": 48000,
+        "outCh": 6,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "cs-mp3-22k-mono.mp3": {
+       "config": {
+        "codec": "mp3",
+        "sampleRate": 22050,
+        "numberOfChannels": 1,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 117,
+        "samples": 67392,
+        "wasmSamples": 66150,
+        "outSr": 22050,
+        "outCh": 1,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "cs-mp3-8k-mono.mp3": {
+       "config": {
+        "codec": "mp3",
+        "sampleRate": 8000,
+        "numberOfChannels": 1,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 44,
+        "samples": 25344,
+        "wasmSamples": 24000,
+        "outSr": 8000,
+        "outCh": 1,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "cs-ac3-6ch.ac3": {
+       "error": "LibAVFactory/ff_init_demuxer_file/<@http://127.0.0.1:42419/dist/libav-6.10.9.0-kikoeru-af.wasm.mjs:573:224291\npromise callback*ff_init_demuxer_file@http://127.0.0.1:42419/dist/libav-6.10.9.0-kikoeru-af.wasm.mjs:573:224239\nLibAVFactory/Module.ff_init_demuxer_file/<@http://127.0.0.1:42419/dist/libav-6.10.9.0-kikoeru-af.wasm.mjs:573:225312\nserially@http://127.0.0.1:42419/dist/libav-6.10.9.0-kikoeru-af.wasm.mjs:573:130653\nLibAVFactory/Module.ff_init_demuxer_file@http://127.0.0.1:42419/dist/libav-6.1"
+      },
+      "cs-eac3-6ch.eac3": {
+       "error": "LibAVFactory/ff_init_demuxer_file/<@http://127.0.0.1:42419/dist/libav-6.10.9.0-kikoeru-af.wasm.mjs:573:224291\npromise callback*ff_init_demuxer_file@http://127.0.0.1:42419/dist/libav-6.10.9.0-kikoeru-af.wasm.mjs:573:224239\nLibAVFactory/Module.ff_init_demuxer_file/<@http://127.0.0.1:42419/dist/libav-6.10.9.0-kikoeru-af.wasm.mjs:573:225312\nserially@http://127.0.0.1:42419/dist/libav-6.10.9.0-kikoeru-af.wasm.mjs:573:130653\nLibAVFactory/Module.ff_init_demuxer_file@http://127.0.0.1:42419/dist/libav-6.1"
+      },
+      "cs-alac.m4a": {
+       "config": {
+        "codec": "alac",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 36
+       },
+       "supported": false,
+       "decode": {
+        "error": "NotSupportedError: Operation is not supported",
+        "outputs": 0,
+        "samples": 0,
+        "wasmSamples": 144000,
+        "format": null
+       },
+       "verdict": "unsupported"
+      },
+      "cs-pcm-s24-96k.wav": {
+       "config": {
+        "codec": "pcm-s24",
+        "sampleRate": 96000,
+        "numberOfChannels": 2,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 36,
+        "samples": 216000,
+        "wasmSamples": 288000,
+        "outSr": 96000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "cs-pcm-f32.wav": {
+       "config": {
+        "codec": "pcm-f32",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 36,
+        "samples": 144000,
+        "wasmSamples": 144000,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      },
+      "cpu-pcm192.wav": {
+       "config": {
+        "codec": "pcm-s24",
+        "sampleRate": 192000,
+        "numberOfChannels": 2,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 200,
+        "samples": 2457600,
+        "wasmSamples": 3276800,
+        "outSr": 192000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 4396,
+    "version": "155.0"
+   }
+  }
+ },
+ "webkit": {
+  "support {\"files\":[\"acc-aac.m4a\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-aac.m4a": {
+       "config": {
+        "codec": "mp4a.40.2",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 5
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 940,
+        "samples": 962560,
+        "wasmSamples": 960576,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32-planar"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 401,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"acc-aac.aac\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-aac.aac": {
+       "config": {
+        "codec": "mp4a.40.2",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 940,
+        "samples": 962560,
+        "wasmSamples": 962560,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32-planar"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 422,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"acc-mp3.mp3\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-mp3.mp3": {
+       "config": {
+        "codec": "mp3",
+        "sampleRate": 44100,
+        "numberOfChannels": 2,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 768,
+        "samples": 884736,
+        "wasmSamples": 882542,
+        "outSr": 44100,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 441,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"acc-opus.opus\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-opus.opus": {
+       "config": {
+        "codec": "opus",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 19
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 1001,
+        "samples": 960960,
+        "wasmSamples": 960590,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 518,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"acc-opus.webm\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-opus.webm": {
+       "config": {
+        "codec": "opus",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 19
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 1001,
+        "samples": 960960,
+        "wasmSamples": 960590,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 518,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"acc-flac.flac\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-flac.flac": {
+       "config": {
+        "codec": "flac",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 42
+       },
+       "supported": true,
+       "decode": {
+        "error": "EncodingError: Decode error",
+        "outputs": 0,
+        "samples": 0,
+        "wasmSamples": 960590,
+        "format": null
+       },
+       "verdict": "false-positive"
+      }
+     }
+    },
+    "ms": 358,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"acc-vorbis.ogg\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-vorbis.ogg": {
+       "config": {
+        "codec": "vorbis",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 4286
+       },
+       "supported": true,
+       "decode": {
+        "error": "Error: flush timeout (queue 0, outputs 0)",
+        "outputs": 0,
+        "samples": 0,
+        "wasmSamples": 960590,
+        "format": null
+       },
+       "verdict": "false-positive"
+      }
+     }
+    },
+    "ms": 15369,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"acc-vorbis.webm\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "acc-vorbis.webm": {
+       "config": {
+        "codec": "vorbis",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 4351
+       },
+       "supported": true,
+       "decode": {
+        "error": "Error: flush timeout (queue 0, outputs 0)",
+        "outputs": 0,
+        "samples": 0,
+        "wasmSamples": 960640,
+        "format": null
+       },
+       "verdict": "false-positive"
+      }
+     }
+    },
+    "ms": 15357,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"cs-aac-6ch.m4a\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-aac-6ch.m4a": {
+       "config": {
+        "codec": "mp4a.40.2",
+        "sampleRate": 48000,
+        "numberOfChannels": 6,
+        "description": 5
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 142,
+        "samples": 145408,
+        "wasmSamples": 144000,
+        "outSr": 48000,
+        "outCh": 6,
+        "format": "f32-planar"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 307,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"cs-aac-96k.m4a\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-aac-96k.m4a": {
+       "config": {
+        "codec": "mp4a.40.2",
+        "sampleRate": 96000,
+        "numberOfChannels": 2,
+        "description": 5
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 283,
+        "samples": 289792,
+        "wasmSamples": 288000,
+        "outSr": 96000,
+        "outCh": 2,
+        "format": "f32-planar"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 303,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"cs-opus-6ch.opus\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-opus-6ch.opus": {
+       "config": {
+        "codec": "opus",
+        "sampleRate": 48000,
+        "numberOfChannels": 6,
+        "description": 27
+       },
+       "supported": true,
+       "decode": {
+        "error": "Error: flush timeout (queue 0, outputs 0)",
+        "outputs": 0,
+        "samples": 0,
+        "wasmSamples": 144000,
+        "format": null
+       },
+       "verdict": "false-positive"
+      }
+     }
+    },
+    "ms": 15329,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"cs-flac-6ch.flac\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-flac-6ch.flac": {
+       "config": {
+        "codec": "flac",
+        "sampleRate": 48000,
+        "numberOfChannels": 6,
+        "description": 42
+       },
+       "supported": true,
+       "decode": {
+        "error": "EncodingError: Decode error",
+        "outputs": 0,
+        "samples": 0,
+        "wasmSamples": 144000,
+        "format": null
+       },
+       "verdict": "false-positive"
+      }
+     }
+    },
+    "ms": 291,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"cs-flac-192k24.flac\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-flac-192k24.flac": {
+       "config": {
+        "codec": "flac",
+        "sampleRate": 192000,
+        "numberOfChannels": 2,
+        "description": 42
+       },
+       "supported": true,
+       "decode": {
+        "error": "EncodingError: Decode error",
+        "outputs": 0,
+        "samples": 0,
+        "wasmSamples": 576000,
+        "format": null
+       },
+       "verdict": "false-positive"
+      }
+     }
+    },
+    "ms": 293,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"cs-flac-384k24.flac\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-flac-384k24.flac": {
+       "config": {
+        "codec": "flac",
+        "sampleRate": 384000,
+        "numberOfChannels": 2,
+        "description": 42
+       },
+       "supported": true,
+       "decode": {
+        "error": "EncodingError: Decode error",
+        "outputs": 0,
+        "samples": 0,
+        "wasmSamples": 1152000,
+        "format": null
+       },
+       "verdict": "false-positive"
+      }
+     }
+    },
+    "ms": 330,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"cs-vorbis-6ch.ogg\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-vorbis-6ch.ogg": {
+       "config": {
+        "codec": "vorbis",
+        "sampleRate": 48000,
+        "numberOfChannels": 6,
+        "description": 9596
+       },
+       "supported": true,
+       "decode": {
+        "error": "Error: flush timeout (queue 0, outputs 0)",
+        "outputs": 0,
+        "samples": 0,
+        "wasmSamples": 144000,
+        "format": null
+       },
+       "verdict": "false-positive"
+      }
+     }
+    },
+    "ms": 15292,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"cs-mp3-22k-mono.mp3\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-mp3-22k-mono.mp3": {
+       "config": {
+        "codec": "mp3",
+        "sampleRate": 22050,
+        "numberOfChannels": 1,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 117,
+        "samples": 67392,
+        "wasmSamples": 66150,
+        "outSr": 22050,
+        "outCh": 1,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 268,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"cs-mp3-8k-mono.mp3\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-mp3-8k-mono.mp3": {
+       "config": {
+        "codec": "mp3",
+        "sampleRate": 8000,
+        "numberOfChannels": 1,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 44,
+        "samples": 25344,
+        "wasmSamples": 24000,
+        "outSr": 8000,
+        "outCh": 1,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 257,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"cs-ac3-6ch.ac3\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-ac3-6ch.ac3": {
+       "error": "@http://127.0.0.1:46713/dist/libav-6.10.9.0-kikoeru-af.wasm.mjs:573:224300"
+      }
+     }
+    },
+    "ms": 247,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"cs-eac3-6ch.eac3\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-eac3-6ch.eac3": {
+       "error": "@http://127.0.0.1:46713/dist/libav-6.10.9.0-kikoeru-af.wasm.mjs:573:224300"
+      }
+     }
+    },
+    "ms": 247,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"cs-alac.m4a\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-alac.m4a": {
+       "config": {
+        "codec": "alac",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": 36
+       },
+       "supported": false,
+       "decode": {
+        "error": "NotSupportedError: Codec is not supported",
+        "outputs": 0,
+        "samples": 0,
+        "wasmSamples": 144000,
+        "format": null
+       },
+       "verdict": "unsupported"
+      }
+     }
+    },
+    "ms": 269,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"cs-pcm-s24-96k.wav\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-pcm-s24-96k.wav": {
+       "config": {
+        "codec": "pcm-s24",
+        "sampleRate": 96000,
+        "numberOfChannels": 2,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 36,
+        "samples": 288000,
+        "wasmSamples": 288000,
+        "outSr": 96000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 279,
+    "version": "26.6"
+   }
+  },
+  "support {\"files\":[\"cs-pcm-f32.wav\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "throws TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-pcm-f32.wav": {
+       "config": {
+        "codec": "pcm-f32",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 36,
+        "samples": 144000,
+        "wasmSamples": 144000,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 266,
+    "version": "26.6"
+   }
+  }
+ }
+}

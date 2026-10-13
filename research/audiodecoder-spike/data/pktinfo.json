@@ -1,0 +1,338 @@
+{
+ "pktinfo": {
+  "chromium": {
+   "ok": true,
+   "result": {
+    "acc-aac.m4a": {
+     "head": [
+      {
+       "i": 0,
+       "us": -21333,
+       "dur": 1024,
+       "flags": 5,
+       "skip": {
+        "start": 1024,
+        "end": 0
+       }
+      },
+      {
+       "i": 1,
+       "us": 0,
+       "dur": 1024,
+       "flags": 1,
+       "skip": null
+      },
+      {
+       "i": 2,
+       "us": 21333,
+       "dur": 1024,
+       "flags": 1,
+       "skip": null
+      }
+     ],
+     "tail": [
+      {
+       "i": 938,
+       "us": 19989333,
+       "dur": 1024,
+       "flags": 1,
+       "skip": null
+      },
+      {
+       "i": 939,
+       "us": 20010667,
+       "dur": 78,
+       "flags": 1,
+       "skip": {
+        "start": 0,
+        "end": 960
+       }
+      }
+     ],
+     "discardFlagged": 1
+    },
+    "acc-fdk.m4a": {
+     "head": [
+      {
+       "i": 0,
+       "us": -42667,
+       "dur": 1024,
+       "flags": 5,
+       "skip": {
+        "start": 2048,
+        "end": 0
+       }
+      },
+      {
+       "i": 1,
+       "us": -21333,
+       "dur": 1024,
+       "flags": 5,
+       "skip": null
+      },
+      {
+       "i": 2,
+       "us": 0,
+       "dur": 1024,
+       "flags": 1,
+       "skip": null
+      }
+     ],
+     "tail": [
+      {
+       "i": 939,
+       "us": 19989333,
+       "dur": 1024,
+       "flags": 1,
+       "skip": null
+      },
+      {
+       "i": 940,
+       "us": 20010667,
+       "dur": 78,
+       "flags": 1,
+       "skip": {
+        "start": 0,
+        "end": 960
+       }
+      }
+     ],
+     "discardFlagged": 2
+    },
+    "acc-mp3.mp3": {
+     "head": [
+      {
+       "i": 0,
+       "us": 0,
+       "dur": 368640,
+       "flags": 1,
+       "skip": {
+        "start": 1105,
+        "end": 0
+       }
+      },
+      {
+       "i": 1,
+       "us": 26122,
+       "dur": 368640,
+       "flags": 1,
+       "skip": null
+      },
+      {
+       "i": 2,
+       "us": 52245,
+       "dur": 368640,
+       "flags": 1,
+       "skip": null
+      }
+     ],
+     "tail": [
+      {
+       "i": 766,
+       "us": 20009796,
+       "dur": 368640,
+       "flags": 1,
+       "skip": null
+      },
+      {
+       "i": 767,
+       "us": 20035918,
+       "dur": 368640,
+       "flags": 1,
+       "skip": {
+        "start": 0,
+        "end": 1089
+       }
+      }
+     ],
+     "discardFlagged": 0
+    },
+    "acc-opus.opus": {
+     "head": [
+      {
+       "i": 0,
+       "us": -6500,
+       "dur": 960,
+       "flags": 1,
+       "skip": {
+        "start": 312,
+        "end": 0
+       }
+      },
+      {
+       "i": 1,
+       "us": 13500,
+       "dur": 960,
+       "flags": 1,
+       "skip": null
+      },
+      {
+       "i": 2,
+       "us": 33500,
+       "dur": 960,
+       "flags": 1,
+       "skip": null
+      }
+     ],
+     "tail": [
+      {
+       "i": 999,
+       "us": 19973500,
+       "dur": 960,
+       "flags": 1,
+       "skip": null
+      },
+      {
+       "i": 1000,
+       "us": 19993500,
+       "dur": 902,
+       "flags": 1,
+       "skip": {
+        "start": 0,
+        "end": 58
+       }
+      }
+     ],
+     "discardFlagged": 0
+    },
+    "acc-opus.webm": {
+     "head": [
+      {
+       "i": 0,
+       "us": -7000,
+       "dur": 20,
+       "flags": 1,
+       "skip": {
+        "start": 312,
+        "end": 0
+       }
+      },
+      {
+       "i": 1,
+       "us": 14000,
+       "dur": 20,
+       "flags": 1,
+       "skip": null
+      },
+      {
+       "i": 2,
+       "us": 34000,
+       "dur": 20,
+       "flags": 1,
+       "skip": null
+      }
+     ],
+     "tail": [
+      {
+       "i": 999,
+       "us": 19974000,
+       "dur": 20,
+       "flags": 1,
+       "skip": null
+      },
+      {
+       "i": 1000,
+       "us": 19994000,
+       "dur": 20,
+       "flags": 1,
+       "skip": {
+        "start": 0,
+        "end": 58
+       }
+      }
+     ],
+     "discardFlagged": 0
+    },
+    "acc-vorbis.ogg": {
+     "head": [
+      {
+       "i": 0,
+       "us": -2667,
+       "dur": 128,
+       "flags": 1,
+       "skip": null
+      },
+      {
+       "i": 1,
+       "us": 0,
+       "dur": 128,
+       "flags": 1,
+       "skip": null
+      },
+      {
+       "i": 2,
+       "us": 2667,
+       "dur": 576,
+       "flags": 1,
+       "skip": null
+      }
+     ],
+     "tail": [
+      {
+       "i": 945,
+       "us": 20008000,
+       "dur": 128,
+       "flags": 1,
+       "skip": null
+      },
+      {
+       "i": 946,
+       "us": 20010667,
+       "dur": 78,
+       "flags": 1,
+       "skip": {
+        "start": 0,
+        "end": 50
+       }
+      }
+     ],
+     "discardFlagged": 0
+    },
+    "acc-vorbis.webm": {
+     "head": [
+      {
+       "i": 0,
+       "us": 0,
+       "dur": 2,
+       "flags": 1,
+       "skip": null
+      },
+      {
+       "i": 1,
+       "us": 3000,
+       "dur": 2,
+       "flags": 1,
+       "skip": null
+      },
+      {
+       "i": 2,
+       "us": 6000,
+       "dur": 12,
+       "flags": 1,
+       "skip": null
+      }
+     ],
+     "tail": [
+      {
+       "i": 945,
+       "us": 20011000,
+       "dur": 2,
+       "flags": 1,
+       "skip": null
+      },
+      {
+       "i": 946,
+       "us": 20014000,
+       "dur": 2,
+       "flags": 1,
+       "skip": null
+      }
+     ],
+     "discardFlagged": 0
+    }
+   },
+   "ms": 177,
+   "version": "153.0.8010.12"
+  }
+ }
+}

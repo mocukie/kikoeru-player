@@ -1,0 +1,249 @@
+{
+ "files": {
+  "support {\"files\":[\"cs-pcm-s24-96k.wav\"]}": {
+   "chromium": {
+    "ok": false,
+    "error": "page.evaluate: Target crashed ",
+    "ms": 206,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cs-pcm-f32.wav\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "hasAudioDecoder": true,
+     "matrix": {
+      "mp4a.40.2": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.5": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.29": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.40.42": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.67": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.69": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp4a.6B": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "mp3": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "opus": {
+       "yes": [
+        "8k/1",
+        "8k/2",
+        "22.05k/1",
+        "22.05k/2",
+        "44.1k/1",
+        "44.1k/2",
+        "48k/1",
+        "48k/2",
+        "96k/1",
+        "96k/2",
+        "192k/1",
+        "192k/2",
+        "384k/1",
+        "384k/2"
+       ],
+       "noCount": 0,
+       "thrown": [
+        "TypeError"
+       ]
+      },
+      "vorbis": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "TypeError"
+       ]
+      },
+      "flac": {
+       "yes": [],
+       "noCount": 0,
+       "thrown": [
+        "TypeError"
+       ]
+      },
+      "ac-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "ec-3": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a5": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "mp4a.a6": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "alac": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "wavpack": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "dtsc": {
+       "yes": [],
+       "noCount": 28,
+       "thrown": []
+      },
+      "pcm-u8": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s16": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s24": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-s32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "pcm-f32": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "ulaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      },
+      "alaw": {
+       "yes": "all",
+       "noCount": 0,
+       "thrown": []
+      }
+     },
+     "files": {
+      "cs-pcm-f32.wav": {
+       "config": {
+        "codec": "pcm-f32",
+        "sampleRate": 48000,
+        "numberOfChannels": 2,
+        "description": null
+       },
+       "supported": true,
+       "decode": {
+        "error": null,
+        "outputs": 36,
+        "samples": 144000,
+        "wasmSamples": 144000,
+        "outSr": 48000,
+        "outCh": 2,
+        "format": "f32"
+       },
+       "verdict": "ok"
+      }
+     }
+    },
+    "ms": 94,
+    "version": "153.0.8010.12"
+   }
+  },
+  "support {\"files\":[\"cpu-pcm192.wav\"]}": {
+   "chromium": {
+    "ok": false,
+    "error": "page.evaluate: Target crashed ",
+    "ms": 443,
+    "version": "153.0.8010.12"
+   }
+  }
+ },
+ "minimal": {
+  "m-s24 {\"copy\":\"native\"}": {
+   "chromium": {
+    "ok": false,
+    "error": "page.evaluate: Target crashed ",
+    "ms": 116,
+    "version": "153.0.8010.12"
+   }
+  },
+  "m-s24 {\"copy\":\"f32-planar\"}": {
+   "chromium": {
+    "ok": false,
+    "error": "page.evaluate: Target crashed ",
+    "ms": 114,
+    "version": "153.0.8010.12"
+   }
+  },
+  "m-s24 {\"copy\":\"f32\"}": {
+   "chromium": {
+    "ok": false,
+    "error": "page.evaluate: Target crashed ",
+    "ms": 117,
+    "version": "153.0.8010.12"
+   }
+  },
+  "m-s24 {\"codec\":\"pcm-s16\",\"copy\":\"f32-planar\"}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "outputs": 4,
+     "format": "s16",
+     "error": null
+    },
+    "ms": 6,
+    "version": "153.0.8010.12"
+   }
+  },
+  "m-s24 {\"codec\":\"pcm-s32\",\"copy\":\"f32-planar\"}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "outputs": 4,
+     "format": "s32",
+     "error": null
+    },
+    "ms": 5,
+    "version": "153.0.8010.12"
+   }
+  }
+ }
+}

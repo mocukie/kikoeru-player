@@ -1,0 +1,3316 @@
+{
+ "chromium+firefox": {
+  "seek": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "acc-aac.m4a": {
+      "target": {
+       "pkt": 470,
+       "us": 10005333,
+       "pktDur": 1024
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11005333,
+        "chunkTs": 11005333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.484,
+         "snrDb": 4.5,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10984000,
+        "chunkTs": 10984000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10962667,
+        "chunkTs": 10962667,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10941333,
+        "chunkTs": 10941333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10920000,
+        "chunkTs": 10920000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10877333,
+        "chunkTs": 10877333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10834667,
+        "chunkTs": 10834667,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10749333,
+        "chunkTs": 10749333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0.453,
+         "snrDb": 4.5,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       }
+      }
+     },
+     "acc-aac.aac": {
+      "target": {
+       "pkt": 469,
+       "us": 10005333,
+       "pktDur": 1024
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11005333,
+        "chunkTs": 11005333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.441,
+         "snrDb": 6.6,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10984000,
+        "chunkTs": 10984000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10962667,
+        "chunkTs": 10962667,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10941333,
+        "chunkTs": 10941333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10920000,
+        "chunkTs": 10920000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10877333,
+        "chunkTs": 10877333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10834667,
+        "chunkTs": 10834667,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10749333,
+        "chunkTs": 10749333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0.462,
+         "snrDb": 4.9,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       }
+      }
+     },
+     "acc-mp3.mp3": {
+      "target": {
+       "pkt": 383,
+       "us": 10004898,
+       "pktDur": 1152
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11004898,
+        "chunkTs": 11004898,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.456,
+         "snrDb": -7.1,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10978776,
+        "chunkTs": 10978776,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.447,
+         "snrDb": 5.6,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10952653,
+        "chunkTs": 10952653,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10926531,
+        "chunkTs": 10926531,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10900408,
+        "chunkTs": 10900408,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10848163,
+        "chunkTs": 10848163,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10795918,
+        "chunkTs": 10795918,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10691429,
+        "chunkTs": 10691429,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0.456,
+         "snrDb": -7.1,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0.447,
+         "snrDb": 5.6,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       }
+      }
+     },
+     "acc-opus.opus": {
+      "target": {
+       "pkt": 501,
+       "us": 10013500,
+       "pktDur": 960
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11013500,
+        "chunkTs": 11013500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.417,
+         "snrDb": -3.6,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10993500,
+        "chunkTs": 10993500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.311,
+         "snrDb": 2.9,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10973500,
+        "chunkTs": 10973500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.188,
+         "snrDb": 9.8,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10953500,
+        "chunkTs": 10953500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.0984,
+         "snrDb": 17.1,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10933500,
+        "chunkTs": 10933500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.0512,
+         "snrDb": 23.2,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10893500,
+        "chunkTs": 10893500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.0141,
+         "snrDb": 34.9,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10853500,
+        "chunkTs": 10853500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.00329,
+         "snrDb": 47.5,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10773500,
+        "chunkTs": 10773500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.000237,
+         "snrDb": 70.4,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0.417,
+         "snrDb": -3.6,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0.311,
+         "snrDb": 2.9,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0.188,
+         "snrDb": 9.8,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0.0984,
+         "snrDb": 17.1,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0.0512,
+         "snrDb": 23.2,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0.0141,
+         "snrDb": 34.9,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0.00329,
+         "snrDb": 47.5,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0.000237,
+         "snrDb": 70.4,
+         "n": 2048
+        }
+       }
+      }
+     },
+     "acc-opus.webm": {
+      "target": {
+       "pkt": 501,
+       "us": 10014000,
+       "pktDur": 960
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11014000,
+        "chunkTs": 11014000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.417,
+         "snrDb": -3.4,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10994000,
+        "chunkTs": 10994000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.311,
+         "snrDb": 3.2,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10974000,
+        "chunkTs": 10974000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.188,
+         "snrDb": 10,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10954000,
+        "chunkTs": 10954000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.0984,
+         "snrDb": 17.3,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10934000,
+        "chunkTs": 10934000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.0512,
+         "snrDb": 23.4,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10894000,
+        "chunkTs": 10894000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.0141,
+         "snrDb": 35.1,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10854000,
+        "chunkTs": 10854000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.00329,
+         "snrDb": 47.7,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10774000,
+        "chunkTs": 10774000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.000237,
+         "snrDb": 70.6,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0.417,
+         "snrDb": -3.4,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0.311,
+         "snrDb": 3.2,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0.188,
+         "snrDb": 10,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0.0984,
+         "snrDb": 17.3,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0.0512,
+         "snrDb": 23.4,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0.0141,
+         "snrDb": 35.1,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0.00329,
+         "snrDb": 47.7,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0.000237,
+         "snrDb": 70.6,
+         "n": 2048
+        }
+       }
+      }
+     },
+     "acc-flac.flac": {
+      "target": {
+       "pkt": 105,
+       "us": 10080000,
+       "pktDur": 4608
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11080000,
+        "chunkTs": 11080000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10984000,
+        "chunkTs": 10984000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10888000,
+        "chunkTs": 10888000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10792000,
+        "chunkTs": 10792000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10696000,
+        "chunkTs": 10696000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10504000,
+        "chunkTs": 10504000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10312000,
+        "chunkTs": 10312000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 9928000,
+        "chunkTs": 9928000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       }
+      }
+     },
+     "acc-vorbis.ogg": {
+      "target": {
+       "pkt": 472,
+       "us": 10020000,
+       "pktDur": 1024
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11020000,
+        "chunkTs": 11020000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 896,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 1152
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10998667,
+        "chunkTs": 10998667,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 896,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10977333,
+        "chunkTs": 10977333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 896,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10956000,
+        "chunkTs": 10956000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 896,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10934667,
+        "chunkTs": 10934667,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 896,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10892000,
+        "chunkTs": 10892000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 896,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10849333,
+        "chunkTs": 10849333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 896,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10764000,
+        "chunkTs": 10764000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 896,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 1152
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       }
+      }
+     }
+    },
+    "ms": 3571,
+    "version": "153.0.8010.12"
+   },
+   "firefox": {
+    "ok": true,
+    "result": {
+     "acc-aac.m4a": {
+      "target": {
+       "pkt": 470,
+       "us": 10005333,
+       "pktDur": 1024
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11005333,
+        "chunkTs": 11005333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.484,
+         "snrDb": 4.5,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10984000,
+        "chunkTs": 10984000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10962667,
+        "chunkTs": 10962667,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10941333,
+        "chunkTs": 10941333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10920000,
+        "chunkTs": 10920000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10877333,
+        "chunkTs": 10877333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10834667,
+        "chunkTs": 10834667,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10749333,
+        "chunkTs": 10749333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0.453,
+         "snrDb": 4.5,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       }
+      }
+     },
+     "acc-aac.aac": {
+      "target": {
+       "pkt": 469,
+       "us": 10005333,
+       "pktDur": 1024
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11005333,
+        "chunkTs": 11005333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.441,
+         "snrDb": 6.6,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10984000,
+        "chunkTs": 10984000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10962667,
+        "chunkTs": 10962667,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10941333,
+        "chunkTs": 10941333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10920000,
+        "chunkTs": 10920000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10877333,
+        "chunkTs": 10877333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10834667,
+        "chunkTs": 10834667,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10749333,
+        "chunkTs": 10749333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0.462,
+         "snrDb": 4.9,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       }
+      }
+     },
+     "acc-mp3.mp3": {
+      "target": {
+       "pkt": 383,
+       "us": 10004898,
+       "pktDur": 1152
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11004898,
+        "chunkTs": 11004898,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.456,
+         "snrDb": -7.1,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10978776,
+        "chunkTs": 10978776,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.447,
+         "snrDb": 5.6,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10952653,
+        "chunkTs": 10952653,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 3.05e-05,
+         "snrDb": 88.5,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10926531,
+        "chunkTs": 10926531,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 3.05e-05,
+         "snrDb": 85.4,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10900408,
+        "chunkTs": 10900408,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 3.05e-05,
+         "snrDb": 83.1,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10848163,
+        "chunkTs": 10848163,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 3.05e-05,
+         "snrDb": 82.4,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10795918,
+        "chunkTs": 10795918,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 3.05e-05,
+         "snrDb": 80.7,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10691429,
+        "chunkTs": 10691429,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 3.05e-05,
+         "snrDb": 81.7,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0.456,
+         "snrDb": -7.1,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0.447,
+         "snrDb": 5.6,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       }
+      }
+     },
+     "acc-opus.opus": {
+      "target": {
+       "pkt": 501,
+       "us": 10013500,
+       "pktDur": 960
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11013500,
+        "chunkTs": 11013500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.417,
+         "snrDb": -3.6,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10993500,
+        "chunkTs": 10993500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.311,
+         "snrDb": 2.9,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10973500,
+        "chunkTs": 10973500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.188,
+         "snrDb": 9.8,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10953500,
+        "chunkTs": 10953500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.0984,
+         "snrDb": 17.1,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10933500,
+        "chunkTs": 10933500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.0512,
+         "snrDb": 23.2,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10893500,
+        "chunkTs": 10893500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.0141,
+         "snrDb": 34.9,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10853500,
+        "chunkTs": 10853500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.00329,
+         "snrDb": 47.5,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10773500,
+        "chunkTs": 10773500,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.000237,
+         "snrDb": 70.4,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0.417,
+         "snrDb": -3.6,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0.311,
+         "snrDb": 2.9,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0.188,
+         "snrDb": 9.8,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0.0984,
+         "snrDb": 17.1,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0.0512,
+         "snrDb": 23.2,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0.0141,
+         "snrDb": 34.9,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0.00329,
+         "snrDb": 47.5,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0.000237,
+         "snrDb": 70.4,
+         "n": 2048
+        }
+       }
+      }
+     },
+     "acc-opus.webm": {
+      "target": {
+       "pkt": 501,
+       "us": 10014000,
+       "pktDur": 960
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11014000,
+        "chunkTs": 11014000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.417,
+         "snrDb": -3.4,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10994000,
+        "chunkTs": 10994000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.311,
+         "snrDb": 3.2,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10974000,
+        "chunkTs": 10974000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.188,
+         "snrDb": 10,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10954000,
+        "chunkTs": 10954000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.0984,
+         "snrDb": 17.3,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10934000,
+        "chunkTs": 10934000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.0512,
+         "snrDb": 23.4,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10894000,
+        "chunkTs": 10894000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.0141,
+         "snrDb": 35.1,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10854000,
+        "chunkTs": 10854000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.00329,
+         "snrDb": 47.7,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10774000,
+        "chunkTs": 10774000,
+        "firstN": 648,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.000237,
+         "snrDb": 70.6,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0.417,
+         "snrDb": -3.4,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0.311,
+         "snrDb": 3.2,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0.188,
+         "snrDb": 10,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0.0984,
+         "snrDb": 17.3,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0.0512,
+         "snrDb": 23.4,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0.0141,
+         "snrDb": 35.1,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0.00329,
+         "snrDb": 47.7,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0.000237,
+         "snrDb": 70.6,
+         "n": 2048
+        }
+       }
+      }
+     },
+     "acc-flac.flac": {
+      "target": {
+       "pkt": 105,
+       "us": 10080000,
+       "pktDur": 4608
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11080000,
+        "chunkTs": 11080000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10984000,
+        "chunkTs": 10984000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10888000,
+        "chunkTs": 10888000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10792000,
+        "chunkTs": 10792000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10696000,
+        "chunkTs": 10696000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10504000,
+        "chunkTs": 10504000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10312000,
+        "chunkTs": 10312000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 9928000,
+        "chunkTs": 9928000,
+        "firstN": 4608,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       }
+      }
+     },
+     "acc-vorbis.ogg": {
+      "target": {
+       "pkt": 472,
+       "us": 10020000,
+       "pktDur": 1024
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11041333,
+        "chunkTs": 11020000,
+        "firstN": 1024,
+        "zero": 1,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 1152
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 11020000,
+        "chunkTs": 10998667,
+        "firstN": 1024,
+        "zero": 1,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10998667,
+        "chunkTs": 10977333,
+        "firstN": 1024,
+        "zero": 1,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10977333,
+        "chunkTs": 10956000,
+        "firstN": 1024,
+        "zero": 1,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10956000,
+        "chunkTs": 10934667,
+        "firstN": 1024,
+        "zero": 1,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10913333,
+        "chunkTs": 10892000,
+        "firstN": 1024,
+        "zero": 1,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10870667,
+        "chunkTs": 10849333,
+        "firstN": 1024,
+        "zero": 1,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10785333,
+        "chunkTs": 10764000,
+        "firstN": 1024,
+        "zero": 1,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 1152
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       }
+      }
+     }
+    },
+    "ms": 6498,
+    "version": "155.0"
+   }
+  }
+ },
+ "webkit": {
+  "seek {\"files\":[\"acc-aac.m4a\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "acc-aac.m4a": {
+      "target": {
+       "pkt": 470,
+       "us": 10005333,
+       "pktDur": 1024
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11005333,
+        "chunkTs": 11005333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.484,
+         "snrDb": 4.5,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10984000,
+        "chunkTs": 10984000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10962667,
+        "chunkTs": 10962667,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10941333,
+        "chunkTs": 10941333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10920000,
+        "chunkTs": 10920000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10877333,
+        "chunkTs": 10877333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10834667,
+        "chunkTs": 10834667,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10749333,
+        "chunkTs": 10749333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0.453,
+         "snrDb": 4.5,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       }
+      }
+     }
+    },
+    "ms": 539,
+    "version": "26.6"
+   }
+  },
+  "seek {\"files\":[\"acc-aac.aac\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "acc-aac.aac": {
+      "target": {
+       "pkt": 469,
+       "us": 10005333,
+       "pktDur": 1024
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11005333,
+        "chunkTs": 11005333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.441,
+         "snrDb": 6.6,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10984000,
+        "chunkTs": 10984000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10962667,
+        "chunkTs": 10962667,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10941333,
+        "chunkTs": 10941333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10920000,
+        "chunkTs": 10920000,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10877333,
+        "chunkTs": 10877333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10834667,
+        "chunkTs": 10834667,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10749333,
+        "chunkTs": 10749333,
+        "firstN": 1024,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0.462,
+         "snrDb": 4.9,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       }
+      }
+     }
+    },
+    "ms": 556,
+    "version": "26.6"
+   }
+  },
+  "seek {\"files\":[\"acc-mp3.mp3\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "acc-mp3.mp3": {
+      "target": {
+       "pkt": 383,
+       "us": 10004898,
+       "pktDur": 1152
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11004898,
+        "chunkTs": 11004898,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.456,
+         "snrDb": -7.1,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10978776,
+        "chunkTs": 10978776,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.447,
+         "snrDb": 5.6,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10952653,
+        "chunkTs": 10952653,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10926531,
+        "chunkTs": 10926531,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10900408,
+        "chunkTs": 10900408,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10848163,
+        "chunkTs": 10848163,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10795918,
+        "chunkTs": 10795918,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10691429,
+        "chunkTs": 10691429,
+        "firstN": 1152,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0.456,
+         "snrDb": -7.1,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0.447,
+         "snrDb": 5.6,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0,
+         "snrDb": null,
+         "n": 2048
+        }
+       }
+      }
+     }
+    },
+    "ms": 534,
+    "version": "26.6"
+   }
+  },
+  "seek {\"files\":[\"acc-opus.opus\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "acc-opus.opus": {
+      "target": {
+       "pkt": 501,
+       "us": 10013500,
+       "pktDur": 960
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11013500,
+        "chunkTs": 11013500,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.423,
+         "snrDb": -6.2,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10993500,
+        "chunkTs": 10993500,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.341,
+         "snrDb": 1.3,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10973500,
+        "chunkTs": 10973500,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.235,
+         "snrDb": 8.4,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10953500,
+        "chunkTs": 10953500,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.123,
+         "snrDb": 16,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10933500,
+        "chunkTs": 10933500,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.0678,
+         "snrDb": 22,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10893500,
+        "chunkTs": 10893500,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.019,
+         "snrDb": 33.8,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10853500,
+        "chunkTs": 10853500,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.00479,
+         "snrDb": 46.3,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10773500,
+        "chunkTs": 10773500,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": 0,
+        "atTarget": {
+         "max": 0.000336,
+         "snrDb": 69,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0.423,
+         "snrDb": -6.2,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0.341,
+         "snrDb": 1.3,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0.235,
+         "snrDb": 8.4,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0.123,
+         "snrDb": 16,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0.0678,
+         "snrDb": 22,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0.019,
+         "snrDb": 33.8,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0.00479,
+         "snrDb": 46.3,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0.000345,
+         "snrDb": 69.1,
+         "n": 2048
+        }
+       }
+      }
+     }
+    },
+    "ms": 657,
+    "version": "26.6"
+   }
+  },
+  "seek {\"files\":[\"acc-opus.webm\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "acc-opus.webm": {
+      "target": {
+       "pkt": 501,
+       "us": 10014000,
+       "pktDur": 960
+      },
+      "ad": {
+       "0": {
+        "firstTs": 11014000,
+        "chunkTs": 11014000,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.423,
+         "snrDb": -5.6,
+         "n": 2048
+        },
+        "error": null
+       },
+       "1": {
+        "firstTs": 10994000,
+        "chunkTs": 10994000,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.311,
+         "snrDb": 1.7,
+         "n": 2048
+        },
+        "error": null
+       },
+       "2": {
+        "firstTs": 10974000,
+        "chunkTs": 10974000,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.188,
+         "snrDb": 8.8,
+         "n": 2048
+        },
+        "error": null
+       },
+       "3": {
+        "firstTs": 10954000,
+        "chunkTs": 10954000,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.0984,
+         "snrDb": 16.4,
+         "n": 2048
+        },
+        "error": null
+       },
+       "4": {
+        "firstTs": 10934000,
+        "chunkTs": 10934000,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.0511,
+         "snrDb": 22.4,
+         "n": 2048
+        },
+        "error": null
+       },
+       "6": {
+        "firstTs": 10894000,
+        "chunkTs": 10894000,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.0142,
+         "snrDb": 34.2,
+         "n": 2048
+        },
+        "error": null
+       },
+       "8": {
+        "firstTs": 10854000,
+        "chunkTs": 10854000,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.00342,
+         "snrDb": 46.7,
+         "n": 2048
+        },
+        "error": null
+       },
+       "12": {
+        "firstTs": 10774000,
+        "chunkTs": 10774000,
+        "firstN": 960,
+        "zero": 0,
+        "tsErr": -48,
+        "atTarget": {
+         "max": 0.000275,
+         "snrDb": 69.4,
+         "n": 2048
+        },
+        "error": null
+       }
+      },
+      "wasm": {
+       "0": {
+        "atTarget": {
+         "max": 0.423,
+         "snrDb": -5.6,
+         "n": 2048
+        }
+       },
+       "1": {
+        "atTarget": {
+         "max": 0.311,
+         "snrDb": 1.7,
+         "n": 2048
+        }
+       },
+       "2": {
+        "atTarget": {
+         "max": 0.188,
+         "snrDb": 8.8,
+         "n": 2048
+        }
+       },
+       "3": {
+        "atTarget": {
+         "max": 0.0984,
+         "snrDb": 16.4,
+         "n": 2048
+        }
+       },
+       "4": {
+        "atTarget": {
+         "max": 0.0512,
+         "snrDb": 22.4,
+         "n": 2048
+        }
+       },
+       "6": {
+        "atTarget": {
+         "max": 0.0141,
+         "snrDb": 34.2,
+         "n": 2048
+        }
+       },
+       "8": {
+        "atTarget": {
+         "max": 0.0034,
+         "snrDb": 46.7,
+         "n": 2048
+        }
+       },
+       "12": {
+        "atTarget": {
+         "max": 0.000255,
+         "snrDb": 69.6,
+         "n": 2048
+        }
+       }
+      }
+     }
+    },
+    "ms": 641,
+    "version": "26.6"
+   }
+  }
+ }
+}

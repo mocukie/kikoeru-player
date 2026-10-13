@@ -1,0 +1,3546 @@
+{
+ "chromium": {
+  "ok": true,
+  "result": {
+   "acc-aac.m4a": {
+    "info": {
+     "codec": "aac",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 1024,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 1024,
+     "start_time": 0,
+     "tb": "1/48000",
+     "packets": 940,
+     "firstPktUs": -21333,
+     "firstPktDur": 1024,
+     "skips": [
+      {
+       "pkt": 0,
+       "start": 1024,
+       "end": 0
+      },
+      {
+       "pkt": 939,
+       "start": 0,
+       "end": 960
+      }
+     ],
+     "extradata": 5,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "mp4a.40.2",
+      "description": 5
+     }
+    },
+    "ffmpeg": {
+     "len": 960576,
+     "lenDiff": -14,
+     "lag": 0,
+     "corr": 0.9991,
+     "vsTruth": {
+      "max": 0.0444,
+      "snrDb": 29,
+      "n": 956480
+     },
+     "rawLen": 961536,
+     "rawLag": 0
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32-planar",
+     "converted": false,
+     "outputs": 940,
+     "len": 962560,
+     "lenDiff": 1970,
+     "lag": 1024,
+     "corr": 0.9991,
+     "tailExtra": 946,
+     "firstTs": 0,
+     "firstN": 1024,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0444,
+      "snrDb": 29,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 961536
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 953344
+     }
+    },
+    "adNoDesc": {
+     "supported": true,
+     "error": null,
+     "format": "f32-planar",
+     "converted": false,
+     "outputs": 940,
+     "len": 962560,
+     "lenDiff": 1970,
+     "lag": 1024,
+     "corr": 0.9991,
+     "tailExtra": 946,
+     "firstTs": 0,
+     "firstN": 1024,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0444,
+      "snrDb": 29,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 961536
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 953344
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32-planar",
+     "converted": false,
+     "outputs": 940,
+     "len": 962560,
+     "lenDiff": 1970,
+     "lag": 1024,
+     "corr": 0.9991,
+     "tailExtra": 946,
+     "firstTs": 978667,
+     "firstN": 1024,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0444,
+      "snrDb": 29,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 961536
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 953344
+     }
+    }
+   },
+   "acc-fdk.m4a": {
+    "info": {
+     "codec": "aac",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 2048,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 1024,
+     "start_time": 0,
+     "tb": "1/48000",
+     "packets": 941,
+     "firstPktUs": -42667,
+     "firstPktDur": 1024,
+     "skips": [
+      {
+       "pkt": 0,
+       "start": 2048,
+       "end": 0
+      },
+      {
+       "pkt": 940,
+       "start": 0,
+       "end": 960
+      }
+     ],
+     "extradata": 2,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "mp4a.40.2",
+      "description": 2
+     }
+    },
+    "ffmpeg": {
+     "len": 960576,
+     "lenDiff": -14,
+     "lag": 0,
+     "corr": 0.99951,
+     "vsTruth": {
+      "max": 0.0301,
+      "snrDb": 30.4,
+      "n": 956480
+     },
+     "rawLen": 961536,
+     "rawLag": 0
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32-planar",
+     "converted": false,
+     "outputs": 941,
+     "len": 963584,
+     "lenDiff": 2994,
+     "lag": 2048,
+     "corr": 0.99951,
+     "tailExtra": 946,
+     "firstTs": 0,
+     "firstN": 1024,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0301,
+      "snrDb": 30.4,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.79e-07,
+      "snrDb": 141.3,
+      "n": 961536
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.79e-07,
+      "snrDb": 141.4,
+      "n": 953344
+     }
+    },
+    "adNoDesc": {
+     "supported": true,
+     "error": null,
+     "format": "f32-planar",
+     "converted": false,
+     "outputs": 941,
+     "len": 963584,
+     "lenDiff": 2994,
+     "lag": 2048,
+     "corr": 0.99951,
+     "tailExtra": 946,
+     "firstTs": 0,
+     "firstN": 1024,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0301,
+      "snrDb": 30.4,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.79e-07,
+      "snrDb": 141.3,
+      "n": 961536
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.79e-07,
+      "snrDb": 141.4,
+      "n": 953344
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32-planar",
+     "converted": false,
+     "outputs": 941,
+     "len": 963584,
+     "lenDiff": 2994,
+     "lag": 2048,
+     "corr": 0.99951,
+     "tailExtra": 946,
+     "firstTs": 957333,
+     "firstN": 1024,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0301,
+      "snrDb": 30.4,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.79e-07,
+      "snrDb": 141.3,
+      "n": 961536
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.79e-07,
+      "snrDb": 141.4,
+      "n": 953344
+     }
+    }
+   },
+   "acc-aac.aac": {
+    "info": {
+     "codec": "aac",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 0,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 1024,
+     "start_time": 0,
+     "tb": "1/28224000",
+     "packets": 940,
+     "firstPktUs": 0,
+     "firstPktDur": 602112,
+     "skips": [],
+     "extradata": 0,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "mp4a.40.2"
+     }
+    },
+    "ffmpeg": {
+     "len": 962560,
+     "lenDiff": 1970,
+     "lag": 1024,
+     "corr": 0.9991,
+     "vsTruth": {
+      "max": 0.0444,
+      "snrDb": 29,
+      "n": 956494
+     },
+     "rawLen": 962560,
+     "rawLag": 1024
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32-planar",
+     "converted": false,
+     "outputs": 940,
+     "len": 962560,
+     "lenDiff": 1970,
+     "lag": 1024,
+     "corr": 0.9991,
+     "tailExtra": 946,
+     "firstTs": 0,
+     "firstN": 1024,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0444,
+      "snrDb": 29,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 962560
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 954368
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32-planar",
+     "converted": false,
+     "outputs": 940,
+     "len": 962560,
+     "lenDiff": 1970,
+     "lag": 1024,
+     "corr": 0.9991,
+     "tailExtra": 946,
+     "firstTs": 1000000,
+     "firstN": 1024,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0444,
+      "snrDb": 29,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 962560
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 954368
+     }
+    }
+   },
+   "acc-mp3.mp3": {
+    "info": {
+     "codec": "mp3",
+     "sr": 44100,
+     "ch": 2,
+     "initial_padding": 0,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 1152,
+     "start_time": 353600,
+     "tb": "1/14112000",
+     "packets": 768,
+     "firstPktUs": 0,
+     "firstPktDur": 368640,
+     "skips": [
+      {
+       "pkt": 0,
+       "start": 1105,
+       "end": 0
+      },
+      {
+       "pkt": 767,
+       "start": 0,
+       "end": 1089
+      }
+     ],
+     "extradata": 0,
+     "config": {
+      "sampleRate": 44100,
+      "numberOfChannels": 2,
+      "codec": "mp3"
+     }
+    },
+    "ffmpeg": {
+     "len": 882542,
+     "lenDiff": 0,
+     "lag": 0,
+     "corr": 0.99954,
+     "vsTruth": {
+      "max": 0.0455,
+      "snrDb": 27.6,
+      "n": 878446
+     },
+     "rawLen": 884736,
+     "rawLag": 1105
+    },
+    "truthLen": 882542,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 768,
+     "len": 884736,
+     "lenDiff": 2194,
+     "lag": 1105,
+     "corr": 0.99954,
+     "tailExtra": 1089,
+     "firstTs": 0,
+     "firstN": 1152,
+     "outSr": 44100,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0455,
+      "snrDb": 27.6,
+      "n": 878446
+     },
+     "vsFFmpegRaw": {
+      "max": 9.24e-07,
+      "snrDb": 127.4,
+      "n": 884736
+     },
+     "vsFFmpegRawInterior": {
+      "max": 9.24e-07,
+      "snrDb": 127.4,
+      "n": 876544
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 768,
+     "len": 884736,
+     "lenDiff": 2194,
+     "lag": 1105,
+     "corr": 0.99954,
+     "tailExtra": 1089,
+     "firstTs": 1000000,
+     "firstN": 1152,
+     "outSr": 44100,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0455,
+      "snrDb": 27.6,
+      "n": 878446
+     },
+     "vsFFmpegRaw": {
+      "max": 9.24e-07,
+      "snrDb": 127.4,
+      "n": 884736
+     },
+     "vsFFmpegRawInterior": {
+      "max": 9.24e-07,
+      "snrDb": 127.4,
+      "n": 876544
+     }
+    }
+   },
+   "acc-mp3-noxing.mp3": {
+    "info": {
+     "codec": "mp3",
+     "sr": 44100,
+     "ch": 2,
+     "initial_padding": 0,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 1152,
+     "start_time": 0,
+     "tb": "1/14112000",
+     "packets": 768,
+     "firstPktUs": 0,
+     "firstPktDur": 368640,
+     "skips": [],
+     "extradata": 0,
+     "config": {
+      "sampleRate": 44100,
+      "numberOfChannels": 2,
+      "codec": "mp3"
+     }
+    },
+    "ffmpeg": {
+     "len": 884736,
+     "lenDiff": 2194,
+     "lag": 1105,
+     "corr": 0.99954,
+     "vsTruth": {
+      "max": 0.0455,
+      "snrDb": 27.6,
+      "n": 878446
+     },
+     "rawLen": 884736,
+     "rawLag": 1105
+    },
+    "truthLen": 882542,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 768,
+     "len": 884736,
+     "lenDiff": 2194,
+     "lag": 1105,
+     "corr": 0.99954,
+     "tailExtra": 1089,
+     "firstTs": 0,
+     "firstN": 1152,
+     "outSr": 44100,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0455,
+      "snrDb": 27.6,
+      "n": 878446
+     },
+     "vsFFmpegRaw": {
+      "max": 9.24e-07,
+      "snrDb": 127.4,
+      "n": 884736
+     },
+     "vsFFmpegRawInterior": {
+      "max": 9.24e-07,
+      "snrDb": 127.4,
+      "n": 876544
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 768,
+     "len": 884736,
+     "lenDiff": 2194,
+     "lag": 1105,
+     "corr": 0.99954,
+     "tailExtra": 1089,
+     "firstTs": 1000000,
+     "firstN": 1152,
+     "outSr": 44100,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0455,
+      "snrDb": 27.6,
+      "n": 878446
+     },
+     "vsFFmpegRaw": {
+      "max": 9.24e-07,
+      "snrDb": 127.4,
+      "n": 884736
+     },
+     "vsFFmpegRawInterior": {
+      "max": 9.24e-07,
+      "snrDb": 127.4,
+      "n": 876544
+     }
+    }
+   },
+   "acc-opus.opus": {
+    "info": {
+     "codec": "opus",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 312,
+     "trailing_padding": 0,
+     "seek_preroll": 3840,
+     "frame_size": 0,
+     "start_time": 0,
+     "tb": "1/48000",
+     "packets": 1001,
+     "firstPktUs": -6500,
+     "firstPktDur": 960,
+     "skips": [
+      {
+       "pkt": 0,
+       "start": 312,
+       "end": 0
+      },
+      {
+       "pkt": 1000,
+       "start": 0,
+       "end": 58
+      }
+     ],
+     "extradata": 19,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "opus",
+      "description": 19
+     }
+    },
+    "ffmpeg": {
+     "len": 960590,
+     "lenDiff": 0,
+     "lag": 0,
+     "corr": 0.99923,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "rawLen": 960648,
+     "rawLag": 0
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 1001,
+     "len": 960648,
+     "lenDiff": 58,
+     "lag": 0,
+     "corr": 0.99923,
+     "tailExtra": 58,
+     "firstTs": 0,
+     "firstN": 648,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 2.09e-07,
+      "snrDb": 137.9,
+      "n": 960648
+     },
+     "vsFFmpegRawInterior": {
+      "max": 2.09e-07,
+      "snrDb": 137.9,
+      "n": 952456
+     }
+    },
+    "adNoDesc": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 1001,
+     "len": 960960,
+     "lenDiff": 370,
+     "lag": 312,
+     "corr": 0.99923,
+     "tailExtra": 58,
+     "firstTs": 0,
+     "firstN": 960,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 2.09e-07,
+      "snrDb": 137.9,
+      "n": 960648
+     },
+     "vsFFmpegRawInterior": {
+      "max": 2.09e-07,
+      "snrDb": 137.9,
+      "n": 952456
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 1001,
+     "len": 960648,
+     "lenDiff": 58,
+     "lag": 0,
+     "corr": 0.99923,
+     "tailExtra": 58,
+     "firstTs": 993500,
+     "firstN": 648,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 2.09e-07,
+      "snrDb": 137.9,
+      "n": 960648
+     },
+     "vsFFmpegRawInterior": {
+      "max": 2.09e-07,
+      "snrDb": 137.9,
+      "n": 952456
+     }
+    }
+   },
+   "acc-opus.webm": {
+    "info": {
+     "codec": "opus",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 312,
+     "trailing_padding": 0,
+     "seek_preroll": 3840,
+     "frame_size": 0,
+     "start_time": 0,
+     "tb": "1/1000",
+     "packets": 1001,
+     "firstPktUs": -7000,
+     "firstPktDur": 20,
+     "skips": [
+      {
+       "pkt": 0,
+       "start": 312,
+       "end": 0
+      },
+      {
+       "pkt": 1000,
+       "start": 0,
+       "end": 58
+      }
+     ],
+     "extradata": 19,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "opus",
+      "description": 19
+     }
+    },
+    "ffmpeg": {
+     "len": 960590,
+     "lenDiff": 0,
+     "lag": 0,
+     "corr": 0.99923,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "rawLen": 960648,
+     "rawLag": 0
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 1001,
+     "len": 960648,
+     "lenDiff": 58,
+     "lag": 0,
+     "corr": 0.99923,
+     "tailExtra": 58,
+     "firstTs": 0,
+     "firstN": 648,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 2.09e-07,
+      "snrDb": 137.9,
+      "n": 960648
+     },
+     "vsFFmpegRawInterior": {
+      "max": 2.09e-07,
+      "snrDb": 137.9,
+      "n": 952456
+     }
+    },
+    "adNoDesc": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 1001,
+     "len": 960960,
+     "lenDiff": 370,
+     "lag": 312,
+     "corr": 0.99923,
+     "tailExtra": 58,
+     "firstTs": 0,
+     "firstN": 960,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 2.09e-07,
+      "snrDb": 137.9,
+      "n": 960648
+     },
+     "vsFFmpegRawInterior": {
+      "max": 2.09e-07,
+      "snrDb": 137.9,
+      "n": 952456
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 1001,
+     "len": 960648,
+     "lenDiff": 58,
+     "lag": 0,
+     "corr": 0.99923,
+     "tailExtra": 58,
+     "firstTs": 993000,
+     "firstN": 648,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 2.09e-07,
+      "snrDb": 137.9,
+      "n": 960648
+     },
+     "vsFFmpegRawInterior": {
+      "max": 2.09e-07,
+      "snrDb": 137.9,
+      "n": 952456
+     }
+    }
+   },
+   "acc-flac.flac": {
+    "info": {
+     "codec": "flac",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 0,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 0,
+     "start_time": 0,
+     "tb": "1/48000",
+     "packets": 209,
+     "firstPktUs": 0,
+     "firstPktDur": 4608,
+     "skips": [],
+     "extradata": 34,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "flac",
+      "description": 42
+     }
+    },
+    "ffmpeg": {
+     "len": 960590,
+     "lenDiff": 0,
+     "lag": 0,
+     "corr": 1,
+     "vsTruth": {
+      "max": 0,
+      "snrDb": null,
+      "n": 956494
+     },
+     "rawLen": 960590,
+     "rawLag": 0
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "s32",
+     "converted": false,
+     "outputs": 209,
+     "len": 960590,
+     "lenDiff": 0,
+     "lag": 0,
+     "corr": 1,
+     "tailExtra": 0,
+     "firstTs": 0,
+     "firstN": 4608,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0,
+      "snrDb": null,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 0,
+      "snrDb": null,
+      "n": 960590
+     },
+     "vsFFmpegRawInterior": {
+      "max": 0,
+      "snrDb": null,
+      "n": 952398
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "s32",
+     "converted": false,
+     "outputs": 209,
+     "len": 960590,
+     "lenDiff": 0,
+     "lag": 0,
+     "corr": 1,
+     "tailExtra": 0,
+     "firstTs": 1000000,
+     "firstN": 4608,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0,
+      "snrDb": null,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 0,
+      "snrDb": null,
+      "n": 960590
+     },
+     "vsFFmpegRawInterior": {
+      "max": 0,
+      "snrDb": null,
+      "n": 952398
+     }
+    }
+   },
+   "acc-vorbis.ogg": {
+    "info": {
+     "codec": "vorbis",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 0,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 0,
+     "start_time": 0,
+     "tb": "1/48000",
+     "packets": 947,
+     "firstPktUs": -2667,
+     "firstPktDur": 128,
+     "skips": [
+      {
+       "pkt": 946,
+       "start": 0,
+       "end": 50
+      }
+     ],
+     "extradata": 4286,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "vorbis",
+      "description": 4286
+     }
+    },
+    "ffmpeg": {
+     "len": 960590,
+     "lenDiff": 0,
+     "lag": 0,
+     "corr": 0.99951,
+     "vsTruth": {
+      "max": 0.0368,
+      "snrDb": 30.1,
+      "n": 956494
+     },
+     "rawLen": 960640,
+     "rawLag": 0
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32-planar",
+     "converted": false,
+     "outputs": 946,
+     "len": 960640,
+     "lenDiff": 50,
+     "lag": 0,
+     "corr": 0.99951,
+     "tailExtra": 50,
+     "firstTs": 0,
+     "firstN": 128,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0368,
+      "snrDb": 30.1,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 2.09e-07,
+      "snrDb": 141.4,
+      "n": 960640
+     },
+     "vsFFmpegRawInterior": {
+      "max": 2.09e-07,
+      "snrDb": 141.4,
+      "n": 952448
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32-planar",
+     "converted": false,
+     "outputs": 946,
+     "len": 960640,
+     "lenDiff": 50,
+     "lag": 0,
+     "corr": 0.99951,
+     "tailExtra": 50,
+     "firstTs": 997333,
+     "firstN": 128,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0368,
+      "snrDb": 30.1,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 2.09e-07,
+      "snrDb": 141.4,
+      "n": 960640
+     },
+     "vsFFmpegRawInterior": {
+      "max": 2.09e-07,
+      "snrDb": 141.4,
+      "n": 952448
+     }
+    }
+   },
+   "acc-vorbis.webm": {
+    "info": {
+     "codec": "vorbis",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 0,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 0,
+     "start_time": 0,
+     "tb": "1/1000",
+     "packets": 947,
+     "firstPktUs": 0,
+     "firstPktDur": 2,
+     "skips": [],
+     "extradata": 4351,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "vorbis",
+      "description": 4351
+     }
+    },
+    "ffmpeg": {
+     "len": 960640,
+     "lenDiff": 50,
+     "lag": 0,
+     "corr": 0.99951,
+     "vsTruth": {
+      "max": 0.0368,
+      "snrDb": 30.1,
+      "n": 956494
+     },
+     "rawLen": 960640,
+     "rawLag": 0
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32-planar",
+     "converted": false,
+     "outputs": 946,
+     "len": 960640,
+     "lenDiff": 50,
+     "lag": 0,
+     "corr": 0.99951,
+     "tailExtra": 50,
+     "firstTs": 0,
+     "firstN": 128,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0368,
+      "snrDb": 30.1,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 2.09e-07,
+      "snrDb": 141.4,
+      "n": 960640
+     },
+     "vsFFmpegRawInterior": {
+      "max": 2.09e-07,
+      "snrDb": 141.4,
+      "n": 952448
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32-planar",
+     "converted": false,
+     "outputs": 946,
+     "len": 960640,
+     "lenDiff": 50,
+     "lag": 0,
+     "corr": 0.99951,
+     "tailExtra": 50,
+     "firstTs": 1000000,
+     "firstN": 128,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0368,
+      "snrDb": 30.1,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 2.09e-07,
+      "snrDb": 141.4,
+      "n": 960640
+     },
+     "vsFFmpegRawInterior": {
+      "max": 2.09e-07,
+      "snrDb": 141.4,
+      "n": 952448
+     }
+    }
+   }
+  },
+  "ms": 7567,
+  "version": "153.0.8010.12"
+ },
+ "firefox": {
+  "ok": true,
+  "result": {
+   "acc-aac.m4a": {
+    "info": {
+     "codec": "aac",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 1024,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 1024,
+     "start_time": 0,
+     "tb": "1/48000",
+     "packets": 940,
+     "firstPktUs": -21333,
+     "firstPktDur": 1024,
+     "skips": [
+      {
+       "pkt": 0,
+       "start": 1024,
+       "end": 0
+      },
+      {
+       "pkt": 939,
+       "start": 0,
+       "end": 960
+      }
+     ],
+     "extradata": 5,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "mp4a.40.2",
+      "description": 5
+     }
+    },
+    "ffmpeg": {
+     "len": 960576,
+     "lenDiff": -14,
+     "lag": 0,
+     "corr": 0.9991,
+     "vsTruth": {
+      "max": 0.0444,
+      "snrDb": 29,
+      "n": 956480
+     },
+     "rawLen": 961536,
+     "rawLag": 0
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 940,
+     "len": 962560,
+     "lenDiff": 1970,
+     "lag": 1024,
+     "corr": 0.9991,
+     "tailExtra": 946,
+     "firstTs": -21333,
+     "firstN": 1024,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0444,
+      "snrDb": 29,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 961536
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 953344
+     }
+    },
+    "adNoDesc": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 940,
+     "len": 962560,
+     "lenDiff": 1970,
+     "lag": 1024,
+     "corr": 0.9991,
+     "tailExtra": 946,
+     "firstTs": -21333,
+     "firstN": 1024,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0444,
+      "snrDb": 29,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 961536
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 953344
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 940,
+     "len": 962560,
+     "lenDiff": 1970,
+     "lag": 1024,
+     "corr": 0.9991,
+     "tailExtra": 946,
+     "firstTs": 978667,
+     "firstN": 1024,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0444,
+      "snrDb": 29,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 961536
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 953344
+     }
+    }
+   },
+   "acc-fdk.m4a": {
+    "info": {
+     "codec": "aac",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 2048,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 1024,
+     "start_time": 0,
+     "tb": "1/48000",
+     "packets": 941,
+     "firstPktUs": -42667,
+     "firstPktDur": 1024,
+     "skips": [
+      {
+       "pkt": 0,
+       "start": 2048,
+       "end": 0
+      },
+      {
+       "pkt": 940,
+       "start": 0,
+       "end": 960
+      }
+     ],
+     "extradata": 2,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "mp4a.40.2",
+      "description": 2
+     }
+    },
+    "ffmpeg": {
+     "len": 960576,
+     "lenDiff": -14,
+     "lag": 0,
+     "corr": 0.99951,
+     "vsTruth": {
+      "max": 0.0301,
+      "snrDb": 30.4,
+      "n": 956480
+     },
+     "rawLen": 961536,
+     "rawLag": 0
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 941,
+     "len": 963584,
+     "lenDiff": 2994,
+     "lag": 2048,
+     "corr": 0.99951,
+     "tailExtra": 946,
+     "firstTs": -42667,
+     "firstN": 1024,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0301,
+      "snrDb": 30.4,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.79e-07,
+      "snrDb": 141.3,
+      "n": 961536
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.79e-07,
+      "snrDb": 141.4,
+      "n": 953344
+     }
+    },
+    "adNoDesc": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 941,
+     "len": 963584,
+     "lenDiff": 2994,
+     "lag": 2048,
+     "corr": 0.99951,
+     "tailExtra": 946,
+     "firstTs": -42667,
+     "firstN": 1024,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0301,
+      "snrDb": 30.4,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.79e-07,
+      "snrDb": 141.3,
+      "n": 961536
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.79e-07,
+      "snrDb": 141.4,
+      "n": 953344
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 941,
+     "len": 963584,
+     "lenDiff": 2994,
+     "lag": 2048,
+     "corr": 0.99951,
+     "tailExtra": 946,
+     "firstTs": 957333,
+     "firstN": 1024,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0301,
+      "snrDb": 30.4,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.79e-07,
+      "snrDb": 141.3,
+      "n": 961536
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.79e-07,
+      "snrDb": 141.4,
+      "n": 953344
+     }
+    }
+   },
+   "acc-aac.aac": {
+    "info": {
+     "codec": "aac",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 0,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 1024,
+     "start_time": 0,
+     "tb": "1/28224000",
+     "packets": 940,
+     "firstPktUs": 0,
+     "firstPktDur": 602112,
+     "skips": [],
+     "extradata": 0,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "mp4a.40.2"
+     }
+    },
+    "ffmpeg": {
+     "len": 962560,
+     "lenDiff": 1970,
+     "lag": 1024,
+     "corr": 0.9991,
+     "vsTruth": {
+      "max": 0.0444,
+      "snrDb": 29,
+      "n": 956494
+     },
+     "rawLen": 962560,
+     "rawLag": 1024
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 940,
+     "len": 962560,
+     "lenDiff": 1970,
+     "lag": 1024,
+     "corr": 0.9991,
+     "tailExtra": 946,
+     "firstTs": 0,
+     "firstN": 1024,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0444,
+      "snrDb": 29,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 962560
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 954368
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 940,
+     "len": 962560,
+     "lenDiff": 1970,
+     "lag": 1024,
+     "corr": 0.9991,
+     "tailExtra": 946,
+     "firstTs": 1000000,
+     "firstN": 1024,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0444,
+      "snrDb": 29,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 962560
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.49e-07,
+      "snrDb": 141.3,
+      "n": 954368
+     }
+    }
+   },
+   "acc-mp3.mp3": {
+    "info": {
+     "codec": "mp3",
+     "sr": 44100,
+     "ch": 2,
+     "initial_padding": 0,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 1152,
+     "start_time": 353600,
+     "tb": "1/14112000",
+     "packets": 768,
+     "firstPktUs": 0,
+     "firstPktDur": 368640,
+     "skips": [
+      {
+       "pkt": 0,
+       "start": 1105,
+       "end": 0
+      },
+      {
+       "pkt": 767,
+       "start": 0,
+       "end": 1089
+      }
+     ],
+     "extradata": 0,
+     "config": {
+      "sampleRate": 44100,
+      "numberOfChannels": 2,
+      "codec": "mp3"
+     }
+    },
+    "ffmpeg": {
+     "len": 882542,
+     "lenDiff": 0,
+     "lag": 0,
+     "corr": 0.99954,
+     "vsTruth": {
+      "max": 0.0455,
+      "snrDb": 27.6,
+      "n": 878446
+     },
+     "rawLen": 884736,
+     "rawLag": 1105
+    },
+    "truthLen": 882542,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 768,
+     "len": 884736,
+     "lenDiff": 2194,
+     "lag": 1105,
+     "corr": 0.99954,
+     "tailExtra": 1089,
+     "firstTs": 0,
+     "firstN": 1152,
+     "zeroOutputs": 0,
+     "outSr": 44100,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0455,
+      "snrDb": 27.6,
+      "n": 878446
+     },
+     "vsFFmpegRaw": {
+      "max": 4.39e-05,
+      "snrDb": 84.8,
+      "n": 884736
+     },
+     "vsFFmpegRawInterior": {
+      "max": 4.39e-05,
+      "snrDb": 84.8,
+      "n": 876544
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 768,
+     "len": 884736,
+     "lenDiff": 2194,
+     "lag": 1105,
+     "corr": 0.99954,
+     "tailExtra": 1089,
+     "firstTs": 1000000,
+     "firstN": 1152,
+     "zeroOutputs": 0,
+     "outSr": 44100,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0455,
+      "snrDb": 27.6,
+      "n": 878446
+     },
+     "vsFFmpegRaw": {
+      "max": 4.39e-05,
+      "snrDb": 84.8,
+      "n": 884736
+     },
+     "vsFFmpegRawInterior": {
+      "max": 4.39e-05,
+      "snrDb": 84.8,
+      "n": 876544
+     }
+    }
+   },
+   "acc-mp3-noxing.mp3": {
+    "info": {
+     "codec": "mp3",
+     "sr": 44100,
+     "ch": 2,
+     "initial_padding": 0,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 1152,
+     "start_time": 0,
+     "tb": "1/14112000",
+     "packets": 768,
+     "firstPktUs": 0,
+     "firstPktDur": 368640,
+     "skips": [],
+     "extradata": 0,
+     "config": {
+      "sampleRate": 44100,
+      "numberOfChannels": 2,
+      "codec": "mp3"
+     }
+    },
+    "ffmpeg": {
+     "len": 884736,
+     "lenDiff": 2194,
+     "lag": 1105,
+     "corr": 0.99954,
+     "vsTruth": {
+      "max": 0.0455,
+      "snrDb": 27.6,
+      "n": 878446
+     },
+     "rawLen": 884736,
+     "rawLag": 1105
+    },
+    "truthLen": 882542,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 768,
+     "len": 884736,
+     "lenDiff": 2194,
+     "lag": 1105,
+     "corr": 0.99954,
+     "tailExtra": 1089,
+     "firstTs": 0,
+     "firstN": 1152,
+     "zeroOutputs": 0,
+     "outSr": 44100,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0455,
+      "snrDb": 27.6,
+      "n": 878446
+     },
+     "vsFFmpegRaw": {
+      "max": 4.39e-05,
+      "snrDb": 84.8,
+      "n": 884736
+     },
+     "vsFFmpegRawInterior": {
+      "max": 4.39e-05,
+      "snrDb": 84.8,
+      "n": 876544
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 768,
+     "len": 884736,
+     "lenDiff": 2194,
+     "lag": 1105,
+     "corr": 0.99954,
+     "tailExtra": 1089,
+     "firstTs": 1000000,
+     "firstN": 1152,
+     "zeroOutputs": 0,
+     "outSr": 44100,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0455,
+      "snrDb": 27.6,
+      "n": 878446
+     },
+     "vsFFmpegRaw": {
+      "max": 4.39e-05,
+      "snrDb": 84.8,
+      "n": 884736
+     },
+     "vsFFmpegRawInterior": {
+      "max": 4.39e-05,
+      "snrDb": 84.8,
+      "n": 876544
+     }
+    }
+   },
+   "acc-opus.opus": {
+    "info": {
+     "codec": "opus",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 312,
+     "trailing_padding": 0,
+     "seek_preroll": 3840,
+     "frame_size": 0,
+     "start_time": 0,
+     "tb": "1/48000",
+     "packets": 1001,
+     "firstPktUs": -6500,
+     "firstPktDur": 960,
+     "skips": [
+      {
+       "pkt": 0,
+       "start": 312,
+       "end": 0
+      },
+      {
+       "pkt": 1000,
+       "start": 0,
+       "end": 58
+      }
+     ],
+     "extradata": 19,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "opus",
+      "description": 19
+     }
+    },
+    "ffmpeg": {
+     "len": 960590,
+     "lenDiff": 0,
+     "lag": 0,
+     "corr": 0.99923,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "rawLen": 960648,
+     "rawLag": 0
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 1001,
+     "len": 960648,
+     "lenDiff": 58,
+     "lag": 0,
+     "corr": 0.99923,
+     "tailExtra": 58,
+     "firstTs": -6500,
+     "firstN": 648,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 6500,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.79e-07,
+      "snrDb": 138,
+      "n": 960648
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.79e-07,
+      "snrDb": 138,
+      "n": 952456
+     }
+    },
+    "adNoDesc": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 1001,
+     "len": 960960,
+     "lenDiff": 370,
+     "lag": 312,
+     "corr": 0.99923,
+     "tailExtra": 58,
+     "firstTs": -6500,
+     "firstN": 960,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 0,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.79e-07,
+      "snrDb": 138,
+      "n": 960648
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.79e-07,
+      "snrDb": 138,
+      "n": 952456
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 1001,
+     "len": 960648,
+     "lenDiff": 58,
+     "lag": 0,
+     "corr": 0.99923,
+     "tailExtra": 58,
+     "firstTs": 993500,
+     "firstN": 648,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 6500,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.79e-07,
+      "snrDb": 138,
+      "n": 960648
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.79e-07,
+      "snrDb": 138,
+      "n": 952456
+     }
+    }
+   },
+   "acc-opus.webm": {
+    "info": {
+     "codec": "opus",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 312,
+     "trailing_padding": 0,
+     "seek_preroll": 3840,
+     "frame_size": 0,
+     "start_time": 0,
+     "tb": "1/1000",
+     "packets": 1001,
+     "firstPktUs": -7000,
+     "firstPktDur": 20,
+     "skips": [
+      {
+       "pkt": 0,
+       "start": 312,
+       "end": 0
+      },
+      {
+       "pkt": 1000,
+       "start": 0,
+       "end": 58
+      }
+     ],
+     "extradata": 19,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "opus",
+      "description": 19
+     }
+    },
+    "ffmpeg": {
+     "len": 960590,
+     "lenDiff": 0,
+     "lag": 0,
+     "corr": 0.99923,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "rawLen": 960648,
+     "rawLag": 0
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 1001,
+     "len": 960648,
+     "lenDiff": 58,
+     "lag": 0,
+     "corr": 0.99923,
+     "tailExtra": 58,
+     "firstTs": -7000,
+     "firstN": 648,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 7500,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.79e-07,
+      "snrDb": 138,
+      "n": 960648
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.79e-07,
+      "snrDb": 138,
+      "n": 952456
+     }
+    },
+    "adNoDesc": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 1001,
+     "len": 960960,
+     "lenDiff": 370,
+     "lag": 312,
+     "corr": 0.99923,
+     "tailExtra": 58,
+     "firstTs": -7000,
+     "firstN": 960,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1000,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.79e-07,
+      "snrDb": 138,
+      "n": 960648
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.79e-07,
+      "snrDb": 138,
+      "n": 952456
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 1001,
+     "len": 960648,
+     "lenDiff": 58,
+     "lag": 0,
+     "corr": 0.99923,
+     "tailExtra": 58,
+     "firstTs": 993000,
+     "firstN": 648,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 7500,
+     "vsTruth": {
+      "max": 0.0518,
+      "snrDb": 27.9,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 1.79e-07,
+      "snrDb": 138,
+      "n": 960648
+     },
+     "vsFFmpegRawInterior": {
+      "max": 1.79e-07,
+      "snrDb": 138,
+      "n": 952456
+     }
+    }
+   },
+   "acc-flac.flac": {
+    "info": {
+     "codec": "flac",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 0,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 0,
+     "start_time": 0,
+     "tb": "1/48000",
+     "packets": 209,
+     "firstPktUs": 0,
+     "firstPktDur": 4608,
+     "skips": [],
+     "extradata": 34,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "flac",
+      "description": 42
+     }
+    },
+    "ffmpeg": {
+     "len": 960590,
+     "lenDiff": 0,
+     "lag": 0,
+     "corr": 1,
+     "vsTruth": {
+      "max": 0,
+      "snrDb": null,
+      "n": 956494
+     },
+     "rawLen": 960590,
+     "rawLag": 0
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 209,
+     "len": 960590,
+     "lenDiff": 0,
+     "lag": 0,
+     "corr": 1,
+     "tailExtra": 0,
+     "firstTs": 0,
+     "firstN": 4608,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 0,
+     "vsTruth": {
+      "max": 0,
+      "snrDb": null,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 0,
+      "snrDb": null,
+      "n": 960590
+     },
+     "vsFFmpegRawInterior": {
+      "max": 0,
+      "snrDb": null,
+      "n": 952398
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 209,
+     "len": 960590,
+     "lenDiff": 0,
+     "lag": 0,
+     "corr": 1,
+     "tailExtra": 0,
+     "firstTs": 1000000,
+     "firstN": 4608,
+     "zeroOutputs": 0,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 0,
+     "vsTruth": {
+      "max": 0,
+      "snrDb": null,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 0,
+      "snrDb": null,
+      "n": 960590
+     },
+     "vsFFmpegRawInterior": {
+      "max": 0,
+      "snrDb": null,
+      "n": 952398
+     }
+    }
+   },
+   "acc-vorbis.ogg": {
+    "info": {
+     "codec": "vorbis",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 0,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 0,
+     "start_time": 0,
+     "tb": "1/48000",
+     "packets": 947,
+     "firstPktUs": -2667,
+     "firstPktDur": 128,
+     "skips": [
+      {
+       "pkt": 946,
+       "start": 0,
+       "end": 50
+      }
+     ],
+     "extradata": 4286,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "vorbis",
+      "description": 4286
+     }
+    },
+    "ffmpeg": {
+     "len": 960590,
+     "lenDiff": 0,
+     "lag": 0,
+     "corr": 0.99951,
+     "vsTruth": {
+      "max": 0.0368,
+      "snrDb": 30.1,
+      "n": 956494
+     },
+     "rawLen": 960640,
+     "rawLag": 0
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 947,
+     "len": 960640,
+     "lenDiff": 50,
+     "lag": 0,
+     "corr": 0.99951,
+     "tailExtra": 50,
+     "firstTs": 0,
+     "firstN": 128,
+     "zeroOutputs": 1,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1,
+     "vsTruth": {
+      "max": 0.0368,
+      "snrDb": 30.1,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 2.38e-07,
+      "snrDb": 135.1,
+      "n": 960640
+     },
+     "vsFFmpegRawInterior": {
+      "max": 2.38e-07,
+      "snrDb": 135.1,
+      "n": 952448
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 947,
+     "len": 960640,
+     "lenDiff": 50,
+     "lag": 0,
+     "corr": 0.99951,
+     "tailExtra": 50,
+     "firstTs": 1000000,
+     "firstN": 128,
+     "zeroOutputs": 1,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1000000,
+     "vsTruth": {
+      "max": 0.0368,
+      "snrDb": 30.1,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 2.38e-07,
+      "snrDb": 135.1,
+      "n": 960640
+     },
+     "vsFFmpegRawInterior": {
+      "max": 2.38e-07,
+      "snrDb": 135.1,
+      "n": 952448
+     }
+    }
+   },
+   "acc-vorbis.webm": {
+    "info": {
+     "codec": "vorbis",
+     "sr": 48000,
+     "ch": 2,
+     "initial_padding": 0,
+     "trailing_padding": 0,
+     "seek_preroll": 0,
+     "frame_size": 0,
+     "start_time": 0,
+     "tb": "1/1000",
+     "packets": 947,
+     "firstPktUs": 0,
+     "firstPktDur": 2,
+     "skips": [],
+     "extradata": 4351,
+     "config": {
+      "sampleRate": 48000,
+      "numberOfChannels": 2,
+      "codec": "vorbis",
+      "description": 4351
+     }
+    },
+    "ffmpeg": {
+     "len": 960640,
+     "lenDiff": 50,
+     "lag": 0,
+     "corr": 0.99951,
+     "vsTruth": {
+      "max": 0.0368,
+      "snrDb": 30.1,
+      "n": 956494
+     },
+     "rawLen": 960640,
+     "rawLag": 0
+    },
+    "truthLen": 960590,
+    "ad": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 947,
+     "len": 960640,
+     "lenDiff": 50,
+     "lag": 0,
+     "corr": 0.99951,
+     "tailExtra": 50,
+     "firstTs": 3000,
+     "firstN": 128,
+     "zeroOutputs": 1,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 3000,
+     "vsTruth": {
+      "max": 0.0368,
+      "snrDb": 30.1,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 2.38e-07,
+      "snrDb": 135.1,
+      "n": 960640
+     },
+     "vsFFmpegRawInterior": {
+      "max": 2.38e-07,
+      "snrDb": 135.1,
+      "n": 952448
+     }
+    },
+    "adShift": {
+     "supported": true,
+     "error": null,
+     "format": "f32",
+     "converted": false,
+     "outputs": 947,
+     "len": 960640,
+     "lenDiff": 50,
+     "lag": 0,
+     "corr": 0.99951,
+     "tailExtra": 50,
+     "firstTs": 1003000,
+     "firstN": 128,
+     "zeroOutputs": 1,
+     "outSr": 48000,
+     "outCh": 2,
+     "maxTsGapUs": 1003000,
+     "vsTruth": {
+      "max": 0.0368,
+      "snrDb": 30.1,
+      "n": 956494
+     },
+     "vsFFmpegRaw": {
+      "max": 2.38e-07,
+      "snrDb": 135.1,
+      "n": 960640
+     },
+     "vsFFmpegRawInterior": {
+      "max": 2.38e-07,
+      "snrDb": 135.1,
+      "n": 952448
+     }
+    }
+   }
+  },
+  "ms": 13871,
+  "version": "155.0"
+ },
+ "webkit": {
+  "accuracy {\"files\":[\"acc-aac.m4a\"]}": {
+   "ok": true,
+   "result": {
+    "acc-aac.m4a": {
+     "info": {
+      "codec": "aac",
+      "sr": 48000,
+      "ch": 2,
+      "initial_padding": 1024,
+      "trailing_padding": 0,
+      "seek_preroll": 0,
+      "frame_size": 1024,
+      "start_time": 0,
+      "tb": "1/48000",
+      "packets": 940,
+      "firstPktUs": -21333,
+      "firstPktDur": 1024,
+      "skips": [
+       {
+        "pkt": 0,
+        "start": 1024,
+        "end": 0
+       },
+       {
+        "pkt": 939,
+        "start": 0,
+        "end": 960
+       }
+      ],
+      "extradata": 5,
+      "config": {
+       "sampleRate": 48000,
+       "numberOfChannels": 2,
+       "codec": "mp4a.40.2",
+       "description": 5
+      }
+     },
+     "ffmpeg": {
+      "len": 960576,
+      "lenDiff": -14,
+      "lag": 0,
+      "corr": 0.9991,
+      "vsTruth": {
+       "max": 0.0444,
+       "snrDb": 29,
+       "n": 956480
+      },
+      "rawLen": 961536,
+      "rawLag": 0
+     },
+     "truthLen": 960590,
+     "ad": {
+      "supported": true,
+      "error": null,
+      "format": "f32-planar",
+      "converted": false,
+      "outputs": 940,
+      "len": 962560,
+      "lenDiff": 1970,
+      "lag": 2523,
+      "corr": 0.37918,
+      "tailExtra": -553,
+      "firstTs": -20010667,
+      "firstN": 1024,
+      "zeroOutputs": 0,
+      "outSr": 48000,
+      "outCh": 2,
+      "maxTsGapUs": 42666,
+      "vsTruth": {
+       "max": 0.928,
+       "snrDb": -3.1,
+       "n": 955941
+      },
+      "vsFFmpegRaw": {
+       "max": 0.991,
+       "snrDb": -3.1,
+       "n": 960037
+      },
+      "vsFFmpegRawInterior": {
+       "max": 0.921,
+       "snrDb": -3.1,
+       "n": 951845
+      }
+     },
+     "adNoDesc": {
+      "supported": true,
+      "error": null,
+      "format": null,
+      "converted": false,
+      "outputs": 0
+     },
+     "adShift": {
+      "supported": true,
+      "error": null,
+      "format": "f32-planar",
+      "converted": false,
+      "outputs": 940,
+      "len": 962560,
+      "lenDiff": 1970,
+      "lag": 1024,
+      "corr": 0.9991,
+      "tailExtra": 946,
+      "firstTs": 978667,
+      "firstN": 1024,
+      "zeroOutputs": 0,
+      "outSr": 48000,
+      "outCh": 2,
+      "maxTsGapUs": 1,
+      "vsTruth": {
+       "max": 0.0444,
+       "snrDb": 29,
+       "n": 956494
+      },
+      "vsFFmpegRaw": {
+       "max": 1.49e-07,
+       "snrDb": 141.3,
+       "n": 961536
+      },
+      "vsFFmpegRawInterior": {
+       "max": 1.49e-07,
+       "snrDb": 141.3,
+       "n": 953344
+      }
+     }
+    }
+   },
+   "ms": 1051,
+   "version": "26.6"
+  },
+  "accuracy {\"files\":[\"acc-fdk.m4a\"]}": {
+   "ok": true,
+   "result": {
+    "acc-fdk.m4a": {
+     "info": {
+      "codec": "aac",
+      "sr": 48000,
+      "ch": 2,
+      "initial_padding": 2048,
+      "trailing_padding": 0,
+      "seek_preroll": 0,
+      "frame_size": 1024,
+      "start_time": 0,
+      "tb": "1/48000",
+      "packets": 941,
+      "firstPktUs": -42667,
+      "firstPktDur": 1024,
+      "skips": [
+       {
+        "pkt": 0,
+        "start": 2048,
+        "end": 0
+       },
+       {
+        "pkt": 940,
+        "start": 0,
+        "end": 960
+       }
+      ],
+      "extradata": 2,
+      "config": {
+       "sampleRate": 48000,
+       "numberOfChannels": 2,
+       "codec": "mp4a.40.2",
+       "description": 2
+      }
+     },
+     "ffmpeg": {
+      "len": 960576,
+      "lenDiff": -14,
+      "lag": 0,
+      "corr": 0.99951,
+      "vsTruth": {
+       "max": 0.0301,
+       "snrDb": 30.4,
+       "n": 956480
+      },
+      "rawLen": 961536,
+      "rawLag": 0
+     },
+     "truthLen": 960590,
+     "ad": {
+      "supported": true,
+      "error": null,
+      "format": "f32-planar",
+      "converted": false,
+      "outputs": 941,
+      "len": 963584,
+      "lenDiff": 2994,
+      "lag": 2523,
+      "corr": 0.37875,
+      "tailExtra": 471,
+      "firstTs": -20010667,
+      "firstN": 1024,
+      "zeroOutputs": 0,
+      "outSr": 48000,
+      "outCh": 2,
+      "maxTsGapUs": 42667,
+      "vsTruth": {
+       "max": 0.923,
+       "snrDb": -3.1,
+       "n": 956494
+      },
+      "vsFFmpegRaw": {
+       "max": 0.92,
+       "snrDb": -3.1,
+       "n": 961061
+      },
+      "vsFFmpegRawInterior": {
+       "max": 0.92,
+       "snrDb": -3.1,
+       "n": 952869
+      }
+     },
+     "adNoDesc": {
+      "supported": true,
+      "error": null,
+      "format": null,
+      "converted": false,
+      "outputs": 0
+     },
+     "adShift": {
+      "supported": true,
+      "error": null,
+      "format": "f32-planar",
+      "converted": false,
+      "outputs": 941,
+      "len": 963584,
+      "lenDiff": 2994,
+      "lag": 2048,
+      "corr": 0.99951,
+      "tailExtra": 946,
+      "firstTs": 957333,
+      "firstN": 1024,
+      "zeroOutputs": 0,
+      "outSr": 48000,
+      "outCh": 2,
+      "maxTsGapUs": 1,
+      "vsTruth": {
+       "max": 0.0301,
+       "snrDb": 30.4,
+       "n": 956494
+      },
+      "vsFFmpegRaw": {
+       "max": 1.79e-07,
+       "snrDb": 141.3,
+       "n": 961536
+      },
+      "vsFFmpegRawInterior": {
+       "max": 1.79e-07,
+       "snrDb": 141.4,
+       "n": 953344
+      }
+     }
+    }
+   },
+   "ms": 1051,
+   "version": "26.6"
+  },
+  "accuracy {\"files\":[\"acc-aac.aac\"]}": {
+   "ok": true,
+   "result": {
+    "acc-aac.aac": {
+     "info": {
+      "codec": "aac",
+      "sr": 48000,
+      "ch": 2,
+      "initial_padding": 0,
+      "trailing_padding": 0,
+      "seek_preroll": 0,
+      "frame_size": 1024,
+      "start_time": 0,
+      "tb": "1/28224000",
+      "packets": 940,
+      "firstPktUs": 0,
+      "firstPktDur": 602112,
+      "skips": [],
+      "extradata": 0,
+      "config": {
+       "sampleRate": 48000,
+       "numberOfChannels": 2,
+       "codec": "mp4a.40.2"
+      }
+     },
+     "ffmpeg": {
+      "len": 962560,
+      "lenDiff": 1970,
+      "lag": 1024,
+      "corr": 0.9991,
+      "vsTruth": {
+       "max": 0.0444,
+       "snrDb": 29,
+       "n": 956494
+      },
+      "rawLen": 962560,
+      "rawLag": 1024
+     },
+     "truthLen": 960590,
+     "ad": {
+      "supported": true,
+      "error": null,
+      "format": "f32-planar",
+      "converted": false,
+      "outputs": 940,
+      "len": 962560,
+      "lenDiff": 1970,
+      "lag": 1024,
+      "corr": 0.9991,
+      "tailExtra": 946,
+      "firstTs": 0,
+      "firstN": 1024,
+      "zeroOutputs": 0,
+      "outSr": 48000,
+      "outCh": 2,
+      "maxTsGapUs": 1,
+      "vsTruth": {
+       "max": 0.0444,
+       "snrDb": 29,
+       "n": 956494
+      },
+      "vsFFmpegRaw": {
+       "max": 1.49e-07,
+       "snrDb": 141.3,
+       "n": 962560
+      },
+      "vsFFmpegRawInterior": {
+       "max": 1.49e-07,
+       "snrDb": 141.3,
+       "n": 954368
+      }
+     },
+     "adShift": {
+      "supported": true,
+      "error": null,
+      "format": "f32-planar",
+      "converted": false,
+      "outputs": 940,
+      "len": 962560,
+      "lenDiff": 1970,
+      "lag": 1024,
+      "corr": 0.9991,
+      "tailExtra": 946,
+      "firstTs": 1000000,
+      "firstN": 1024,
+      "zeroOutputs": 0,
+      "outSr": 48000,
+      "outCh": 2,
+      "maxTsGapUs": 1,
+      "vsTruth": {
+       "max": 0.0444,
+       "snrDb": 29,
+       "n": 956494
+      },
+      "vsFFmpegRaw": {
+       "max": 1.49e-07,
+       "snrDb": 141.3,
+       "n": 962560
+      },
+      "vsFFmpegRawInterior": {
+       "max": 1.49e-07,
+       "snrDb": 141.3,
+       "n": 954368
+      }
+     }
+    }
+   },
+   "ms": 1035,
+   "version": "26.6"
+  },
+  "accuracy {\"files\":[\"acc-mp3.mp3\"]}": {
+   "ok": true,
+   "result": {
+    "acc-mp3.mp3": {
+     "info": {
+      "codec": "mp3",
+      "sr": 44100,
+      "ch": 2,
+      "initial_padding": 0,
+      "trailing_padding": 0,
+      "seek_preroll": 0,
+      "frame_size": 1152,
+      "start_time": 353600,
+      "tb": "1/14112000",
+      "packets": 768,
+      "firstPktUs": 0,
+      "firstPktDur": 368640,
+      "skips": [
+       {
+        "pkt": 0,
+        "start": 1105,
+        "end": 0
+       },
+       {
+        "pkt": 767,
+        "start": 0,
+        "end": 1089
+       }
+      ],
+      "extradata": 0,
+      "config": {
+       "sampleRate": 44100,
+       "numberOfChannels": 2,
+       "codec": "mp3"
+      }
+     },
+     "ffmpeg": {
+      "len": 882542,
+      "lenDiff": 0,
+      "lag": 0,
+      "corr": 0.99954,
+      "vsTruth": {
+       "max": 0.0455,
+       "snrDb": 27.6,
+       "n": 878446
+      },
+      "rawLen": 884736,
+      "rawLag": 1105
+     },
+     "truthLen": 882542,
+     "ad": {
+      "supported": true,
+      "error": null,
+      "format": "f32",
+      "converted": false,
+      "outputs": 768,
+      "len": 884736,
+      "lenDiff": 2194,
+      "lag": 1105,
+      "corr": 0.99954,
+      "tailExtra": 1089,
+      "firstTs": 0,
+      "firstN": 1152,
+      "zeroOutputs": 0,
+      "outSr": 44100,
+      "outCh": 2,
+      "maxTsGapUs": 1,
+      "vsTruth": {
+       "max": 0.0455,
+       "snrDb": 27.6,
+       "n": 878446
+      },
+      "vsFFmpegRaw": {
+       "max": 1.04e-06,
+       "snrDb": 128.2,
+       "n": 884736
+      },
+      "vsFFmpegRawInterior": {
+       "max": 1.04e-06,
+       "snrDb": 128.2,
+       "n": 876544
+      }
+     },
+     "adShift": {
+      "supported": true,
+      "error": null,
+      "format": "f32",
+      "converted": false,
+      "outputs": 768,
+      "len": 884736,
+      "lenDiff": 2194,
+      "lag": 1105,
+      "corr": 0.99954,
+      "tailExtra": 1089,
+      "firstTs": 1000000,
+      "firstN": 1152,
+      "zeroOutputs": 0,
+      "outSr": 44100,
+      "outCh": 2,
+      "maxTsGapUs": 1,
+      "vsTruth": {
+       "max": 0.0455,
+       "snrDb": 27.6,
+       "n": 878446
+      },
+      "vsFFmpegRaw": {
+       "max": 1.04e-06,
+       "snrDb": 128.2,
+       "n": 884736
+      },
+      "vsFFmpegRawInterior": {
+       "max": 1.04e-06,
+       "snrDb": 128.2,
+       "n": 876544
+      }
+     }
+    }
+   },
+   "ms": 1020,
+   "version": "26.6"
+  },
+  "accuracy {\"files\":[\"acc-mp3-noxing.mp3\"]}": {
+   "ok": true,
+   "result": {
+    "acc-mp3-noxing.mp3": {
+     "info": {
+      "codec": "mp3",
+      "sr": 44100,
+      "ch": 2,
+      "initial_padding": 0,
+      "trailing_padding": 0,
+      "seek_preroll": 0,
+      "frame_size": 1152,
+      "start_time": 0,
+      "tb": "1/14112000",
+      "packets": 768,
+      "firstPktUs": 0,
+      "firstPktDur": 368640,
+      "skips": [],
+      "extradata": 0,
+      "config": {
+       "sampleRate": 44100,
+       "numberOfChannels": 2,
+       "codec": "mp3"
+      }
+     },
+     "ffmpeg": {
+      "len": 884736,
+      "lenDiff": 2194,
+      "lag": 1105,
+      "corr": 0.99954,
+      "vsTruth": {
+       "max": 0.0455,
+       "snrDb": 27.6,
+       "n": 878446
+      },
+      "rawLen": 884736,
+      "rawLag": 1105
+     },
+     "truthLen": 882542,
+     "ad": {
+      "supported": true,
+      "error": null,
+      "format": "f32",
+      "converted": false,
+      "outputs": 768,
+      "len": 884736,
+      "lenDiff": 2194,
+      "lag": 1105,
+      "corr": 0.99954,
+      "tailExtra": 1089,
+      "firstTs": 0,
+      "firstN": 1152,
+      "zeroOutputs": 0,
+      "outSr": 44100,
+      "outCh": 2,
+      "maxTsGapUs": 1,
+      "vsTruth": {
+       "max": 0.0455,
+       "snrDb": 27.6,
+       "n": 878446
+      },
+      "vsFFmpegRaw": {
+       "max": 1.04e-06,
+       "snrDb": 128.2,
+       "n": 884736
+      },
+      "vsFFmpegRawInterior": {
+       "max": 1.04e-06,
+       "snrDb": 128.2,
+       "n": 876544
+      }
+     },
+     "adShift": {
+      "supported": true,
+      "error": null,
+      "format": "f32",
+      "converted": false,
+      "outputs": 768,
+      "len": 884736,
+      "lenDiff": 2194,
+      "lag": 1105,
+      "corr": 0.99954,
+      "tailExtra": 1089,
+      "firstTs": 1000000,
+      "firstN": 1152,
+      "zeroOutputs": 0,
+      "outSr": 44100,
+      "outCh": 2,
+      "maxTsGapUs": 1,
+      "vsTruth": {
+       "max": 0.0455,
+       "snrDb": 27.6,
+       "n": 878446
+      },
+      "vsFFmpegRaw": {
+       "max": 1.04e-06,
+       "snrDb": 128.2,
+       "n": 884736
+      },
+      "vsFFmpegRawInterior": {
+       "max": 1.04e-06,
+       "snrDb": 128.2,
+       "n": 876544
+      }
+     }
+    }
+   },
+   "ms": 1030,
+   "version": "26.6"
+  },
+  "accuracy {\"files\":[\"acc-opus.opus\"]}": {
+   "ok": true,
+   "result": {
+    "acc-opus.opus": {
+     "info": {
+      "codec": "opus",
+      "sr": 48000,
+      "ch": 2,
+      "initial_padding": 312,
+      "trailing_padding": 0,
+      "seek_preroll": 3840,
+      "frame_size": 0,
+      "start_time": 0,
+      "tb": "1/48000",
+      "packets": 1001,
+      "firstPktUs": -6500,
+      "firstPktDur": 960,
+      "skips": [
+       {
+        "pkt": 0,
+        "start": 312,
+        "end": 0
+       },
+       {
+        "pkt": 1000,
+        "start": 0,
+        "end": 58
+       }
+      ],
+      "extradata": 19,
+      "config": {
+       "sampleRate": 48000,
+       "numberOfChannels": 2,
+       "codec": "opus",
+       "description": 19
+      }
+     },
+     "ffmpeg": {
+      "len": 960590,
+      "lenDiff": 0,
+      "lag": 0,
+      "corr": 0.99923,
+      "vsTruth": {
+       "max": 0.0518,
+       "snrDb": 27.9,
+       "n": 956494
+      },
+      "rawLen": 960648,
+      "rawLag": 0
+     },
+     "truthLen": 960590,
+     "ad": {
+      "supported": true,
+      "error": null,
+      "format": "f32",
+      "converted": false,
+      "outputs": 1001,
+      "len": 960960,
+      "lenDiff": 370,
+      "lag": 5551,
+      "corr": 0.77881,
+      "tailExtra": -5181,
+      "firstTs": -19993500,
+      "firstN": 960,
+      "zeroOutputs": 0,
+      "outSr": 48000,
+      "outCh": 2,
+      "maxTsGapUs": 13000,
+      "vsTruth": {
+       "max": 0.933,
+       "snrDb": -3,
+       "n": 951313
+      },
+      "vsFFmpegRaw": {
+       "max": 0.934,
+       "snrDb": -3.1,
+       "n": 955409
+      },
+      "vsFFmpegRawInterior": {
+       "max": 0.934,
+       "snrDb": -3.1,
+       "n": 947217
+      }
+     },
+     "adNoDesc": {
+      "supported": true,
+      "error": null,
+      "format": "f32",
+      "converted": false,
+      "outputs": 1001,
+      "len": 960960,
+      "lenDiff": 370,
+      "lag": 5551,
+      "corr": 0.77881,
+      "tailExtra": -5181,
+      "firstTs": -19993500,
+      "firstN": 960,
+      "zeroOutputs": 0,
+      "outSr": 48000,
+      "outCh": 2,
+      "maxTsGapUs": 13000,
+      "vsTruth": {
+       "max": 0.933,
+       "snrDb": -3,
+       "n": 951313
+      },
+      "vsFFmpegRaw": {
+       "max": 0.934,
+       "snrDb": -3.1,
+       "n": 955409
+      },
+      "vsFFmpegRawInterior": {
+       "max": 0.934,
+       "snrDb": -3.1,
+       "n": 947217
+      }
+     },
+     "adShift": {
+      "supported": true,
+      "error": null,
+      "format": "f32",
+      "converted": false,
+      "outputs": 1001,
+      "len": 960960,
+      "lenDiff": 370,
+      "lag": 312,
+      "corr": 0.99923,
+      "tailExtra": 58,
+      "firstTs": 993500,
+      "firstN": 960,
+      "zeroOutputs": 0,
+      "outSr": 48000,
+      "outCh": 2,
+      "maxTsGapUs": 0,
+      "vsTruth": {
+       "max": 0.0518,
+       "snrDb": 27.9,
+       "n": 956494
+      },
+      "vsFFmpegRaw": {
+       "max": 1.54e-05,
+       "snrDb": 88.6,
+       "n": 960648
+      },
+      "vsFFmpegRawInterior": {
+       "max": 1.54e-05,
+       "snrDb": 88.6,
+       "n": 952456
+      }
+     }
+    }
+   },
+   "ms": 1503,
+   "version": "26.6"
+  },
+  "accuracy {\"files\":[\"acc-opus.webm\"]}": {
+   "ok": true,
+   "result": {
+    "acc-opus.webm": {
+     "info": {
+      "codec": "opus",
+      "sr": 48000,
+      "ch": 2,
+      "initial_padding": 312,
+      "trailing_padding": 0,
+      "seek_preroll": 3840,
+      "frame_size": 0,
+      "start_time": 0,
+      "tb": "1/1000",
+      "packets": 1001,
+      "firstPktUs": -7000,
+      "firstPktDur": 20,
+      "skips": [
+       {
+        "pkt": 0,
+        "start": 312,
+        "end": 0
+       },
+       {
+        "pkt": 1000,
+        "start": 0,
+        "end": 58
+       }
+      ],
+      "extradata": 19,
+      "config": {
+       "sampleRate": 48000,
+       "numberOfChannels": 2,
+       "codec": "opus",
+       "description": 19
+      }
+     },
+     "ffmpeg": {
+      "len": 960590,
+      "lenDiff": 0,
+      "lag": 0,
+      "corr": 0.99923,
+      "vsTruth": {
+       "max": 0.0518,
+       "snrDb": 27.9,
+       "n": 956494
+      },
+      "rawLen": 960648,
+      "rawLag": 0
+     },
+     "truthLen": 960590,
+     "ad": {
+      "supported": true,
+      "error": null,
+      "format": "f32",
+      "converted": false,
+      "outputs": 1001,
+      "len": 960960,
+      "lenDiff": 370,
+      "lag": 5551,
+      "corr": 0.77881,
+      "tailExtra": -5181,
+      "firstTs": -19994000,
+      "firstN": 960,
+      "zeroOutputs": 0,
+      "outSr": 48000,
+      "outCh": 2,
+      "maxTsGapUs": 13000,
+      "vsTruth": {
+       "max": 0.933,
+       "snrDb": -3,
+       "n": 951313
+      },
+      "vsFFmpegRaw": {
+       "max": 0.934,
+       "snrDb": -3.1,
+       "n": 955409
+      },
+      "vsFFmpegRawInterior": {
+       "max": 0.934,
+       "snrDb": -3.1,
+       "n": 947217
+      }
+     },
+     "adNoDesc": {
+      "supported": true,
+      "error": null,
+      "format": "f32",
+      "converted": false,
+      "outputs": 1001,
+      "len": 960960,
+      "lenDiff": 370,
+      "lag": 5551,
+      "corr": 0.77881,
+      "tailExtra": -5181,
+      "firstTs": -19994000,
+      "firstN": 960,
+      "zeroOutputs": 0,
+      "outSr": 48000,
+      "outCh": 2,
+      "maxTsGapUs": 13000,
+      "vsTruth": {
+       "max": 0.933,
+       "snrDb": -3,
+       "n": 951313
+      },
+      "vsFFmpegRaw": {
+       "max": 0.934,
+       "snrDb": -3.1,
+       "n": 955409
+      },
+      "vsFFmpegRawInterior": {
+       "max": 0.934,
+       "snrDb": -3.1,
+       "n": 947217
+      }
+     },
+     "adShift": {
+      "supported": true,
+      "error": null,
+      "format": "f32",
+      "converted": false,
+      "outputs": 1001,
+      "len": 960960,
+      "lenDiff": 370,
+      "lag": 312,
+      "corr": 0.99923,
+      "tailExtra": 58,
+      "firstTs": 993000,
+      "firstN": 960,
+      "zeroOutputs": 0,
+      "outSr": 48000,
+      "outCh": 2,
+      "maxTsGapUs": 1000,
+      "vsTruth": {
+       "max": 0.0518,
+       "snrDb": 27.9,
+       "n": 956494
+      },
+      "vsFFmpegRaw": {
+       "max": 1.54e-05,
+       "snrDb": 88.6,
+       "n": 960648
+      },
+      "vsFFmpegRawInterior": {
+       "max": 1.54e-05,
+       "snrDb": 88.6,
+       "n": 952456
+      }
+     }
+    }
+   },
+   "ms": 1500,
+   "version": "26.6"
+  },
+  "accuracy {\"files\":[\"acc-flac.flac\"]}": {
+   "ok": true,
+   "result": {
+    "acc-flac.flac": {
+     "info": {
+      "codec": "flac",
+      "sr": 48000,
+      "ch": 2,
+      "initial_padding": 0,
+      "trailing_padding": 0,
+      "seek_preroll": 0,
+      "frame_size": 0,
+      "start_time": 0,
+      "tb": "1/48000",
+      "packets": 209,
+      "firstPktUs": 0,
+      "firstPktDur": 4608,
+      "skips": [],
+      "extradata": 34,
+      "config": {
+       "sampleRate": 48000,
+       "numberOfChannels": 2,
+       "codec": "flac",
+       "description": 42
+      }
+     },
+     "ffmpeg": {
+      "len": 960590,
+      "lenDiff": 0,
+      "lag": 0,
+      "corr": 1,
+      "vsTruth": {
+       "max": 0,
+       "snrDb": null,
+       "n": 956494
+      },
+      "rawLen": 960590,
+      "rawLag": 0
+     },
+     "truthLen": 960590,
+     "ad": {
+      "supported": true,
+      "error": "EncodingError: Decode error",
+      "format": null,
+      "converted": false,
+      "outputs": 0
+     },
+     "adShift": {
+      "supported": true,
+      "error": "EncodingError: Decode error",
+      "format": null,
+      "converted": false,
+      "outputs": 0
+     }
+    }
+   },
+   "ms": 549,
+   "version": "26.6"
+  },
+  "accuracy {\"files\":[\"acc-vorbis.ogg\"]}": {
+   "ok": true,
+   "result": {
+    "acc-vorbis.ogg": {
+     "info": {
+      "codec": "vorbis",
+      "sr": 48000,
+      "ch": 2,
+      "initial_padding": 0,
+      "trailing_padding": 0,
+      "seek_preroll": 0,
+      "frame_size": 0,
+      "start_time": 0,
+      "tb": "1/48000",
+      "packets": 947,
+      "firstPktUs": -2667,
+      "firstPktDur": 128,
+      "skips": [
+       {
+        "pkt": 946,
+        "start": 0,
+        "end": 50
+       }
+      ],
+      "extradata": 4286,
+      "config": {
+       "sampleRate": 48000,
+       "numberOfChannels": 2,
+       "codec": "vorbis",
+       "description": 4286
+      }
+     },
+     "ffmpeg": {
+      "len": 960590,
+      "lenDiff": 0,
+      "lag": 0,
+      "corr": 0.99951,
+      "vsTruth": {
+       "max": 0.0368,
+       "snrDb": 30.1,
+       "n": 956494
+      },
+      "rawLen": 960640,
+      "rawLag": 0
+     },
+     "truthLen": 960590,
+     "ad": {
+      "supported": true,
+      "error": "Error: flush timeout (queue 0, outputs 0)",
+      "format": null,
+      "converted": false,
+      "outputs": 0
+     },
+     "adShift": {
+      "supported": "timeout",
+      "error": "Error: dequeue timeout (queue 33)",
+      "format": null,
+      "converted": false,
+      "outputs": 0
+     }
+    }
+   },
+   "ms": 25580,
+   "version": "26.6"
+  },
+  "accuracy {\"files\":[\"acc-vorbis.webm\"]}": {
+   "ok": true,
+   "result": {
+    "acc-vorbis.webm": {
+     "info": {
+      "codec": "vorbis",
+      "sr": 48000,
+      "ch": 2,
+      "initial_padding": 0,
+      "trailing_padding": 0,
+      "seek_preroll": 0,
+      "frame_size": 0,
+      "start_time": 0,
+      "tb": "1/1000",
+      "packets": 947,
+      "firstPktUs": 0,
+      "firstPktDur": 2,
+      "skips": [],
+      "extradata": 4351,
+      "config": {
+       "sampleRate": 48000,
+       "numberOfChannels": 2,
+       "codec": "vorbis",
+       "description": 4351
+      }
+     },
+     "ffmpeg": {
+      "len": 960640,
+      "lenDiff": 50,
+      "lag": 0,
+      "corr": 0.99951,
+      "vsTruth": {
+       "max": 0.0368,
+       "snrDb": 30.1,
+       "n": 956494
+      },
+      "rawLen": 960640,
+      "rawLag": 0
+     },
+     "truthLen": 960590,
+     "ad": {
+      "supported": true,
+      "error": "Error: flush timeout (queue 0, outputs 0)",
+      "format": null,
+      "converted": false,
+      "outputs": 0
+     },
+     "adShift": {
+      "supported": "timeout",
+      "error": "Error: dequeue timeout (queue 33)",
+      "format": null,
+      "converted": false,
+      "outputs": 0
+     }
+    }
+   },
+   "ms": 25576,
+   "version": "26.6"
+  }
+ }
+}

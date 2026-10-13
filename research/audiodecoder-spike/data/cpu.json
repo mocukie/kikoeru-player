@@ -1,0 +1,2231 @@
+{
+ "chromium": {
+  "cpu": {
+   "chromium": {
+    "ok": false,
+    "error": "page.evaluate: Target crashed ",
+    "ms": 119176,
+    "version": "153.0.8010.12"
+   }
+  },
+  "cpu {\"files\":[\"cpu-mp3.mp3\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "cpu-mp3.mp3": {
+      "info": {
+       "codec": "mp3",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 0,
+       "mediaSec": 300,
+       "packets": 12501
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 2053,
+       "cpuMs": 2130,
+       "cpuMsPerMediaSec": 7.1,
+       "wallMsPerMediaSec": 6.84,
+       "samples": 11520286,
+       "all": [
+        [
+         2105,
+         2300
+        ],
+        [
+         2053,
+         2120
+        ],
+        [
+         2032,
+         2130
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 797,
+       "cpuMs": 840,
+       "cpuMsPerMediaSec": 2.8,
+       "wallMsPerMediaSec": 2.66,
+       "samples": 14400000,
+       "all": [
+        [
+         816,
+         900
+        ],
+        [
+         797,
+         840
+        ],
+        [
+         791,
+         830
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 2640,
+       "cpuMs": 3040,
+       "cpuMsPerMediaSec": 10.13,
+       "wallMsPerMediaSec": 8.8,
+       "samples": 14401152,
+       "filtered": 11521171,
+       "decodeWallMs": 1240,
+       "format": "f32",
+       "all": [
+        [
+         2631,
+         2990
+        ],
+        [
+         2640,
+         3040
+        ],
+        [
+         2680,
+         3200
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 1244,
+       "cpuMs": 1500,
+       "cpuMsPerMediaSec": 5,
+       "wallMsPerMediaSec": 4.15,
+       "samples": 14401152,
+       "filtered": 0,
+       "decodeWallMs": 1244,
+       "format": "f32",
+       "all": [
+        [
+         1226,
+         1500
+        ],
+        [
+         1245,
+         1610
+        ],
+        [
+         1244,
+         1350
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 21291,
+    "version": "153.0.8010.12"
+   }
+  },
+  "cpu {\"files\":[\"cpu-aac.m4a\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "cpu-aac.m4a": {
+      "info": {
+       "codec": "aac",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 0,
+       "mediaSec": 300,
+       "packets": 14064
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 1836,
+       "cpuMs": 1900,
+       "cpuMsPerMediaSec": 6.33,
+       "wallMsPerMediaSec": 6.12,
+       "samples": 11520500,
+       "all": [
+        [
+         1888,
+         2090
+        ],
+        [
+         1836,
+         1900
+        ],
+        [
+         1826,
+         1900
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 595,
+       "cpuMs": 640,
+       "cpuMsPerMediaSec": 2.13,
+       "wallMsPerMediaSec": 1.98,
+       "samples": 14400000,
+       "all": [
+        [
+         606,
+         690
+        ],
+        [
+         595,
+         640
+        ],
+        [
+         589,
+         640
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 2438,
+       "cpuMs": 2970,
+       "cpuMsPerMediaSec": 9.9,
+       "wallMsPerMediaSec": 8.13,
+       "samples": 14401536,
+       "filtered": 11521616,
+       "decodeWallMs": 1037,
+       "format": "f32-planar",
+       "all": [
+        [
+         2486,
+         2990
+        ],
+        [
+         2435,
+         2890
+        ],
+        [
+         2438,
+         2970
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 1024,
+       "cpuMs": 1190,
+       "cpuMsPerMediaSec": 3.97,
+       "wallMsPerMediaSec": 3.41,
+       "samples": 14401536,
+       "filtered": 0,
+       "decodeWallMs": 1023,
+       "format": "f32-planar",
+       "all": [
+        [
+         1068,
+         1350
+        ],
+        [
+         1007,
+         1160
+        ],
+        [
+         1024,
+         1190
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 18961,
+    "version": "153.0.8010.12"
+   }
+  },
+  "cpu {\"files\":[\"cpu-opus.opus\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "cpu-opus.opus": {
+      "info": {
+       "codec": "opus",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 0,
+       "mediaSec": 300,
+       "packets": 15001
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 2488,
+       "cpuMs": 2540,
+       "cpuMsPerMediaSec": 8.47,
+       "wallMsPerMediaSec": 8.29,
+       "samples": 11520260,
+       "all": [
+        [
+         2532,
+         2730
+        ],
+        [
+         2488,
+         2540
+        ],
+        [
+         2471,
+         2540
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 1236,
+       "cpuMs": 1290,
+       "cpuMsPerMediaSec": 4.3,
+       "wallMsPerMediaSec": 4.12,
+       "samples": 14400000,
+       "all": [
+        [
+         1256,
+         1390
+        ],
+        [
+         1236,
+         1290
+        ],
+        [
+         1231,
+         1270
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 3272,
+       "cpuMs": 3770,
+       "cpuMsPerMediaSec": 12.57,
+       "wallMsPerMediaSec": 10.91,
+       "samples": 14400648,
+       "filtered": 11520484,
+       "decodeWallMs": 1849,
+       "format": "f32",
+       "all": [
+        [
+         3247,
+         3650
+        ],
+        [
+         3272,
+         3770
+        ],
+        [
+         3301,
+         3840
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 1804,
+       "cpuMs": 2040,
+       "cpuMsPerMediaSec": 6.8,
+       "wallMsPerMediaSec": 6.01,
+       "samples": 14400648,
+       "filtered": 0,
+       "decodeWallMs": 1804,
+       "format": "f32",
+       "all": [
+        [
+         1799,
+         2050
+        ],
+        [
+         1804,
+         1910
+        ],
+        [
+         1817,
+         2040
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 27501,
+    "version": "153.0.8010.12"
+   }
+  },
+  "cpu {\"files\":[\"cpu-vorbis.ogg\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "cpu-vorbis.ogg": {
+      "info": {
+       "codec": "vorbis",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 0,
+       "mediaSec": 300,
+       "packets": 14067
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 1905,
+       "cpuMs": 1980,
+       "cpuMsPerMediaSec": 6.6,
+       "wallMsPerMediaSec": 6.35,
+       "samples": 11520228,
+       "all": [
+        [
+         1952,
+         2150
+        ],
+        [
+         1905,
+         1960
+        ],
+        [
+         1900,
+         1980
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 668,
+       "cpuMs": 710,
+       "cpuMsPerMediaSec": 2.37,
+       "wallMsPerMediaSec": 2.23,
+       "samples": 14400000,
+       "all": [
+        [
+         677,
+         760
+        ],
+        [
+         668,
+         710
+        ],
+        [
+         666,
+         700
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 2465,
+       "cpuMs": 2950,
+       "cpuMsPerMediaSec": 9.83,
+       "wallMsPerMediaSec": 8.22,
+       "samples": 14400000,
+       "filtered": 11520228,
+       "decodeWallMs": 1054,
+       "format": "f32-planar",
+       "all": [
+        [
+         2465,
+         2950
+        ],
+        [
+         2477,
+         2910
+        ],
+        [
+         2453,
+         2990
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 1032,
+       "cpuMs": 1190,
+       "cpuMsPerMediaSec": 3.97,
+       "wallMsPerMediaSec": 3.44,
+       "samples": 14400000,
+       "filtered": 0,
+       "decodeWallMs": 1032,
+       "format": "f32-planar",
+       "all": [
+        [
+         1092,
+         1390
+        ],
+        [
+         1032,
+         1190
+        ],
+        [
+         1031,
+         1190
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 19441,
+    "version": "153.0.8010.12"
+   }
+  },
+  "cpu {\"files\":[\"cpu-flac.flac\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "cpu-flac.flac": {
+      "info": {
+       "codec": "flac",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 24,
+       "mediaSec": 300,
+       "packets": 3125
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 1915,
+       "cpuMs": 1960,
+       "cpuMsPerMediaSec": 6.53,
+       "wallMsPerMediaSec": 6.38,
+       "samples": 11520289,
+       "all": [
+        [
+         1951,
+         2110
+        ],
+        [
+         1914,
+         1950
+        ],
+        [
+         1915,
+         1960
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 712,
+       "cpuMs": 740,
+       "cpuMsPerMediaSec": 2.47,
+       "wallMsPerMediaSec": 2.37,
+       "samples": 14400000,
+       "all": [
+        [
+         720,
+         790
+        ],
+        [
+         712,
+         740
+        ],
+        [
+         707,
+         740
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 1859,
+       "cpuMs": 2070,
+       "cpuMsPerMediaSec": 6.9,
+       "wallMsPerMediaSec": 6.2,
+       "samples": 14400000,
+       "filtered": 11520289,
+       "decodeWallMs": 585,
+       "format": "s32",
+       "all": [
+        [
+         1859,
+         2040
+        ],
+        [
+         1861,
+         2120
+        ],
+        [
+         1854,
+         2070
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 590,
+       "cpuMs": 750,
+       "cpuMsPerMediaSec": 2.5,
+       "wallMsPerMediaSec": 1.97,
+       "samples": 14400000,
+       "filtered": 0,
+       "decodeWallMs": 590,
+       "format": "s32",
+       "all": [
+        [
+         590,
+         720
+        ],
+        [
+         594,
+         770
+        ],
+        [
+         585,
+         750
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 15950,
+    "version": "153.0.8010.12"
+   }
+  },
+  "cpu {\"files\":[\"cpu-flac192.flac\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "cpu-flac192.flac": {
+      "info": {
+       "codec": "flac",
+       "sr": 192000,
+       "ch": 2,
+       "bits": 24,
+       "mediaSec": 60,
+       "packets": 704
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 1541,
+       "cpuMs": 1580,
+       "cpuMsPerMediaSec": 26.33,
+       "wallMsPerMediaSec": 25.68,
+       "samples": 9216351,
+       "all": [
+        [
+         1573,
+         1660
+        ],
+        [
+         1541,
+         1580
+        ],
+        [
+         1535,
+         1560
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 548,
+       "cpuMs": 580,
+       "cpuMsPerMediaSec": 9.67,
+       "wallMsPerMediaSec": 9.13,
+       "samples": 11520000,
+       "all": [
+        [
+         551,
+         580
+        ],
+        [
+         548,
+         590
+        ],
+        [
+         544,
+         580
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 1406,
+       "cpuMs": 1480,
+       "cpuMsPerMediaSec": 24.67,
+       "wallMsPerMediaSec": 23.43,
+       "samples": 11520000,
+       "filtered": 9216351,
+       "decodeWallMs": 378,
+       "format": "s32",
+       "all": [
+        [
+         1409,
+         1490
+        ],
+        [
+         1401,
+         1470
+        ],
+        [
+         1406,
+         1480
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 379,
+       "cpuMs": 430,
+       "cpuMsPerMediaSec": 7.17,
+       "wallMsPerMediaSec": 6.32,
+       "samples": 11520000,
+       "filtered": 0,
+       "decodeWallMs": 379,
+       "format": "s32",
+       "all": [
+        [
+         381,
+         430
+        ],
+        [
+         379,
+         440
+        ],
+        [
+         379,
+         430
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 12089,
+    "version": "153.0.8010.12"
+   }
+  }
+ },
+ "chromium-pcm192-wasm-only": {
+  "cpu {\"files\":[\"cpu-pcm192.wav\"],\"paths\":[\"wasm\",\"wasmNoFilter\"]}": {
+   "chromium": {
+    "ok": true,
+    "result": {
+     "cpu-pcm192.wav": {
+      "info": {
+       "codec": "pcm_s24le",
+       "sr": 192000,
+       "ch": 2,
+       "bits": 24,
+       "mediaSec": 60,
+       "packets": 704
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 1083,
+       "cpuMs": 1140,
+       "cpuMsPerMediaSec": 19,
+       "wallMsPerMediaSec": 18.04,
+       "samples": 9216351,
+       "all": [
+        [
+         1104,
+         1170
+        ],
+        [
+         1083,
+         1140
+        ],
+        [
+         1077,
+         1090
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 78,
+       "cpuMs": 90,
+       "cpuMsPerMediaSec": 1.5,
+       "wallMsPerMediaSec": 1.3,
+       "samples": 11520000,
+       "all": [
+        [
+         84,
+         110
+        ],
+        [
+         78,
+         90
+        ],
+        [
+         78,
+         90
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 3813,
+    "version": "153.0.8010.12"
+   }
+  }
+ },
+ "firefox": {
+  "cpu {\"files\":[\"cpu-mp3.mp3\"]}": {
+   "firefox": {
+    "ok": true,
+    "result": {
+     "cpu-mp3.mp3": {
+      "info": {
+       "codec": "mp3",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 0,
+       "mediaSec": 300,
+       "packets": 12501
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 2338,
+       "cpuMs": 2480,
+       "cpuMsPerMediaSec": 8.27,
+       "wallMsPerMediaSec": 7.79,
+       "samples": 11520286,
+       "all": [
+        [
+         2338,
+         2480
+        ],
+        [
+         2307,
+         2400
+        ],
+        [
+         2701,
+         2770
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 876,
+       "cpuMs": 950,
+       "cpuMsPerMediaSec": 3.17,
+       "wallMsPerMediaSec": 2.92,
+       "samples": 14400000,
+       "all": [
+        [
+         876,
+         950
+        ],
+        [
+         1082,
+         1140
+        ],
+        [
+         848,
+         880
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 5392,
+       "cpuMs": 6190,
+       "cpuMsPerMediaSec": 20.63,
+       "wallMsPerMediaSec": 17.97,
+       "samples": 14401152,
+       "filtered": 11521146,
+       "decodeWallMs": 3594,
+       "format": "f32",
+       "all": [
+        [
+         5370,
+         5880
+        ],
+        [
+         5529,
+         6200
+        ],
+        [
+         5392,
+         6190
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 3618,
+       "cpuMs": 4400,
+       "cpuMsPerMediaSec": 14.67,
+       "wallMsPerMediaSec": 12.06,
+       "samples": 14401152,
+       "filtered": 0,
+       "decodeWallMs": 3618,
+       "format": "f32",
+       "all": [
+        [
+         3974,
+         4900
+        ],
+        [
+         3488,
+         4190
+        ],
+        [
+         3618,
+         4400
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 38350,
+    "version": "155.0"
+   }
+  },
+  "cpu {\"files\":[\"cpu-aac.m4a\"]}": {
+   "firefox": {
+    "ok": true,
+    "result": {
+     "cpu-aac.m4a": {
+      "info": {
+       "codec": "aac",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 0,
+       "mediaSec": 300,
+       "packets": 14064
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 2174,
+       "cpuMs": 2270,
+       "cpuMsPerMediaSec": 7.57,
+       "wallMsPerMediaSec": 7.25,
+       "samples": 11520500,
+       "all": [
+        [
+         2174,
+         2270
+        ],
+        [
+         2147,
+         2170
+        ],
+        [
+         2556,
+         2650
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 649,
+       "cpuMs": 680,
+       "cpuMsPerMediaSec": 2.27,
+       "wallMsPerMediaSec": 2.16,
+       "samples": 14400000,
+       "all": [
+        [
+         670,
+         710
+        ],
+        [
+         647,
+         680
+        ],
+        [
+         649,
+         670
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 5527,
+       "cpuMs": 6340,
+       "cpuMsPerMediaSec": 21.13,
+       "wallMsPerMediaSec": 18.42,
+       "samples": 14401536,
+       "filtered": 11521616,
+       "decodeWallMs": 3567,
+       "format": "f32",
+       "all": [
+        [
+         5236,
+         5780
+        ],
+        [
+         5527,
+         6360
+        ],
+        [
+         5579,
+         6340
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 3660,
+       "cpuMs": 4480,
+       "cpuMsPerMediaSec": 14.93,
+       "wallMsPerMediaSec": 12.2,
+       "samples": 14401536,
+       "filtered": 0,
+       "decodeWallMs": 3660,
+       "format": "f32",
+       "all": [
+        [
+         3660,
+         4480
+        ],
+        [
+         3580,
+         4260
+        ],
+        [
+         3790,
+         4620
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 37472,
+    "version": "155.0"
+   }
+  },
+  "cpu {\"files\":[\"cpu-opus.opus\"]}": {
+   "firefox": {
+    "ok": true,
+    "result": {
+     "cpu-opus.opus": {
+      "info": {
+       "codec": "opus",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 0,
+       "mediaSec": 300,
+       "packets": 15001
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 3234,
+       "cpuMs": 3310,
+       "cpuMsPerMediaSec": 11.03,
+       "wallMsPerMediaSec": 10.78,
+       "samples": 11520260,
+       "all": [
+        [
+         2872,
+         3120
+        ],
+        [
+         3234,
+         3310
+        ],
+        [
+         3301,
+         3380
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 1327,
+       "cpuMs": 1350,
+       "cpuMsPerMediaSec": 4.5,
+       "wallMsPerMediaSec": 4.42,
+       "samples": 14400000,
+       "all": [
+        [
+         1354,
+         1400
+        ],
+        [
+         1326,
+         1350
+        ],
+        [
+         1327,
+         1340
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 6520,
+       "cpuMs": 7220,
+       "cpuMsPerMediaSec": 24.07,
+       "wallMsPerMediaSec": 21.73,
+       "samples": 14400648,
+       "filtered": 11520484,
+       "decodeWallMs": 4606,
+       "format": "f32",
+       "all": [
+        [
+         6520,
+         7220
+        ],
+        [
+         6458,
+         7100
+        ],
+        [
+         6646,
+         7260
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 4216,
+       "cpuMs": 4980,
+       "cpuMsPerMediaSec": 16.6,
+       "wallMsPerMediaSec": 14.05,
+       "samples": 14400648,
+       "filtered": 0,
+       "decodeWallMs": 4216,
+       "format": "f32",
+       "all": [
+        [
+         4216,
+         4980
+        ],
+        [
+         4202,
+         4980
+        ],
+        [
+         4226,
+         4980
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 46435,
+    "version": "155.0"
+   }
+  },
+  "cpu {\"files\":[\"cpu-vorbis.ogg\"]}": {
+   "firefox": {
+    "ok": true,
+    "result": {
+     "cpu-vorbis.ogg": {
+      "info": {
+       "codec": "vorbis",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 0,
+       "mediaSec": 300,
+       "packets": 14067
+      },
+      "adSupported": true,
+      "adError": "Failed to allocate frame buffers: Invalid argument",
+      "wasm": {
+       "wallMs": 2287,
+       "cpuMs": 2410,
+       "cpuMsPerMediaSec": 8.03,
+       "wallMsPerMediaSec": 7.62,
+       "samples": 11520228,
+       "all": [
+        [
+         2287,
+         2410
+        ],
+        [
+         2260,
+         2300
+        ],
+        [
+         2587,
+         2680
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 746,
+       "cpuMs": 770,
+       "cpuMsPerMediaSec": 2.57,
+       "wallMsPerMediaSec": 2.49,
+       "samples": 14400000,
+       "all": [
+        [
+         771,
+         800
+        ],
+        [
+         742,
+         760
+        ],
+        [
+         746,
+         770
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 4245,
+       "cpuMs": 5000,
+       "cpuMsPerMediaSec": 16.67,
+       "wallMsPerMediaSec": 14.15,
+       "samples": 14400000,
+       "filtered": 0,
+       "decodeWallMs": 4245,
+       "format": "f32",
+       "all": [
+        [
+         4220,
+         5000
+        ],
+        [
+         4426,
+         5120
+        ],
+        [
+         4245,
+         4900
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 27061,
+    "version": "155.0"
+   }
+  },
+  "cpu {\"files\":[\"cpu-flac.flac\"]}": {
+   "firefox": {
+    "ok": true,
+    "result": {
+     "cpu-flac.flac": {
+      "info": {
+       "codec": "flac",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 24,
+       "mediaSec": 300,
+       "packets": 3125
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 2196,
+       "cpuMs": 2250,
+       "cpuMsPerMediaSec": 7.5,
+       "wallMsPerMediaSec": 7.32,
+       "samples": 11520289,
+       "all": [
+        [
+         2196,
+         2240
+        ],
+        [
+         2169,
+         2250
+        ],
+        [
+         2275,
+         2300
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 725,
+       "cpuMs": 730,
+       "cpuMsPerMediaSec": 2.43,
+       "wallMsPerMediaSec": 2.42,
+       "samples": 14400000,
+       "all": [
+        [
+         725,
+         730
+        ],
+        [
+         770,
+         790
+        ],
+        [
+         716,
+         730
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 2710,
+       "cpuMs": 3000,
+       "cpuMsPerMediaSec": 10,
+       "wallMsPerMediaSec": 9.03,
+       "samples": 14400000,
+       "filtered": 11520289,
+       "decodeWallMs": 1197,
+       "format": "f32",
+       "all": [
+        [
+         2710,
+         3070
+        ],
+        [
+         2705,
+         2960
+        ],
+        [
+         2741,
+         3000
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 1155,
+       "cpuMs": 1370,
+       "cpuMsPerMediaSec": 4.57,
+       "wallMsPerMediaSec": 3.85,
+       "samples": 14400000,
+       "filtered": 0,
+       "decodeWallMs": 1155,
+       "format": "f32",
+       "all": [
+        [
+         1155,
+         1370
+        ],
+        [
+         1153,
+         1370
+        ],
+        [
+         1212,
+         1420
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 21228,
+    "version": "155.0"
+   }
+  },
+  "cpu {\"files\":[\"cpu-flac192.flac\"]}": {
+   "firefox": {
+    "ok": true,
+    "result": {
+     "cpu-flac192.flac": {
+      "info": {
+       "codec": "flac",
+       "sr": 192000,
+       "ch": 2,
+       "bits": 24,
+       "mediaSec": 60,
+       "packets": 704
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 1747,
+       "cpuMs": 1770,
+       "cpuMsPerMediaSec": 29.5,
+       "wallMsPerMediaSec": 29.12,
+       "samples": 9216351,
+       "all": [
+        [
+         1762,
+         1780
+        ],
+        [
+         1747,
+         1770
+        ],
+        [
+         1726,
+         1760
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 561,
+       "cpuMs": 560,
+       "cpuMsPerMediaSec": 9.33,
+       "wallMsPerMediaSec": 9.35,
+       "samples": 11520000,
+       "all": [
+        [
+         561,
+         560
+        ],
+        [
+         561,
+         580
+        ],
+        [
+         557,
+         560
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 1725,
+       "cpuMs": 1930,
+       "cpuMsPerMediaSec": 32.17,
+       "wallMsPerMediaSec": 28.75,
+       "samples": 11520000,
+       "filtered": 9216351,
+       "decodeWallMs": 528,
+       "format": "f32",
+       "all": [
+        [
+         1722,
+         1930
+        ],
+        [
+         1746,
+         1970
+        ],
+        [
+         1725,
+         1900
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 535,
+       "cpuMs": 600,
+       "cpuMsPerMediaSec": 10,
+       "wallMsPerMediaSec": 8.92,
+       "samples": 11520000,
+       "filtered": 0,
+       "decodeWallMs": 535,
+       "format": "f32",
+       "all": [
+        [
+         517,
+         600
+        ],
+        [
+         535,
+         600
+        ],
+        [
+         548,
+         650
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 14190,
+    "version": "155.0"
+   }
+  },
+  "cpu {\"files\":[\"cpu-pcm192.wav\"]}": {
+   "firefox": {
+    "ok": true,
+    "result": {
+     "cpu-pcm192.wav": {
+      "info": {
+       "codec": "pcm_s24le",
+       "sr": 192000,
+       "ch": 2,
+       "bits": 24,
+       "mediaSec": 60,
+       "packets": 704
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 1267,
+       "cpuMs": 1310,
+       "cpuMsPerMediaSec": 21.83,
+       "wallMsPerMediaSec": 21.12,
+       "samples": 9216351,
+       "all": [
+        [
+         1282,
+         1310
+        ],
+        [
+         1267,
+         1350
+        ],
+        [
+         1259,
+         1290
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 83,
+       "cpuMs": 90,
+       "cpuMsPerMediaSec": 1.5,
+       "wallMsPerMediaSec": 1.38,
+       "samples": 11520000,
+       "all": [
+        [
+         86,
+         90
+        ],
+        [
+         83,
+         140
+        ],
+        [
+         82,
+         80
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 1039,
+       "cpuMs": 1160,
+       "cpuMsPerMediaSec": 19.33,
+       "wallMsPerMediaSec": 17.32,
+       "samples": 8640000,
+       "filtered": 6912512,
+       "decodeWallMs": 257,
+       "format": "f32",
+       "all": [
+        [
+         1019,
+         1150
+        ],
+        [
+         1039,
+         1160
+        ],
+        [
+         1061,
+         1170
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 261,
+       "cpuMs": 360,
+       "cpuMsPerMediaSec": 6,
+       "wallMsPerMediaSec": 4.35,
+       "samples": 8640000,
+       "filtered": 0,
+       "decodeWallMs": 261,
+       "format": "f32",
+       "all": [
+        [
+         260,
+         350
+        ],
+        [
+         261,
+         360
+        ],
+        [
+         297,
+         450
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 8524,
+    "version": "155.0"
+   }
+  }
+ },
+ "firefox-vorbis-rerun": {
+  "cpu {\"files\":[\"cpu-vorbis.ogg\"]}": {
+   "firefox": {
+    "ok": true,
+    "result": {
+     "cpu-vorbis.ogg": {
+      "info": {
+       "codec": "vorbis",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 0,
+       "mediaSec": 300,
+       "packets": 14067
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 2542,
+       "cpuMs": 2640,
+       "cpuMsPerMediaSec": 8.8,
+       "wallMsPerMediaSec": 8.47,
+       "samples": 11520228,
+       "all": [
+        [
+         2282,
+         2400
+        ],
+        [
+         2542,
+         2640
+        ],
+        [
+         2724,
+         2820
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 764,
+       "cpuMs": 860,
+       "cpuMsPerMediaSec": 2.87,
+       "wallMsPerMediaSec": 2.55,
+       "samples": 14400000,
+       "all": [
+        [
+         764,
+         820
+        ],
+        [
+         879,
+         920
+        ],
+        [
+         742,
+         860
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 5964,
+       "cpuMs": 6610,
+       "cpuMsPerMediaSec": 22.03,
+       "wallMsPerMediaSec": 19.88,
+       "samples": 14400000,
+       "filtered": 11520228,
+       "decodeWallMs": 4137,
+       "format": "f32",
+       "all": [
+        [
+         5964,
+         6590
+        ],
+        [
+         5884,
+         6610
+        ],
+        [
+         6103,
+         6810
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 3886,
+       "cpuMs": 4600,
+       "cpuMsPerMediaSec": 15.33,
+       "wallMsPerMediaSec": 12.95,
+       "samples": 14400000,
+       "filtered": 0,
+       "decodeWallMs": 3886,
+       "format": "f32",
+       "all": [
+        [
+         4056,
+         4930
+        ],
+        [
+         3886,
+         4600
+        ],
+        [
+         3723,
+         4470
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 40327,
+    "version": "155.0"
+   }
+  }
+ },
+ "webkit": {
+  "cpu {\"files\":[\"cpu-mp3.mp3\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "cpu-mp3.mp3": {
+      "info": {
+       "codec": "mp3",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 0,
+       "mediaSec": 300,
+       "packets": 12501
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 2135,
+       "cpuMs": 2230,
+       "cpuMsPerMediaSec": 7.43,
+       "wallMsPerMediaSec": 7.12,
+       "samples": 11520286,
+       "all": [
+        [
+         2213,
+         2710
+        ],
+        [
+         2135,
+         2230
+        ],
+        [
+         2130,
+         2160
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 821,
+       "cpuMs": 940,
+       "cpuMsPerMediaSec": 3.13,
+       "wallMsPerMediaSec": 2.74,
+       "samples": 14400000,
+       "all": [
+        [
+         821,
+         880
+        ],
+        [
+         809,
+         940
+        ],
+        [
+         822,
+         980
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 2907,
+       "cpuMs": 3240,
+       "cpuMsPerMediaSec": 10.8,
+       "wallMsPerMediaSec": 9.69,
+       "samples": 14401152,
+       "filtered": 11521171,
+       "decodeWallMs": 1463,
+       "format": "f32",
+       "all": [
+        [
+         2858,
+         3240
+        ],
+        [
+         2907,
+         3240
+        ],
+        [
+         2909,
+         3280
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 1467,
+       "cpuMs": 1790,
+       "cpuMsPerMediaSec": 5.97,
+       "wallMsPerMediaSec": 4.89,
+       "samples": 14401152,
+       "filtered": 0,
+       "decodeWallMs": 1467,
+       "format": "f32",
+       "all": [
+        [
+         1467,
+         1780
+        ],
+        [
+         1455,
+         1790
+        ],
+        [
+         1488,
+         1830
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 22430,
+    "version": "26.6"
+   }
+  },
+  "cpu {\"files\":[\"cpu-aac.m4a\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "cpu-aac.m4a": {
+      "info": {
+       "codec": "aac",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 0,
+       "mediaSec": 300,
+       "packets": 14064
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 1982,
+       "cpuMs": 2080,
+       "cpuMsPerMediaSec": 6.93,
+       "wallMsPerMediaSec": 6.61,
+       "samples": 11520500,
+       "all": [
+        [
+         2022,
+         2660
+        ],
+        [
+         1982,
+         2080
+        ],
+        [
+         1966,
+         2030
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 629,
+       "cpuMs": 690,
+       "cpuMsPerMediaSec": 2.3,
+       "wallMsPerMediaSec": 2.1,
+       "samples": 14400000,
+       "all": [
+        [
+         631,
+         690
+        ],
+        [
+         629,
+         720
+        ],
+        [
+         606,
+         660
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 2362,
+       "cpuMs": 2760,
+       "cpuMsPerMediaSec": 9.2,
+       "wallMsPerMediaSec": 7.87,
+       "samples": 14401536,
+       "filtered": 11521783,
+       "decodeWallMs": 888,
+       "format": "f32-planar",
+       "all": [
+        [
+         2248,
+         2540
+        ],
+        [
+         2372,
+         2760
+        ],
+        [
+         2362,
+         2760
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 899,
+       "cpuMs": 1300,
+       "cpuMsPerMediaSec": 4.33,
+       "wallMsPerMediaSec": 3,
+       "samples": 14401536,
+       "filtered": 0,
+       "decodeWallMs": 899,
+       "format": "f32-planar",
+       "all": [
+        [
+         899,
+         1170
+        ],
+        [
+         935,
+         1350
+        ],
+        [
+         896,
+         1300
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 18054,
+    "version": "26.6"
+   }
+  },
+  "cpu {\"files\":[\"cpu-opus.opus\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "cpu-opus.opus": {
+      "info": {
+       "codec": "opus",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 0,
+       "mediaSec": 300,
+       "packets": 15001
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 2538,
+       "cpuMs": 2690,
+       "cpuMsPerMediaSec": 8.97,
+       "wallMsPerMediaSec": 8.46,
+       "samples": 11520260,
+       "all": [
+        [
+         2640,
+         3230
+        ],
+        [
+         2538,
+         2690
+        ],
+        [
+         2520,
+         2580
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 1248,
+       "cpuMs": 1350,
+       "cpuMsPerMediaSec": 4.5,
+       "wallMsPerMediaSec": 4.16,
+       "samples": 14400000,
+       "all": [
+        [
+         1270,
+         1330
+        ],
+        [
+         1248,
+         1350
+        ],
+        [
+         1244,
+         1360
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 3622,
+       "cpuMs": 3930,
+       "cpuMsPerMediaSec": 13.1,
+       "wallMsPerMediaSec": 12.07,
+       "samples": 14400960,
+       "filtered": 11521191,
+       "decodeWallMs": 2128,
+       "format": "f32",
+       "all": [
+        [
+         3632,
+         4050
+        ],
+        [
+         3604,
+         3930
+        ],
+        [
+         3622,
+         3930
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 2129,
+       "cpuMs": 2520,
+       "cpuMsPerMediaSec": 8.4,
+       "wallMsPerMediaSec": 7.1,
+       "samples": 14400960,
+       "filtered": 0,
+       "decodeWallMs": 2129,
+       "format": "f32",
+       "all": [
+        [
+         2118,
+         2470
+        ],
+        [
+         2129,
+         2520
+        ],
+        [
+         2156,
+         2580
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 29144,
+    "version": "26.6"
+   }
+  },
+  "cpu {\"files\":[\"cpu-vorbis.ogg\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "cpu-vorbis.ogg": {
+      "info": {
+       "codec": "vorbis",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 0,
+       "mediaSec": 300,
+       "packets": 14067
+      },
+      "adSupported": true,
+      "adError": "Error: flush timeout (queue 0, outputs 0)",
+      "adNoFilterError": "Error: dequeue timeout (queue 33)",
+      "wasm": {
+       "wallMs": 1989,
+       "cpuMs": 4040,
+       "cpuMsPerMediaSec": 13.47,
+       "wallMsPerMediaSec": 6.63,
+       "samples": 11520228,
+       "all": [
+        [
+         2045,
+         2590
+        ],
+        [
+         1989,
+         4040
+        ],
+        [
+         1966,
+         4040
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 633,
+       "cpuMs": 1300,
+       "cpuMsPerMediaSec": 4.33,
+       "wallMsPerMediaSec": 2.11,
+       "samples": 14400000,
+       "all": [
+        [
+         633,
+         720
+        ],
+        [
+         633,
+         1350
+        ],
+        [
+         623,
+         1300
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 28618,
+    "version": "26.6"
+   }
+  },
+  "cpu {\"files\":[\"cpu-flac.flac\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "cpu-flac.flac": {
+      "info": {
+       "codec": "flac",
+       "sr": 48000,
+       "ch": 2,
+       "bits": 24,
+       "mediaSec": 300,
+       "packets": 3125
+      },
+      "adSupported": true,
+      "adError": "EncodingError: Decode error",
+      "adNoFilterError": "EncodingError: Decode error",
+      "wasm": {
+       "wallMs": 2000,
+       "cpuMs": 2130,
+       "cpuMsPerMediaSec": 7.1,
+       "wallMsPerMediaSec": 6.67,
+       "samples": 11520289,
+       "all": [
+        [
+         2026,
+         2380
+        ],
+        [
+         2000,
+         2130
+        ],
+        [
+         1998,
+         2040
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 743,
+       "cpuMs": 780,
+       "cpuMsPerMediaSec": 2.6,
+       "wallMsPerMediaSec": 2.48,
+       "samples": 14400000,
+       "all": [
+        [
+         745,
+         810
+        ],
+        [
+         743,
+         780
+        ],
+        [
+         743,
+         760
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 8905,
+    "version": "26.6"
+   }
+  },
+  "cpu {\"files\":[\"cpu-flac192.flac\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "cpu-flac192.flac": {
+      "info": {
+       "codec": "flac",
+       "sr": 192000,
+       "ch": 2,
+       "bits": 24,
+       "mediaSec": 60,
+       "packets": 704
+      },
+      "adSupported": true,
+      "adError": "EncodingError: Decode error",
+      "adNoFilterError": "EncodingError: Decode error",
+      "wasm": {
+       "wallMs": 1599,
+       "cpuMs": 1740,
+       "cpuMsPerMediaSec": 29,
+       "wallMsPerMediaSec": 26.65,
+       "samples": 9216351,
+       "all": [
+        [
+         1627,
+         1800
+        ],
+        [
+         1590,
+         1740
+        ],
+        [
+         1599,
+         1690
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 555,
+       "cpuMs": 590,
+       "cpuMsPerMediaSec": 9.83,
+       "wallMsPerMediaSec": 9.25,
+       "samples": 11520000,
+       "all": [
+        [
+         555,
+         620
+        ],
+        [
+         553,
+         590
+        ],
+        [
+         555,
+         570
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 6971,
+    "version": "26.6"
+   }
+  },
+  "cpu {\"files\":[\"cpu-pcm192.wav\"]}": {
+   "webkit": {
+    "ok": true,
+    "result": {
+     "cpu-pcm192.wav": {
+      "info": {
+       "codec": "pcm_s24le",
+       "sr": 192000,
+       "ch": 2,
+       "bits": 24,
+       "mediaSec": 60,
+       "packets": 704
+      },
+      "adSupported": true,
+      "wasm": {
+       "wallMs": 1112,
+       "cpuMs": 1200,
+       "cpuMsPerMediaSec": 20,
+       "wallMsPerMediaSec": 18.53,
+       "samples": 9216351,
+       "all": [
+        [
+         1144,
+         1320
+        ],
+        [
+         1112,
+         1200
+        ],
+        [
+         1112,
+         1190
+        ]
+       ]
+      },
+      "wasmNoFilter": {
+       "wallMs": 62,
+       "cpuMs": 80,
+       "cpuMsPerMediaSec": 1.33,
+       "wallMsPerMediaSec": 1.03,
+       "samples": 11520000,
+       "all": [
+        [
+         71,
+         90
+        ],
+        [
+         62,
+         80
+        ],
+        [
+         60,
+         60
+        ]
+       ]
+      },
+      "ad": {
+       "wallMs": 1373,
+       "cpuMs": 1510,
+       "cpuMsPerMediaSec": 25.17,
+       "wallMsPerMediaSec": 22.88,
+       "samples": 11520000,
+       "filtered": 9216351,
+       "decodeWallMs": 308,
+       "format": "f32",
+       "all": [
+        [
+         1389,
+         1560
+        ],
+        [
+         1373,
+         1510
+        ],
+        [
+         1365,
+         1450
+        ]
+       ]
+      },
+      "adNoFilter": {
+       "wallMs": 305,
+       "cpuMs": 360,
+       "cpuMsPerMediaSec": 6,
+       "wallMsPerMediaSec": 5.08,
+       "samples": 11520000,
+       "filtered": 0,
+       "decodeWallMs": 305,
+       "format": "f32",
+       "all": [
+        [
+         308,
+         370
+        ],
+        [
+         305,
+         360
+        ],
+        [
+         302,
+         350
+        ]
+       ]
+      }
+     }
+    },
+    "ms": 9133,
+    "version": "26.6"
+   }
+  }
+ }
+}
