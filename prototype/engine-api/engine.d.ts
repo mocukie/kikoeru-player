@@ -1,0 +1,440 @@
+// PROTOTYPE — [engine-v1] Prototype: Engine 公開 API（#2）的草稿，用完即丟。
+// 只描述 App 看得到的形狀，不代表內部執行緒分工（見「執行緒分工與 wasm 銜接方式」）。
+// 標 `Q<n>` 的地方是待 user 定案的問題，清單在 README.md。
+// 時間一律以秒為單位（number），位於「媒體時間軸」：已扣掉容器的 start_time，0 是第一個可播放的 sample。
+
+// ───────────────────────────── 建立與設定 ─────────────────────────────
+
+export declare function createEngine(options?: EngineOptions): Engine;
+
+/** 檢查目前瀏覽器能否執行 Engine（WebAssembly、AudioWorklet、Worker）。不檢查 codec。 */
+export declare function isEngineSupported(): boolean;
+
+export interface EngineOptions {
+  /**
+   * wasm 與 Worker 資產的位置。預設由套件以 `new URL(..., import.meta.url)` 解析，
+   * 交給 App 的 bundler 處理；`.wasm` 必須同源、`Content-Type: application/wasm`。
+   */
+  assets?: { wasmUrl?: string | URL; workerUrl?: string | URL; workletUrl?: string | URL };
+  /** 繪製影片的 canvas，也可之後用 `attachCanvas()` 設定。 */
+  canvas?: HTMLCanvasElement | null;
+  /** timeupdate 的最小間隔（ms），預設 250。 */
+  timeUpdateInterval?: number;
+  /** 記憶體上限；數值待「記憶體上限」一題定案，這裡只留入口。 */
+  limits?: {
+    /** Range 快取（LRU）上限，bytes。 */
+    cacheBytes?: number;
+    /** 解碼前封包佇列上限，秒。 */
+    packetQueueSeconds?: number;
+  };
+  /** 卡住偵測：buffering 超過此毫秒數就嘗試恢復並發出 `stall`，預設 8000。 */
+  stallTimeout?: number;
+  /** 背景（document.hidden）時停止解碼影片、只播聲音，回前景時從 keyframe 重新同步。預設 true。 */
+  suspendVideoWhenHidden?: boolean;
+  /** 診斷用 log hook；未設定時 Engine 不輸出任何 log。 */
+  log?: LogHook;
+  /** 送進 log hook 的最低等級，預設 'warn'。 */
+  logLevel?: LogLevel;
+  /** Q9：行動裝置的處理放 Engine 還是 App，待「行動裝置支援的歸屬」定案；這裡只先留位置。 */
+  mobile?: {
+    /** iOS：在解鎖音訊時設定 `navigator.audioSession.type = "playback"`。 */
+    audioSessionPlayback?: boolean;
+    /** Android：同步播放狀態的靜音 anchor `<audio>`。 */
+    anchorAudio?: HTMLAudioElement;
+  };
+}
+
+// ───────────────────────────── Engine ─────────────────────────────
+
+export type EngineState =
+  | 'idle' //      沒有載入任何媒體（初始、unload() 之後）
+  | 'loading' //   load() 進行中：開檔、probe、填第一段緩衝
+  | 'ready' //     載入完成、還沒開始播放過（Q2：要不要併進 paused）
+  | 'playing' //   音訊時鐘在走
+  | 'paused' //    使用者暫停
+  | 'buffering' // 想播但資料不夠，時鐘停住
+  | 'seeking' //   seek() 進行中，直到目標位置的 frame/sample 備妥
+  | 'ended' //     播到結尾
+  | 'error'; //    當前媒體發生致命錯誤，見 `engine.error`；load() 可重新開始
+
+export interface Engine {
+  // ── 唯讀狀態（同步讀取，值以主執行緒最後得知的為準） ──
+
+  readonly state: EngineState;
+  /**
+   * 使用者的播放意圖，與 state 分開（Q3）。seeking／buffering／loading 結束後
+   * 依此回到 playing 或 paused。play() 設為 false、pause() 設為 true。
+   */
+  readonly paused: boolean;
+  /** 目前播放位置。播放中依音訊時鐘內插，已扣除 outputLatency。 */
+  readonly currentTime: number;
+  /** 總長度；未知時為 NaN。 */
+  readonly duration: number;
+  /** 已緩衝範圍（媒體時間），依起點排序、不重疊。 */
+  readonly buffered: readonly TimeRange[];
+  /** 當前媒體的 probe 結果；idle 時為 null。 */
+  readonly media: MediaInfo | null;
+  readonly tracks: readonly Track[];
+  readonly selectedTracks: Readonly<TrackSelection>;
+  /** state 為 'error' 時的錯誤，其他狀態為 null。 */
+  readonly error: EngineError | null;
+  /** 影片的顯示尺寸（已套用旋轉與 SAR）；沒有影片軌時為 null。 */
+  readonly videoSize: VideoSize | null;
+
+  // ── 同步設定（Q4：即時生效、最後一次勝出，不經過指令佇列） ──
+
+  /** 0–1，套用時有 gain ramp。 */
+  volume: number;
+  muted: boolean;
+  /** 不變調的播放速度，0.5–2；超出範圍丟 RangeError。 */
+  playbackRate: number;
+
+  // ── 音訊解鎖 ──
+
+  /**
+   * 在 user gesture 的同步段內呼叫，建立或 resume AudioContext。
+   * play() 若在 user gesture 內被呼叫也會自動解鎖，所以多數 App 不需要直接呼叫。
+   * 若之後沒有 gesture 就 play()，會以 AUDIO_LOCKED 拒絕。
+   */
+  unlockAudio(): void;
+  readonly audioUnlocked: boolean;
+
+  // ── 指令（全部進同一個指令佇列，一律回傳 Promise） ──
+
+  /**
+   * 載入新媒體。取代所有尚未完成的 load／seek／selectTracks／external audio 指令（以 AbortError 結束），
+   * 並中止舊媒體的讀取。resolve 時 state 為 ready（或 options.paused === false 時為 playing）。
+   * 失敗時 reject EngineError，state 變為 'error'。
+   */
+  load(source: Source, options?: LoadOptions): Promise<MediaInfo>;
+
+  /**
+   * 設定 paused = false。resolve 於 state 真正進入 playing（音訊開始輸出）。
+   * 在 ended 時呼叫會從頭播放。之後若有 pause() 或 load() 先完成，reject AbortError。
+   */
+  play(): Promise<void>;
+
+  /** 設定 paused = true，resolve 於 gain ramp 結束、時鐘停止。 */
+  pause(): Promise<void>;
+
+  /**
+   * 精準 seek（影片到 frame、音訊到 sample）。連續呼叫時只有最後一個會執行，
+   * 被取代的以 AbortError 結束。resolve 實際落點（會被夾在 [0, duration]）。
+   */
+  seek(time: number): Promise<number>;
+
+  /**
+   * 播放中切換軌道，不重新載入、時間不跳。只帶要改的 kind；null 表示關閉該類軌道
+   * （例如影片檔只播音訊、關掉字幕）。同一 kind 連續呼叫只保留最後一個。
+   */
+  selectTracks(selection: Partial<TrackSelection>): Promise<void>;
+
+  /**
+   * 以另一個來源加入外掛音軌，回傳新的 AudioTrack（origin: 'external'）。
+   * 不會自動選用；要用 selectTracks({ audio: track.id }) 切過去。
+   * 外掛音軌屬於當前媒體，下一次 load()／unload() 時一併移除。
+   */
+  addExternalAudio(source: Source, options?: { offset?: number; label?: string }): Promise<AudioTrack>;
+  removeExternalAudio(trackId: string): Promise<void>;
+
+  /**
+   * 設定音軌的 offset（秒），容器內與外掛音軌都適用。正值表示聲音比影片晚出現。
+   * 每條音軌各自記住；改的是目前選中的軌時會立即重新同步（短暫 seeking）。
+   */
+  setAudioOffset(trackId: string, offset: number): Promise<void>;
+
+  /** 卸載當前媒體、回到 idle，保留 AudioContext 與 Worker，供之後 load() 使用。 */
+  unload(): Promise<void>;
+
+  /**
+   * 立即釋放所有資源：中止讀取、關閉 decoder、終止 Worker、關閉 AudioContext。
+   * 所有未完成的指令以 AbortError 結束。之後任何指令都 reject EngineError('DESTROYED')。可重複呼叫。
+   */
+  destroy(): Promise<void>;
+
+  // ── 影片輸出 ──
+
+  /**
+   * 指定繪製目標，null 表示不再繪製（影片仍會解碼以維持同步，除非也關掉影片軌）。
+   * Engine 會設定 canvas.width／height 為影片顯示尺寸；版面縮放由 App 用 CSS
+   * （例如 `object-fit: contain`）處理。
+   */
+  attachCanvas(canvas: HTMLCanvasElement | null): void;
+
+  // ── 字幕 ──
+
+  /**
+   * Q8：整條內嵌字幕軌一次取出。是否由 Engine 提供待「內嵌字幕整軌取出的歸屬」定案；
+   * 若保留，形狀如下：可取消、有進度、不影響播放。
+   */
+  extractSubtitles?(
+    trackId: string,
+    options?: { signal?: AbortSignal; onProgress?: (fraction: number) => void },
+  ): Promise<SubtitleCue[]>;
+
+  // ── 事件與診斷 ──
+
+  on<K extends keyof EngineEventMap>(type: K, listener: (event: EngineEventMap[K]) => void): Unsubscribe;
+  off<K extends keyof EngineEventMap>(type: K, listener: (event: EngineEventMap[K]) => void): void;
+
+  /** 取一次統計快照；非同步，因為大部分數字在 Worker 內。 */
+  getStats(): Promise<EngineStats>;
+}
+
+export type Unsubscribe = () => void;
+
+export interface LoadOptions {
+  /** 起始位置，預設 0。用於 session 失效後的重新載入。 */
+  startTime?: number;
+  /** false 時載入完成後直接播放（等同 load 完再 play()）。預設 true：停在 ready。 */
+  paused?: boolean;
+  /**
+   * 初始軌道選擇。未指定的 kind 依偏好語言、再依容器的 default 旗標選；
+   * 字幕預設只在 forced 或 preferredLanguages 命中時開啟（Q6）。
+   */
+  tracks?: Partial<TrackSelection>;
+  preferredLanguages?: { audio?: string[]; subtitle?: string[] };
+  /** 外部取消；效果等同被下一個 load() 取代。 */
+  signal?: AbortSignal;
+}
+
+// ───────────────────────────── 來源 ─────────────────────────────
+
+/**
+ * 檔案來源（Q1）。用可序列化的描述而不是物件，讓 Engine 能在任何執行緒重建讀取器；
+ * 測試用 'bytes'，本機檔案用 'blob'。'custom' 是逃生口：每次讀取都回到主執行緒呼叫，較慢。
+ */
+export type Source = HttpSource | BytesSource | BlobSource | CustomSource;
+
+export interface HttpSource {
+  kind: 'http';
+  url: string | URL;
+  /** 預設 'same-origin'：同源請求自動帶 cookie。 */
+  credentials?: RequestCredentials;
+  headers?: Record<string, string>;
+  /** 已知的檔案大小，可省掉一次 HEAD／Range 探測。 */
+  size?: number;
+}
+
+export interface BytesSource {
+  kind: 'bytes';
+  data: ArrayBuffer | Uint8Array;
+  /** 用於 log 與錯誤訊息。 */
+  name?: string;
+}
+
+export interface BlobSource {
+  kind: 'blob';
+  blob: Blob;
+}
+
+export interface CustomSource {
+  kind: 'custom';
+  name?: string;
+  size(signal: AbortSignal): Promise<number>;
+  /** 回傳 [offset, offset + length) 的資料；到檔尾時可以較短。必須遵守 signal。 */
+  read(offset: number, length: number, signal: AbortSignal): Promise<Uint8Array>;
+}
+
+// ───────────────────────────── 媒體與軌道 ─────────────────────────────
+
+export interface MediaInfo {
+  /** libavformat 的格式名稱，例如 'matroska,webm'、'mov,mp4,m4a,3gp,3g2,mj2'、'wav'。 */
+  format: string;
+  duration: number;
+  size: number;
+  tracks: readonly Track[];
+}
+
+export type Track = AudioTrack | VideoTrack | SubtitleTrack;
+export type TrackKind = Track['kind'];
+
+export interface TrackBase {
+  /** Engine 內唯一、跨 load 不重複，例如 'a:1'、'ext:3'。 */
+  id: string;
+  /** 'container'：容器內的 stream；'external'：addExternalAudio() 加入的來源。 */
+  origin: 'container' | 'external';
+  /** 容器內的 stream index；外掛音軌為其來源內的 index。 */
+  streamIndex: number;
+  /** FFmpeg codec 名稱，例如 'aac'、'flac'、'h264'、'ass'。 */
+  codec: string;
+  /** WebCodecs codec string（只有影片軌），例如 'avc1.640028'。 */
+  codecString?: string;
+  /** false 時無法選用；原因見 unsupportedReason。 */
+  supported: boolean;
+  unsupportedReason?: 'codec' | 'platform' | 'bitmap-subtitle';
+  /** BCP 47 或容器原值（ISO 639-2，例如 'jpn'）。Q7：要不要正規化。 */
+  language?: string;
+  title?: string;
+  default: boolean;
+  forced: boolean;
+}
+
+export interface AudioTrack extends TrackBase {
+  kind: 'audio';
+  sampleRate: number;
+  channels: number;
+  /** FFmpeg 的 channel layout 描述，例如 'stereo'、'5.1(side)'。 */
+  channelLayout?: string;
+  /** 原始取樣格式，例如 's16'、's24'、'fltp'；輸出一律轉為 float。 */
+  sampleFormat?: string;
+  /** 目前設定的 offset（秒）。 */
+  offset: number;
+}
+
+export interface VideoTrack extends TrackBase {
+  kind: 'video';
+  codedWidth: number;
+  codedHeight: number;
+  display: VideoSize;
+  frameRate?: number;
+}
+
+export interface SubtitleTrack extends TrackBase {
+  kind: 'subtitle';
+  format: 'ass' | 'ssa' | 'subrip' | 'webvtt' | 'mov_text' | 'bitmap';
+  /** ASS／SSA 的 header（Matroska CodecPrivate）原文，含 [Script Info]、[V4+ Styles]、[Events] Format 行。 */
+  header?: string;
+}
+
+export interface VideoSize {
+  /** 套用旋轉與 SAR 後的顯示寬高。 */
+  width: number;
+  height: number;
+  /** 0、90、180、270，順時針。 */
+  rotation: 0 | 90 | 180 | 270;
+}
+
+export interface TrackSelection {
+  audio: string | null;
+  video: string | null;
+  subtitle: string | null;
+}
+
+export interface TimeRange {
+  start: number;
+  end: number;
+}
+
+// ───────────────────────────── 字幕 cue ─────────────────────────────
+
+/** 隨 demux 進度串流送出；同一 cue 可能因 seek 重新送出，App 以 id 去重。 */
+export type SubtitleCue = TextCue | AssCue;
+
+export interface CueBase {
+  trackId: string;
+  /** 穩定的 id（由 pts 與 ReadOrder 組成），可用來去重。 */
+  id: string;
+  start: number;
+  end: number;
+}
+
+export interface TextCue extends CueBase {
+  format: 'subrip' | 'webvtt' | 'mov_text';
+  /** 封包內的原始文字，不解析標記。 */
+  text: string;
+}
+
+export interface AssCue extends CueBase {
+  format: 'ass' | 'ssa';
+  /** Matroska 封包原文：`ReadOrder,Layer,Style,Name,MarginL,MarginR,MarginV,Effect,Text`（不含時間）。 */
+  raw: string;
+  readOrder: number;
+  /** 依 header 的 Format 重組的完整 `Dialogue:` 行，方便直接餵給 libass／JASSUB。 */
+  dialogue: string;
+}
+
+// ───────────────────────────── 事件 ─────────────────────────────
+
+export interface EngineEventMap {
+  statechange: { state: EngineState; previous: EngineState };
+  /** 依 timeUpdateInterval 節流；seek 完成時一定會補發一次。 */
+  timeupdate: { currentTime: number };
+  durationchange: { duration: number };
+  seeked: { currentTime: number };
+  ended: Record<string, never>;
+  /** 致命錯誤，state 同時變為 'error'。 */
+  error: { error: EngineError };
+  /** 軌道清單或選擇改變（load 完成、加入外掛音軌、selectTracks 完成、offset 改變）。 */
+  trackschange: { tracks: readonly Track[]; selected: Readonly<TrackSelection> };
+  bufferedchange: { buffered: readonly TimeRange[] };
+  videoresize: { size: VideoSize | null };
+  /** 一批新的內嵌字幕 cue（只送選中的字幕軌）。 */
+  cues: { trackId: string; cues: readonly SubtitleCue[] };
+  /** buffering 超過 stallTimeout，Engine 開始自動恢復。 */
+  stall: { since: number; position: number };
+  /** 卡住後恢復播放。 */
+  stallrecovered: { stalledMs: number; attempts: number };
+}
+
+// ───────────────────────────── 錯誤 ─────────────────────────────
+
+export type EngineErrorCode =
+  // 取檔
+  | 'SOURCE_UNAUTHORIZED' //     401：App 應走 session 失效流程
+  | 'SOURCE_FORBIDDEN' //        403
+  | 'SOURCE_NOT_FOUND' //        404／410
+  | 'SOURCE_SERVER' //           5xx（已自動重試後仍失敗）
+  | 'SOURCE_NETWORK' //          網路中斷、CORS、DNS（已自動重試後仍失敗）
+  | 'SOURCE_RANGE_UNSUPPORTED' // 伺服器不回 206
+  | 'SOURCE_CHANGED' //          [延] 讀到一半檔案被換掉（ETag／If-Range），先保留代碼
+  // 格式與解碼
+  | 'FORMAT_UNSUPPORTED' //      probe 失敗、不認得的容器
+  | 'FORMAT_CORRUPT' //          demux 途中資料損毀
+  | 'CODEC_UNSUPPORTED' //       沒有 wasm decoder、isConfigSupported false、configure 或首個 keyframe 失敗
+  | 'DECODE_FAILED' //           播放中解碼錯誤，重新設定後仍失敗
+  // 輸出與環境
+  | 'AUDIO_LOCKED' //            沒有 user gesture 就要求播放
+  | 'AUDIO_OUTPUT' //            AudioContext／AudioWorklet 無法啟動或恢復
+  | 'ASSET_LOAD_FAILED' //       wasm／Worker／worklet 載入失敗
+  | 'DESTROYED' //               destroy() 之後呼叫指令
+  | 'INTERNAL';
+
+/**
+ * Engine 的錯誤。被取代或取消的指令不使用 EngineError，而是 `DOMException` name 為 'AbortError'，
+ * App 用 `isAbortError()` 判斷後忽略即可。
+ */
+export declare class EngineError extends Error {
+  readonly name: 'EngineError';
+  readonly code: EngineErrorCode;
+  /** 致命錯誤會讓 state 進入 'error'；非致命的只出現在指令的 reject（例如外掛音軌載入失敗）。 */
+  readonly fatal: boolean;
+  /** 發生時的播放位置，供重新載入時接續。 */
+  readonly position: number;
+  readonly detail: {
+    status?: number;
+    url?: string;
+    trackId?: string;
+    codec?: string;
+  };
+  readonly cause?: unknown;
+}
+
+export declare function isAbortError(error: unknown): boolean;
+
+// ───────────────────────────── 診斷 ─────────────────────────────
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogHook = (entry: LogEntry) => void;
+
+export interface LogEntry {
+  level: LogLevel;
+  /** 產生 log 的子系統。 */
+  scope: 'io' | 'demux' | 'audio' | 'video' | 'subtitle' | 'command' | 'worker';
+  message: string;
+  /** performance.now() 時間（主執行緒時基）。 */
+  time: number;
+  data?: Record<string, unknown>;
+}
+
+export interface EngineStats {
+  /** 從 currentTime 往後已備妥的秒數。 */
+  bufferAhead: number;
+  audio: { ringMs: number; underruns: number; outputLatencyMs: number };
+  video: { decoded: number; dropped: number; decodeQueueSize: number; avgDecodeMs: number } | null;
+  packetQueue: { audioSeconds: number; videoSeconds: number; bytes: number };
+  cache: { bytes: number; limitBytes: number; hits: number; misses: number };
+  network: { bytesLoaded: number; inflight: { url: string; start: number; end: number; elapsedMs: number }[] };
+  /** 所有 wasm instance 的 heap 合計。 */
+  wasmHeapBytes: number;
+}
