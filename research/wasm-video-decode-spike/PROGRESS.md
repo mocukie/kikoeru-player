@@ -18,10 +18,10 @@
 - [x] 多執行緒（o3s-noasy thr，1–8 threads）→ `data/threads.json`（第一輪 `threads-run1.json` 有 memory grow 的 RangeError，修正後重跑）：2 threads 約 1.6×、4 threads 約 2.1×（tiles 3.1×）
 - [x] 發現：thr build 在 direct 模式下，pthread 讓 shared memory grow 後 JS 的 HEAPU8 不會更新 → RangeError；量測時把初始 memory 開到 512 MiB 繞過
 - [x] 原生 dav1d 對照（修正 fps 解析後重跑；asm 與 `--cpumask 0`，1／2／4 threads）→ `data/native.tsv`：1080p BBB 單執行緒 native asm 200 fps、native C 62 fps，wasm o3s 43 fps
-- [ ] threaded build 對 CI 的影響：用 JOBS=2 量乾淨 build 時間（kikoeru-af、kikoeru-afv、kikoeru-dav1d wasm、＋thr）
+- [x] threaded build 對 CI 的影響（2 核、乾淨 build）→ `data/build-times.tsv`：af 110 s、afv 126 s、dav1d 102 s、dav1d wasm+thr 141 s、afv wasm+thr 190 s
 - [x] 外部資料整理（報告 §8）：iOS／iPad dav1d 數據（dav1d 0.2.0：iPhone XS 1080p 80fps，native）、Safari wasm SIMD 16.4／threads 15.2／COEP credentialless 不支援（BCD）、WebKit VideoFrame 格式（原始碼）、WebCodecs AV1 在 Cocoa 預設關
 - [x] 授權／NOTICE（報告 §9）：dav1d BSD-2，glue 的 license header 已自動帶入 dav1d 條文；kikoeru-afv 仍是 LGPL
 - [ ] 報告 `docs/research/wasm-video-decode.md`：已寫 §0 環境、§1 libav.js、§2 單執行緒、§3 編譯選項、§4 threads、§6 VideoFrame、§7 掉格／seek、§8 外部資料、§9 授權；待寫 §5 打包（等 build 時間）、§10 實機清單、§11 未驗證、結論先講、對 #21 的含意、spike 用法、來源
 - [ ] resolution 文字、一行 gist、branch／SHA
 
-下一步：等 `build-times.sh` 跑完 dav1d-wasm、dav1d-wasm+thr（af-wasm 110 s、afv-wasm 126 s 已完成），存 `data/build-times.tsv`，再寫 §5 打包。
+下一步：寫報告 §5 打包（體積＋build 時間），再寫 §10 實機清單、§11 未驗證、結論先講與對 #21 的含意。

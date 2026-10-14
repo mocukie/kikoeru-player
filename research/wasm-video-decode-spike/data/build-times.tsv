@@ -1,0 +1,6 @@
+case	seconds	jobs
+af-wasm	110	2
+afv-wasm	126	2
+dav1d-wasm	102	2
+dav1d-wasm+thr	141	2
+afv-wasm+thr	190	2
