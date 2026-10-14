@@ -158,6 +158,46 @@ decode-only fps（Chromium／WebKit／Firefox）：
 - COEP `credentialless` 在 Safari 仍不支援（BCD：`safari: false`），所以在 Safari 上要 isolation，就只能全站送 `require-corp`。這正是 ADR-0001 否決 SAB 的理由。
 - 本次的 harness 必須讓**所有** response（頁面、Worker script、pthread Worker 的 glue、wasm、媒體）都帶 COOP／COEP／CORP，才能在三個引擎都取得 isolation。
 
+## 5. 打包：體積、build 時間與 CI
+
+**體積** [實測：`data/sizes.md`；raw／gzip -9／brotli q11，KiB；「合計」= wasm＋glue（`.wasm.mjs`／`.thr.mjs`）＋frontend（`.mjs`）的 brotli]：
+
+| 組合 | wasm raw | wasm brotli | glue brotli | 合計 brotli | 與現行主 variant 相比 |
+|---|---|---|---|---|---|
+| `kikoeru-af` oz（現行主 variant） | 2038.0 | 669.6 | 48.2 | 723.7 | — |
+| A：`kikoeru-afv` oz（libav.js 預設） | 2597.4 | 833.3 | 48.6 | 887.9 | **+164.2**（每個使用者都要下載） |
+| A：`kikoeru-afv` mix（dav1d 用 `-O3 -msimd128`） | 2791.1 | 870.5 | 48.6 | 925.1 | **+201.4** |
+| B：`kikoeru-dav1d` oz（Asyncify） | 1069.5 | 330.2 | 39.9 | 375.4 | 主 variant 不變；Safari 遇到 AV1 才另外下載 |
+| B：`kikoeru-dav1d` oz-noasy | 792.4 | 290.1 | 38.2 | 333.6 | 同上 |
+| B：`kikoeru-dav1d` mix-noasy | 974.4 | 324.5 | 38.2 | 368.0 | 同上 |
+| B：`kikoeru-dav1d` o3s-noasy | 1061.5 | 343.9 | 38.3 | 387.5 | 同上 |
+| thr：`kikoeru-dav1d` mix-noasy | 1001.7 | 327.3 | 41.5 | 368.8 | 另一組產物（frontend 共用） |
+
+- **選項 A（放進主 variant）**：dav1d 本身只多 164–201 KiB（brotli），因為 libavcodec／libavutil 與 emscripten runtime 已經在主 variant 裡。但 Chromium 與 Firefox 用 WebCodecs 解 AV1，所以這些位元組只有 Safari 用得到。主 variant 的 raw 大小從 2.0 MiB 變成 2.7 MiB，`compileStreaming` 的時間與每個 instance 的 code 記憶體也跟著變大 [推論；#17 量到 WebKit 編譯 1.9 MiB 約 36 ms]。
+- **選項 B（獨立 wasm，需要時才載入）**：合計約 334–388 KiB，比 A 的增量多約 170 KiB，因為要再帶一份 libavcodec 核心、libavutil 與 emscripten runtime。好處是：
+  - 非 Safari、非 AV1 的使用者完全不用下載。
+  - 不需要 Asyncify（decoder 不做 I/O），可以少 1–8% 的時間（§3）與約 40 KiB。
+  - 可以放在自己的 Worker（§7 的 Worker 佔用問題，見「對 #21 的含意」）。
+  - 編譯選項可以跟主 variant 分開（主 variant 維持 `-Oz`）。
+  - 代價：多一個 instance 的 wasm heap（libav.js 預設 24 MiB 起跳，1080p 解碼時會再 grow；本次沒有量 dav1d 的 heap 峰值）以及 WebKit 上每個 instance 30–100 MiB 的 PSS（#17）；packet 要從 demux 的 instance 複製到 decoder 的 instance（每個封包一次 JS 複製，1080p 2 Mbps 約 8 KiB／frame，可以忽略）[推論]。
+- **只開 8-bit**（`-Dbitdepths=['8']`，ogv.js 的做法）可以再小一些，但 10-bit AV1 很常見（例如動畫的 AV1 重編碼），本次沒有 build 這個組合 [未測]。
+
+**build 時間**（模擬 private repo 的 GitHub runner：`--cpus=2`、`make -j2`、每個組合一份全新的樹，含 emfiberthreads、dav1d 的 meson build、FFmpeg configure 與 compile、link；`npm ci` 不計）[實測：`data/build-times.tsv`]：
+
+| 組合 | 秒 | 說明 |
+|---|---|---|
+| `kikoeru-af` wasm | 110 | 現行（#10 量到 106 s，這次多了 avi／aiff／ac3／eac3） |
+| `kikoeru-afv` wasm（A） | 126 | +16 s（dav1d 的 compile） |
+| `kikoeru-dav1d` wasm（B，獨立） | 102 | 另一個 variant，CI 上與主 variant 平行或依序；依序時合計 212 s |
+| `kikoeru-dav1d` wasm＋thr | 141 | thr 要另外 configure／compile 一份 FFmpeg 與 dav1d（`-pthread`），+39 s |
+| `kikoeru-afv` wasm＋thr | 190 | 主 variant 做 thr 版：+64 s（＋51%） |
+
+- **threaded build 對 CI 的影響**：
+  - build 時間：主 variant 加 thr 約多一半；只對獨立的 dav1d 做 thr 只多 39 s。都還在 #10「一次乾淨 build 約 3 分鐘」的量級，時間不是問題。
+  - **產物**：多一組 `.thr.wasm`＋`.thr.mjs`（獨立 dav1d 約 369 KiB brotli），Release 與 `sources/`、license header 的檢查都要涵蓋。
+  - **測試矩陣**才是主要成本：thr 只有在 `crossOriginIsolated` 頁面才會被選用，E2E 要多一個「server 帶 COOP／COEP／CORP」的 Playwright project，並且三個引擎都要跑；還要測 isolation 不成立時的退回路徑。本次就遇到兩個只在 thr 才有的問題：memory grow 後 heap view 失效（§4）、pthread Worker 載入失敗時 WebKit 卡住不報錯。
+  - 與 ADR-0001 的比較：ADR-0001 否決的是「JSPI＋Asyncify 雙 build」，那是把**整個主 variant** 做成兩份。若只對**獨立的 dav1d wasm** 做 thr 版，翻倍的只有 dav1d 這一小塊的產物與「Safari＋AV1＋isolated 頁面」這一條測試路徑，範圍小得多 [推論]。
+
 ## 6. 由 I420 buffer 建立 VideoFrame（以 WebKit 為主）
 
 **8-bit I420 很便宜；10-bit 不能直接建，WebKit 與 Firefox 都要先轉成 8-bit，而在 JS 轉很貴** [實測：`data/vfcost.json`、`data/pipeline.json`]。
