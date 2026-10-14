@@ -195,17 +195,6 @@ export interface Engine extends EventTarget {
    */
   attachCanvas(canvas: HTMLCanvasElement | null): void;
 
-  // ── 字幕 ──
-
-  /**
-   * 整條內嵌字幕軌一次取出。是否由 Engine 提供待「內嵌字幕整軌取出的歸屬」定案；
-   * 若保留，形狀如下：可取消、有進度、不影響播放。
-   */
-  extractSubtitles?(
-    trackId: string,
-    options?: { signal?: AbortSignal; onProgress?: (fraction: number) => void },
-  ): Promise<SubtitleCue[]>;
-
   // ── 事件（標準 EventTarget；支援 { once, signal }） ──
 
   addEventListener<K extends keyof EngineEventMap>(

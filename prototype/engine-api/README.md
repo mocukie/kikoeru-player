@@ -59,7 +59,7 @@
 - Q5 `reload()`：同一份媒體重新開檔，保留位置、paused、選軌、外掛音軌、offset；track id 不變；stream 結構不同時 `SOURCE_CHANGED`。
 - Q6 預設選軌：音軌依偏好語言 → default 旗標 → 第一條；字幕只在 forced 或命中偏好語言時開啟。偏好語言可在 `createEngine()` 設預設值、`load()` 覆蓋。
 - Q7 `language` 正規化為 BCP 47，另附 `rawLanguage`。
-- Q8 先保留 `extractSubtitles()` 的形狀，是否實作由「內嵌字幕整軌取出的歸屬」決定。
+- Q8 ~~先保留 `extractSubtitles()` 的形狀~~：已由「內嵌字幕整軌取出的歸屬」（#14）移除，Engine 不提供整軌取出，內嵌字幕只隨 demux 串流送出 cue。
 - Q11 Engine 設定 `canvas.width/height` 為影片顯示尺寸，縮放交給 App 的 CSS。
 - Q12 外掛音軌屬於當前媒體（`load()`／`unload()` 移除、`reload()` 保留），加入後不自動選用，載入失敗為非致命錯誤。
 - Q13 重試可設定：5xx／網路錯誤預設指數退避 3 次（base 500ms）；401／403／404 不重試；卡住 8 秒後中止讀取並重新 seek，最多 2 次。
