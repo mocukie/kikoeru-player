@@ -5,6 +5,41 @@
 > 標記：**[實測]** 本次在瀏覽器或本機量到；**[原始碼]** 對照 libav.js／dav1d／FFmpeg／WebKit 原始碼；**[已查證]** 對照其他一手來源；**[推論]** 由實測與來源推得；**[未測]** 本次無法測。
 > 原始數據在 branch 的 `research/wasm-video-decode-spike/data/`，表格可用 `node summarize.mjs data` 重新產生。
 
+## 結論先講
+
+1. **libav.js 的 dav1d 存在，但只在 master**（PR #108，2026-08-30 merge）。最新 tag `v6.10.9.0` 與 npm 都沒有，要釘 commit（本次用 `c05a676`）自己 build。在自訂 variant 加 `"decoder-libdav1d"` fragment 就能用，build 環境只多 `meson`、`ninja`。預設的 dav1d 是 `-Oz`、沒有任何 SIMD；dav1d 本身也沒有 wasm 的手寫組語（§1）。
+2. **單執行緒在 Engine 現在的條件下（Worker、Asyncify、`-Oz`）連桌面的一顆 Zen 2 核心都跟不上 1080p**：BBB 1080p30 只有 0.62–0.82 倍即時，實拍 ToS（1920×800、24 fps）0.44–0.56 倍；720p 是 1.3–1.8 倍。三個引擎差距在 10% 內（§2）。
+3. **把 dav1d 改成 `-O3 -msimd128`，速度變成 1.7–1.95 倍**：1080p 動畫 1.1–1.5 倍、實拍 1080p 級 0.75–0.99 倍（仍不夠）、720p 2.2–3.3 倍。`-msimd128` 貢獻 50–70%，`-O3` 5–10%，**Asyncify 只佔 1–8%**。只對 dav1d 開這兩個選項（主 variant 其餘維持 `-Oz`）就有最佳的 94–97%（§3）。
+4. **封包的耗時很不平均**：alt-ref 所在的封包單執行緒要 300–370 ms（1080p，`o3s`），所以即使平均跟得上，**也要先解好 250–330 ms（1080p）或 110–160 ms（720p）**；這段時間呼叫端的 Worker 完全被佔住（§2、§7）。
+5. **wasm threads 有效**（需要 `crossOriginIsolated`）：2 threads 1.6–1.75 倍、4 threads 2–2.6 倍（有 tiles 時 3.1 倍），WebKit 也一樣。實拍 1080p 級要 2 條 thread 才即時。threaded build 在 direct 模式有 memory grow 後 heap view 失效的問題（RangeError），要另外處理（§4）。
+6. **體積**：放進主 variant 每個使用者多 164 KiB（`-Oz`）或 201 KiB（dav1d 用 `-O3 -msimd128`）brotli；獨立 wasm 約 334–388 KiB brotli，只有 Safari 遇到 AV1 才下載，而且可以不開 Asyncify。CI 的乾淨 build（2 核）：主 variant 110 s → 加 dav1d 126 s；獨立 dav1d 102 s，再加 thr 版 +39 s；主 variant 做 thr 版 +64 s（§5）。
+7. **VideoFrame**：8-bit I420 的取出加 `new VideoFrame` 每張 1.5–3 ms（1080p）。**WebKit（pref 預設關，`TypeError`）與 Firefox（`NotSupportedError`）都不能由 I420P10 buffer 建 VideoFrame**，10-bit 一定要先轉 8-bit；在 JS 轉每張 7–11 ms，會讓 1080p 10-bit 從可即時變成 25–28 fps，必須放進 wasm 做（§6）。
+8. **掉格省不到解碼**：libaom 檔案 97–99% 的 frame 都是 reference frame，`skip_frame=noref` 幾乎沒有效果；能省的是 film grain 合成（20–24%）與輸出端（取出、VideoFrame、繪製）。精準 seek 要從 keyframe 解起，4 秒 GOP 的 1080p 最壞 3–6 秒（§7）。
+9. **授權**：dav1d 是 BSD-2，libav.js 的 build 會自動把條文放進 glue 的 license header；NOTICE 要加上 dav1d 的版權與條文。FFmpeg 仍是 LGPL（§9）。
+10. **Safari 上所有 AV1 都會走 dav1d**（WebKit 的 WebCodecs AV1 在 Cocoa 預設關），包括有 AV1 硬體的新機。iPhone／iPad 上 wasm dav1d 的公開數據找不到，手機的門檻要靠實機補量（§8、§10）。
+
+## 對 #21 的含意
+
+- **(a) dav1d 放主 variant，還是另一個需要時才載入的 wasm**
+  - 速度幾乎相同（獨立 wasm 不開 Asyncify 只快 3–6%，§3）。
+  - 主 variant：每個使用者多 164–201 KiB brotli、raw 從 2.0 MiB 變 2.7 MiB，但只有 Safari＋AV1 用得到；不必管第二個 instance。
+  - 獨立 wasm：334–388 KiB brotli，只在需要時下載；不需要 Asyncify；編譯選項獨立；**可以放進自己的 Worker**。代價是多一個 instance 的記憶體（WebKit 每個 instance 30–100 MiB，#17）與一次封包複製。
+  - 不論選哪個，**都要把 dav1d 的編譯選項改成 `-O3 -msimd128`**（`mk/libdav1d.mk` 一行），否則 1080p 幾乎不可能即時；還要釘 libav.js 的 master commit。
+  - **Worker 佔用**：單執行緒時，一個 alt-ref 封包會讓 Worker 停 300–370 ms（1080p）。若 dav1d 跟音訊解碼、Range I/O 同在 media Worker（ADR-0002），音訊供料會被擋住同樣久。要嘛 dav1d 有自己的 Worker（這也讓音訊與影片在沒有 COOP／COEP 時就用到兩個核心），要嘛 AudioWorklet 前面的緩衝要大於這個時間。這點會影響 ADR-0002 的分工，建議在 #21 一併決定。
+- **(b) 單執行緒跟不上時怎麼辦**
+  - 「丟 frame」只能丟輸出，省不到解碼（§7），所以不能當成主要手段；跟不上的串流會越落越遠。
+  - 可以用的資料：解碼速度幾乎只看「解析度 × 內容 × bitrate」，播放前先解 1–2 秒就能估出即時倍數（本次的 preroll 也需要先解 250–330 ms）。這比用固定門檻（例如「≤ 720p 才播」）更能適應手機的差異；固定門檻在這台機器上大致是「720p 都行、1080p 看內容」，手機要實機數據才能定（§10）。
+  - 降級的順序可以是：關 film grain（快 20–24%，要重開 decoder）→ 退回只播音訊並回報錯誤。限制解析度只在來源有多種解析度時才有意義，kikoeru 的媒體通常只有一個檔案。
+  - 10-bit 在 Safari 一定要轉 8-bit；轉換放在 wasm 之前，不要把 1080p 10-bit 當成可播（§6）。
+- **(c) COOP／COEP**
+  - 2 threads 讓 1.6–1.75 倍，正好是實拍 1080p 級「跟不上」與「可以即時」的差距（§4）。
+  - 維持 ADR-0001（不要求）：Safari 上 1080p 實拍大多只能退回音訊。
+  - 頁面已經 isolated 時才用 thr build：只做獨立 dav1d 的 thr 版，代價是多一組約 369 KiB 的產物、CI 多 39 s，以及一個帶 COOP／COEP 的 E2E project；還要處理 memory grow 的問題與 pthread Worker 載入失敗時 WebKit 卡住（要有 timeout）。整個主 variant 不必做 thr 版，所以不是 ADR-0001 否決的「雙 build」。
+  - 要求 COOP／COEP：Safari 不支援 COEP `credentialless`，kikoeru 要全站送 `require-corp`，與 ADR-0001 的理由相同。
+- **(d) Track／`getStats()` 要不要標示軟體解碼**
+  - 有理由標示：軟體解碼的可播性與耗電跟硬體解碼差很多；Safari 上 10-bit 會被降成 8-bit；關掉 film grain 會改變畫面。App 需要能解釋「為什麼這部在 iPhone 上只有聲音」。
+  - 可以提供的數據都量得到：decoder 種類（WebCodecs／dav1d）、平均解碼時間或即時倍數、輸出被丟掉的 frame 數、是否降成 8-bit、是否關閉 grain。
+
 ## 0. 環境與方法
 
 - **機器**：AMD EPYC 7K62（Zen 2，VM 32 vCPU，Linux）。所有瀏覽器數字都在官方 Docker image `mcr.microsoft.com/playwright:v1.63.0-noble` 內量：Chromium 153.0.8010.12、WebKit 26.6（WPE，Linux）、Firefox 155.0；**headless、沒有 GPU**。
