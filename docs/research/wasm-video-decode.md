@@ -30,7 +30,7 @@
   - 「丟 frame」只能丟輸出，省不到解碼（§7），所以不能當成主要手段；跟不上的串流會越落越遠。
   - 可以用的資料：解碼速度幾乎只看「解析度 × 內容 × bitrate」，播放前先解 1–2 秒就能估出即時倍數（本次的 preroll 也需要先解 250–330 ms）。這比用固定門檻（例如「≤ 720p 才播」）更能適應手機的差異；固定門檻在這台機器上大致是「720p 都行、1080p 看內容」，手機要實機數據才能定（§10）。
   - 降級的順序可以是：關 film grain（快 20–24%，要重開 decoder）→ 退回只播音訊並回報錯誤。限制解析度只在來源有多種解析度時才有意義，kikoeru 的媒體通常只有一個檔案。
-  - 10-bit 在 Safari 一定要轉 8-bit；轉換放在 wasm 之前，不要把 1080p 10-bit 當成可播（§6）。
+  - 10-bit 在 Safari 一定要轉 8-bit；在轉換搬進 wasm 之前，不要把 1080p 10-bit 當成可播（§6）。
 - **(c) COOP／COEP**
   - 2 threads 讓 1.6–1.75 倍，正好是實拍 1080p 級「跟不上」與「可以即時」的差距（§4）。
   - 維持 ADR-0001（不要求）：Safari 上 1080p 實拍大多只能退回音訊。
@@ -43,7 +43,7 @@
 ## 0. 環境與方法
 
 - **機器**：AMD EPYC 7K62（Zen 2，VM 32 vCPU，Linux）。所有瀏覽器數字都在官方 Docker image `mcr.microsoft.com/playwright:v1.63.0-noble` 內量：Chromium 153.0.8010.12、WebKit 26.6（WPE，Linux）、Firefox 155.0；**headless、沒有 GPU**。
-  - **Linux 上的 Playwright WebKit 不等於 Safari**：JavaScriptCore 的 wasm 編譯器相同，但 VideoFrame 的後端是 GStreamer，Apple 平台走 CoreVideo（§6）；CPU 也是 x86。
+  - **Linux 上的 Playwright WebKit 不等於 Safari**：同樣是 JavaScriptCore 的 wasm 引擎，但這裡跑在 x86 後端，Apple 裝置是 ARM64；VideoFrame 的後端是 GStreamer，Apple 平台走 CoreVideo（§6）。
   - 單執行緒的數字代表「一顆 Zen 2 伺服器核心」，不是手機。手機的推算見 §8，實機項目見 §10。
 - **build**：在釘 digest 的 `emscripten/emsdk:6.0.5` 內，以 libav.js commit `c05a676`、FFmpeg 9.0、dav1d 1.5.4 build（`build.sh`）。套上 #10／#17／#18 的三個 0BSD wrapper patch，與正式 variant 一致。
   - `kikoeru-af`：ADR-0003 的主 variant（#10 的清單加 avi、aiff、ac3、eac3）。
