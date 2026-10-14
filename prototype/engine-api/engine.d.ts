@@ -59,11 +59,12 @@ export type EngineState =
   | 'paused' //    使用者暫停
   | 'buffering' // 想播但資料不夠，時鐘停住
   | 'seeking' //   seek() 進行中，直到目標位置的 frame/sample 備妥
-  | 'ended' //     播到結尾
+  | 'ended' //     播到結尾；paused 維持 false（與 HTMLMediaElement 不同），App 不接下一首時自己 pause()
   | 'error'; //    當前媒體發生致命錯誤，見 `engine.error`；load() 可重新開始
 
 /**
- * 行動裝置（iOS audioSession、靜音 anchor `<audio>`）不在 core：歸屬由「行動裝置支援的歸屬」決定。
+ * 背景播放（iOS audioSession、靜音 anchor `<audio>`）不在 core，由選配的背景播放模組
+ * `kikoeru-player/background` 處理（見 background.d.ts、ADR-0006）。
  * core 只提供所需的時機點與狀態：`beforeaudiostart` 事件、帶 reason 的 statechange、
  * 以及偵測外部對 AudioContext 的 suspend／resume。
  */
@@ -74,7 +75,8 @@ export interface Engine extends EventTarget {
   // 規則：
   // - 順序保證：指令的 Promise resolve 時，相關 getter 已是新值，對應事件也已發出。
   // - getter 顯示「已生效」的值：例如 selectTracks() 進行中，selectedTracks 仍是舊軌，新軌出聲後才更新。
-  //   唯一例外是 paused，它是使用者意圖，play()／pause() 呼叫當下就改變。
+  //   唯一例外是 paused，它是使用者意圖，play()／pause() 呼叫當下就改變，
+  //   並在呼叫內同步發出 statechange（state 沒變時 state === previous），供背景播放模組與 Media Session 跟上。
   // - tracks 在 load() 之後只因指令或降級改變（addExternalAudio、removeExternalAudio、setAudioOffset、
   //   selectTracks 發現 codec 實際不支援、播放中影片解碼失敗而退回只播音訊）。播放中才出現的 stream 只記 log、不加入。
 
@@ -535,7 +537,7 @@ export type LogHook = (entry: LogEntry) => void;
 export interface LogEntry {
   level: LogLevel;
   /** 產生 log 的子系統。 */
-  scope: 'io' | 'demux' | 'audio' | 'video' | 'subtitle' | 'command' | 'worker';
+  scope: 'io' | 'demux' | 'audio' | 'video' | 'subtitle' | 'command' | 'worker' | 'background';
   message: string;
   /** performance.now() 時間（主執行緒時基）。 */
   time: number;

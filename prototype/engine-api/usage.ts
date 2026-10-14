@@ -6,18 +6,23 @@ import {
   isAbortError,
   type Engine,
   type EngineError,
+  type LogHook,
   type SubtitleCue,
   type TrackSelection,
 } from './engine';
+import { attachBackgroundPlayback } from './background';
 
 // ─── 1. 建立：整個 App 一個 Engine，換檔用 load() ───
 
 const canvas = document.querySelector<HTMLCanvasElement>('#video')!;
 canvas.style.objectFit = 'contain'; // canvas.width/height 由 Engine 設定，版面由 App 決定
 
+const engineLog: LogHook = (e) =>
+  console[e.level === 'debug' ? 'log' : e.level](`[engine:${e.scope}]`, e.message, e.data ?? '');
+
 const engine: Engine = createEngine({
   canvas,
-  log: (e) => console[e.level === 'debug' ? 'log' : e.level](`[engine:${e.scope}]`, e.message, e.data ?? ''),
+  log: engineLog,
   logLevel: 'info',
 });
 
@@ -43,15 +48,8 @@ engine.addEventListener(
   on,
 );
 
-// iOS：音訊啟動前設定 audio session（歸屬待「行動裝置支援的歸屬」定案，這裡示範 App 自己做）。
-engine.addEventListener(
-  'beforeaudiostart',
-  () => {
-    const nav = navigator as Navigator & { audioSession?: { type: string } };
-    if (nav.audioSession) nav.audioSession.type = 'playback';
-  },
-  on,
-);
+// 背景與鎖屏播放：audioSession 與靜音 anchor 交給背景播放模組（ADR-0006）。Media Session 仍由 App 負責。
+attachBackgroundPlayback(engine, { log: engineLog });
 
 // ─── 2. 開檔並播放（使用者點了一首曲目，是 user gesture） ───
 

@@ -74,3 +74,8 @@
   - `unsupportedReason`：`'codec'` 是 Engine 不支援，`'platform'` 是這個瀏覽器不支援。
   - `isEngineSupported()` 不要求 WebCodecs。
   - 播放中影片解碼失敗時退回只播音訊，發出 `fatal: false` 的 `error` 事件與 `trackschange`；音訊連續失敗超過 1 媒體秒才是致命的 `DECODE_FAILED`。
+- 「行動裝置支援的歸屬」（#16，ADR-0006）：
+  - 新增背景播放模組 `kikoeru-player/background`（`background.d.ts`）：`attachBackgroundPlayback(engine, { audioSession?, anchor?, log? })` 回傳 `{ detach() }`，只用公開 API 實作，所有平台都啟用。
+  - `ended` 時 `paused` 維持 false（與 `HTMLMediaElement` 不同），背景接下一首時 anchor 不會停；App 不接下一首時自己 `pause()`。
+  - `play()`／`pause()` 改變 `paused` 時，在呼叫內同步發出 `statechange`（`state` 沒變時 `state === previous`）。
+  - `LogEntry.scope` 新增 `'background'`。
