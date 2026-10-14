@@ -1,0 +1,4 @@
+# 本 repo 不使用 pnpm workspace，這個檔案只放 pnpm 設定。
+allowBuilds:
+  # postinstall 只在平台的 optional binding 沒裝上時補裝；binding 由 optional dependency 安裝，不需要執行。
+  unrs-resolver: false

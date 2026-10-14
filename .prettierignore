@@ -1,0 +1,5 @@
+dist/
+coverage/
+pnpm-lock.yaml
+# 文件不經 Prettier：中文表格的對齊會被改寫成大量無意義的 diff。
+*.md

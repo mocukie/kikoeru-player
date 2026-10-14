@@ -48,11 +48,13 @@ test/
   fakes/           假 media Worker、假音訊輸出、記憶體 Source
   e2e/             Playwright 測試
   fixture-app/     Vite fixture App（不加入 workspace）
+  lint/            ESLint 設定的 Node 測試；fixtures/ 模仿套件目錄，固定依賴規則與 Worker 寫法
 scripts/           wasm 下載與 tree hash 檢查、notices 產生等 build 輔助 script
 wasm/              Dockerfile、variant、patch、版本與 sha256 清單、build script；wasm/dist/ 不進 git
 docs/
   adr/             決定紀錄
   device-checklist.md  實機清單
+eslint.config.js   ESLint flat config，依賴規則在這裡
 vite.config.ts     Demo 頁的 dev server（HTTPS 自簽，掛上 test/server）
 vitest.config.ts   projects：node、browser（chromium、firefox）
 playwright.config.ts
@@ -77,16 +79,19 @@ Node 測試（`*.test.ts`）與 browser mode 測試（`*.browser.test.ts`）都�
 
 - `main/` 與 `worker/` 不互相 import。主執行緒只透過 `new Worker(new URL(...))` 啟動 Worker，雙方只以 `protocol/` 的型別溝通。
 - `background/` 只用公開 API，證明 core 提供的 hook 足夠（[ADR-0006](adr/0006-background-playback-module.md)）。
+- 測試檔（`*.test.ts`）可以 import 任何元素；同一個元素內的 import 不受限制，但 `worklet/` 與 `protocol/` 內仍只能 `import type`。
 
 ## tsconfig
 
-`dom`、`webworker`、`audioworklet` 三個 lib 的全域宣告會互相衝突，所以每個執行環境各有一份 tsconfig，由根目錄的 `tsconfig.json` 以 project references 串起來：
+`dom`、`webworker`、`audioworklet` 三個 lib 的全域宣告會互相衝突，所以每個執行環境各有一份 tsconfig（根目錄的 `tsconfig.<名稱>.json`），由根目錄的 `tsconfig.json` 以 project references 串起來：
 
 - `main`（含 `index.ts`、`background/`）：`lib: dom`。
 - `worker`：`lib: webworker`。
-- `worklet`：`lib: audioworklet`。
+- `worklet`：`audioworklet` 的全域型別。TypeScript 沒有內建這個 lib，改用 DOM lib generator 發布的 `@types/audioworklet`（`types: ["audioworklet"]`）。
 - `protocol`：被以上三者引用，不使用任何環境的全域型別。
-- 測試、Demo 頁、`scripts/` 各自另有 tsconfig，不輸出到 `dist/`。
+- 測試、Demo 頁、`scripts/` 各自另有 tsconfig，不輸出到 `dist/`。`scripts` 也涵蓋根目錄的 `*.config.{js,ts}`。
+
+`pnpm build` 只 build `tsconfig.build.json` 引用的四個套件 project。`tsc -b` 不能搭配 `--noEmit` 使用 project references，所以 `pnpm typecheck` 也會輸出到 `dist/`；發布用的產物一律以 `pnpm build` 重新產生。
 
 ## 訊息協定
 
@@ -102,7 +107,7 @@ Node 測試（`*.test.ts`）與 browser mode 測試（`*.browser.test.ts`）都�
 ### 平台與部署
 
 - **不得要求 COOP/COEP**，不使用 `SharedArrayBuffer`；wasm 與 JS 的銜接只用 Asyncify（[ADR-0001](adr/0001-libavjs-asyncify.md)）。
-- **Worker 的寫法**：只用字面寫法 `new Worker(new URL('./….js', import.meta.url), { type: 'module' })`，讓 App 的 Vite 能辨識並 bundle。
+- **Worker 的寫法**：只用字面寫法 `new Worker(new URL('./….js', import.meta.url), { type: 'module' })`，讓 App 的 Vite 能辨識並 bundle。路徑是 `./` 或 `../` 開頭、`.js` 結尾的字串字面值，例如主執行緒的 `'../worker/index.js'`。
 - **AudioWorklet**：`addModule(new URL(…))` 只會原樣複製檔案，所以 worklet 是不 import 任何 runtime 程式碼的單一檔案。
 - **wasm 資產**：glue 與 `.wasm` 是原封不動的資產，以 `new URL('./libav-….wasm.mjs', import.meta.url)` 參照，Worker 用 `import(/* @vite-ignore */ glueUrl)` 載入，license header 不經過 bundler（[ADR-0005](adr/0005-wasm-release-and-engine-package.md)）。
 - **wasm 的修改**：只能改 `wasm/` 再重新 build；對 libav.js 的修改是 `wasm/` 內的 patch，不 fork。不得啟用 FFmpeg 的 GPL 元件。

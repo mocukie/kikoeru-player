@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.lib.json",
+  "compilerOptions": {
+    "lib": ["es2023"],
+    "types": [],
+    "tsBuildInfoFile": "node_modules/.tmp/tsconfig.protocol.tsbuildinfo"
+  },
+  "include": ["src/protocol"],
+  "exclude": ["src/**/*.test.ts"]
+}
