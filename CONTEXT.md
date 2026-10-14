@@ -85,3 +85,13 @@ _Avoid_: 外部字幕、sidecar subtitle
 **Cue**:
 內嵌字幕中一段有起訖時間的字幕資料。
 _Avoid_: 字幕行、subtitle line、event（ASS 的 event 另指原文中的一行）
+
+### 背景播放
+
+**背景播放模組（Background playback module）**:
+Engine 套件內的選配模組，讓 OS 把 App 當成正在播放的媒體播放器，使播放能在背景、鎖屏與系統媒體控制下持續；由 App 決定是否使用。
+_Avoid_: 行動裝置模組、mobile support、keepalive
+
+**靜音 anchor（Silent anchor）**:
+背景播放模組播放的一段靜音 `<audio>`，只用來向 OS 宣告「正在播放媒體」，媒體的聲音不經過它。
+_Avoid_: keepalive、dummy audio、假音訊
