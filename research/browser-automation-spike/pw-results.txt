@@ -1,0 +1,332 @@
+RESULT {"ua":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36","crossOriginIsolated":true,"audio":{"getAutoplayPolicy":"n/a","stateAtCreate":"suspended","sampleRate":44100,"baseLatency":0.01,"outputLatency":0,"hasAudioWorklet":true,"resume":"TIMEOUT","stateAfter":"suspended","currentTimeDelta":0,"workletProcessCalls":0,"outputTimestamp":{"contextTime":0,"perf":0},"offlineWorkletPeak":0.1,"htmlAudioPlay":"resolved"},"webcodecs":{"VideoDecoder":"function","AudioDecoder":"function","VideoEncoder":"function","h264_annexb":{"label":"h264 annexb","supported":true,"supported_prefer-software":true,"supported_prefer-hardware":false,"flush":"ok","chunks":30,"framesOut":30,"firstFrame":{"fmt":"I420","w":320,"h":258,"pixelSum":496857}},"h264_avcc":{"label":"h264 avcc","supported":true,"supported_prefer-software":true,"supported_prefer-hardware":false,"flush":"ok","chunks":30,"framesOut":30,"firstFrame":{"fmt":"I420","w":320,"h":258,"pixelSum":496857}},"vp9":{"label":"vp9","supported":true,"supported_prefer-software":true,"supported_prefer-hardware":false,"flush":"ok","chunks":30,"framesOut":30,"firstFrame":{"fmt":"I420","w":384,"h":240,"pixelSum":496711}},"av1":{"label":"av1","supported":true,"supported_prefer-software":true,"supported_prefer-hardware":false,"flush":"ok","chunks":30,"framesOut":30,"firstFrame":{"fmt":"I420","w":320,"h":240,"pixelSum":496628}},"audioConfigs":{"aac":true,"opus":true,"flac":true,"mp3":true},"canPlayType":{"h264":"probably","vp9":"probably","av1":"probably","aac":"probably"}},"wasmWorker":{"add":42,"streaming":"function","sab":"function","coi":true,"sharedMemory":true,"simd":true,"videoDecoderInWorker":"function","audioDecoderInWorker":"function"}}
+{
+ "browser": "chromium",
+ "version": "156.0.8078.4",
+ "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+ "crossOriginIsolated": true,
+ "audio": {
+  "getAutoplayPolicy": "n/a",
+  "stateAtCreate": "suspended",
+  "sampleRate": 44100,
+  "baseLatency": 0.01,
+  "outputLatency": 0,
+  "hasAudioWorklet": true,
+  "resume": "TIMEOUT",
+  "stateAfter": "suspended",
+  "currentTimeDelta": 0,
+  "workletProcessCalls": 0,
+  "outputTimestamp": {
+   "contextTime": 0,
+   "perf": 0
+  },
+  "offlineWorkletPeak": 0.1,
+  "htmlAudioPlay": "resolved"
+ },
+ "webcodecs": {
+  "VideoDecoder": "function",
+  "AudioDecoder": "function",
+  "VideoEncoder": "function",
+  "h264_annexb": {
+   "label": "h264 annexb",
+   "supported": true,
+   "supported_prefer-software": true,
+   "supported_prefer-hardware": false,
+   "flush": "ok",
+   "chunks": 30,
+   "framesOut": 30,
+   "firstFrame": {
+    "fmt": "I420",
+    "w": 320,
+    "h": 258,
+    "pixelSum": 496857
+   }
+  },
+  "h264_avcc": {
+   "label": "h264 avcc",
+   "supported": true,
+   "supported_prefer-software": true,
+   "supported_prefer-hardware": false,
+   "flush": "ok",
+   "chunks": 30,
+   "framesOut": 30,
+   "firstFrame": {
+    "fmt": "I420",
+    "w": 320,
+    "h": 258,
+    "pixelSum": 496857
+   }
+  },
+  "vp9": {
+   "label": "vp9",
+   "supported": true,
+   "supported_prefer-software": true,
+   "supported_prefer-hardware": false,
+   "flush": "ok",
+   "chunks": 30,
+   "framesOut": 30,
+   "firstFrame": {
+    "fmt": "I420",
+    "w": 384,
+    "h": 240,
+    "pixelSum": 496711
+   }
+  },
+  "av1": {
+   "label": "av1",
+   "supported": true,
+   "supported_prefer-software": true,
+   "supported_prefer-hardware": false,
+   "flush": "ok",
+   "chunks": 30,
+   "framesOut": 30,
+   "firstFrame": {
+    "fmt": "I420",
+    "w": 320,
+    "h": 240,
+    "pixelSum": 496628
+   }
+  },
+  "audioConfigs": {
+   "aac": true,
+   "opus": true,
+   "flac": true,
+   "mp3": true
+  },
+  "canPlayType": {
+   "h264": "probably",
+   "vp9": "probably",
+   "av1": "probably",
+   "aac": "probably"
+  }
+ },
+ "wasmWorker": {
+  "add": 42,
+  "streaming": "function",
+  "sab": "function",
+  "coi": true,
+  "sharedMemory": true,
+  "simd": true,
+  "videoDecoderInWorker": "function",
+  "audioDecoderInWorker": "function"
+ }
+}
+RESULT {"ua":"Mozilla/5.0 (X11; Linux x86_64; rv:157.0) Gecko/20100101 Firefox/157.0","crossOriginIsolated":true,"audio":{"getAutoplayPolicy":"disallowed","stateAtCreate":"suspended","sampleRate":44100,"baseLatency":0,"outputLatency":0,"hasAudioWorklet":true,"resume":"TIMEOUT","stateAfter":"suspended","currentTimeDelta":0,"workletProcessCalls":0,"outputTimestamp":{"contextTime":0,"perf":4714.86},"offlineWorkletPeak":0.1,"htmlAudioPlay":"rejected:NotSupportedError"},"webcodecs":{"VideoDecoder":"function","AudioDecoder":"function","VideoEncoder":"function","h264_annexb":{"label":"h264 annexb","supported":true,"supported_prefer-software":true,"supported_prefer-hardware":true,"flush":"ok","chunks":30,"framesOut":30,"firstFrame":{"fmt":"BGRX","w":320,"h":240,"pixelSum":496857}},"h264_avcc":{"label":"h264 avcc","supported":true,"supported_prefer-software":true,"supported_prefer-hardware":true,"flush":"ok","chunks":30,"framesOut":30,"firstFrame":{"fmt":"BGRX","w":320,"h":240,"pixelSum":496857}},"vp9":{"label":"vp9","supported":true,"supported_prefer-software":true,"supported_prefer-hardware":true,"flush":"ok","chunks":30,"framesOut":30,"firstFrame":{"fmt":"BGRX","w":320,"h":240,"pixelSum":496711}},"av1":{"label":"av1","supported":true,"supported_prefer-software":true,"supported_prefer-hardware":true,"flush":"ok","chunks":30,"framesOut":30,"firstFrame":{"fmt":"BGRX","w":320,"h":240,"pixelSum":497018}},"audioConfigs":{"aac":true,"opus":true,"flac":true,"mp3":true},"canPlayType":{"h264":"probably","vp9":"probably","av1":"probably","aac":"probably"}},"wasmWorker":{"add":42,"streaming":"function","sab":"function","coi":true,"sharedMemory":true,"simd":true,"videoDecoderInWorker":"function","audioDecoderInWorker":"function"}}
+{
+ "browser": "firefox",
+ "version": "157.0",
+ "ua": "Mozilla/5.0 (X11; Linux x86_64; rv:157.0) Gecko/20100101 Firefox/157.0",
+ "crossOriginIsolated": true,
+ "audio": {
+  "getAutoplayPolicy": "disallowed",
+  "stateAtCreate": "suspended",
+  "sampleRate": 44100,
+  "baseLatency": 0,
+  "outputLatency": 0,
+  "hasAudioWorklet": true,
+  "resume": "TIMEOUT",
+  "stateAfter": "suspended",
+  "currentTimeDelta": 0,
+  "workletProcessCalls": 0,
+  "outputTimestamp": {
+   "contextTime": 0,
+   "perf": 4714.86
+  },
+  "offlineWorkletPeak": 0.1,
+  "htmlAudioPlay": "rejected:NotSupportedError"
+ },
+ "webcodecs": {
+  "VideoDecoder": "function",
+  "AudioDecoder": "function",
+  "VideoEncoder": "function",
+  "h264_annexb": {
+   "label": "h264 annexb",
+   "supported": true,
+   "supported_prefer-software": true,
+   "supported_prefer-hardware": true,
+   "flush": "ok",
+   "chunks": 30,
+   "framesOut": 30,
+   "firstFrame": {
+    "fmt": "BGRX",
+    "w": 320,
+    "h": 240,
+    "pixelSum": 496857
+   }
+  },
+  "h264_avcc": {
+   "label": "h264 avcc",
+   "supported": true,
+   "supported_prefer-software": true,
+   "supported_prefer-hardware": true,
+   "flush": "ok",
+   "chunks": 30,
+   "framesOut": 30,
+   "firstFrame": {
+    "fmt": "BGRX",
+    "w": 320,
+    "h": 240,
+    "pixelSum": 496857
+   }
+  },
+  "vp9": {
+   "label": "vp9",
+   "supported": true,
+   "supported_prefer-software": true,
+   "supported_prefer-hardware": true,
+   "flush": "ok",
+   "chunks": 30,
+   "framesOut": 30,
+   "firstFrame": {
+    "fmt": "BGRX",
+    "w": 320,
+    "h": 240,
+    "pixelSum": 496711
+   }
+  },
+  "av1": {
+   "label": "av1",
+   "supported": true,
+   "supported_prefer-software": true,
+   "supported_prefer-hardware": true,
+   "flush": "ok",
+   "chunks": 30,
+   "framesOut": 30,
+   "firstFrame": {
+    "fmt": "BGRX",
+    "w": 320,
+    "h": 240,
+    "pixelSum": 497018
+   }
+  },
+  "audioConfigs": {
+   "aac": true,
+   "opus": true,
+   "flac": true,
+   "mp3": true
+  },
+  "canPlayType": {
+   "h264": "probably",
+   "vp9": "probably",
+   "av1": "probably",
+   "aac": "probably"
+  }
+ },
+ "wasmWorker": {
+  "add": 42,
+  "streaming": "function",
+  "sab": "function",
+  "coi": true,
+  "sharedMemory": true,
+  "simd": true,
+  "videoDecoderInWorker": "function",
+  "audioDecoderInWorker": "function"
+ }
+}
+RESULT {"ua":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Safari/605.1.15","crossOriginIsolated":true,"audio":{"getAutoplayPolicy":"n/a","stateAtCreate":"suspended","sampleRate":44100,"baseLatency":0.0029024943310657597,"outputLatency":0,"hasAudioWorklet":true,"resume":"TIMEOUT","stateAfter":"interrupted","currentTimeDelta":0,"workletProcessCalls":0,"outputTimestamp":{"contextTime":0,"perf":0},"offlineWorkletPeak":0.1,"htmlAudioPlay":"resolved"},"webcodecs":{"VideoDecoder":"function","AudioDecoder":"function","VideoEncoder":"function","h264_annexb":{"label":"h264 annexb","supported":true,"supported_prefer-software":true,"supported_prefer-hardware":true,"flush":"ok","chunks":30,"framesOut":30,"firstFrame":{"fmt":"I420","w":320,"h":240,"pixelSum":493617}},"h264_avcc":{"label":"h264 avcc","supported":true,"supported_prefer-software":true,"supported_prefer-hardware":true,"flush":"ok","chunks":30,"framesOut":30,"firstFrame":{"fmt":"I420","w":320,"h":240,"pixelSum":493617}},"vp9":{"label":"vp9","supported":true,"supported_prefer-software":true,"supported_prefer-hardware":true,"flush":"ok","chunks":30,"framesOut":30,"firstFrame":{"fmt":"I420","w":320,"h":240,"pixelSum":493407}},"av1":{"label":"av1","supported":true,"supported_prefer-software":true,"supported_prefer-hardware":true,"flush":"rejected:EncodingError: Decode error","chunks":30,"framesOut":0,"firstFrame":null,"error":"EncodingError: Decode error"},"audioConfigs":{"aac":true,"opus":true,"flac":true,"mp3":true},"canPlayType":{"h264":"probably","vp9":"probably","av1":"probably","aac":"probably"}},"wasmWorker":{"add":42,"streaming":"function","sab":"function","coi":true,"sharedMemory":true,"simd":true,"videoDecoderInWorker":"function","audioDecoderInWorker":"function"}}
+{
+ "browser": "webkit",
+ "version": "27.2",
+ "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Safari/605.1.15",
+ "crossOriginIsolated": true,
+ "audio": {
+  "getAutoplayPolicy": "n/a",
+  "stateAtCreate": "suspended",
+  "sampleRate": 44100,
+  "baseLatency": 0.0029024943310657597,
+  "outputLatency": 0,
+  "hasAudioWorklet": true,
+  "resume": "TIMEOUT",
+  "stateAfter": "interrupted",
+  "currentTimeDelta": 0,
+  "workletProcessCalls": 0,
+  "outputTimestamp": {
+   "contextTime": 0,
+   "perf": 0
+  },
+  "offlineWorkletPeak": 0.1,
+  "htmlAudioPlay": "resolved"
+ },
+ "webcodecs": {
+  "VideoDecoder": "function",
+  "AudioDecoder": "function",
+  "VideoEncoder": "function",
+  "h264_annexb": {
+   "label": "h264 annexb",
+   "supported": true,
+   "supported_prefer-software": true,
+   "supported_prefer-hardware": true,
+   "flush": "ok",
+   "chunks": 30,
+   "framesOut": 30,
+   "firstFrame": {
+    "fmt": "I420",
+    "w": 320,
+    "h": 240,
+    "pixelSum": 493617
+   }
+  },
+  "h264_avcc": {
+   "label": "h264 avcc",
+   "supported": true,
+   "supported_prefer-software": true,
+   "supported_prefer-hardware": true,
+   "flush": "ok",
+   "chunks": 30,
+   "framesOut": 30,
+   "firstFrame": {
+    "fmt": "I420",
+    "w": 320,
+    "h": 240,
+    "pixelSum": 493617
+   }
+  },
+  "vp9": {
+   "label": "vp9",
+   "supported": true,
+   "supported_prefer-software": true,
+   "supported_prefer-hardware": true,
+   "flush": "ok",
+   "chunks": 30,
+   "framesOut": 30,
+   "firstFrame": {
+    "fmt": "I420",
+    "w": 320,
+    "h": 240,
+    "pixelSum": 493407
+   }
+  },
+  "av1": {
+   "label": "av1",
+   "supported": true,
+   "supported_prefer-software": true,
+   "supported_prefer-hardware": true,
+   "flush": "rejected:EncodingError: Decode error",
+   "chunks": 30,
+   "framesOut": 0,
+   "firstFrame": null,
+   "error": "EncodingError: Decode error"
+  },
+  "audioConfigs": {
+   "aac": true,
+   "opus": true,
+   "flac": true,
+   "mp3": true
+  },
+  "canPlayType": {
+   "h264": "probably",
+   "vp9": "probably",
+   "av1": "probably",
+   "aac": "probably"
+  }
+ },
+ "wasmWorker": {
+  "add": 42,
+  "streaming": "function",
+  "sab": "function",
+  "coi": true,
+  "sharedMemory": true,
+  "simd": true,
+  "videoDecoderInWorker": "function",
+  "audioDecoderInWorker": "function"
+ }
+}

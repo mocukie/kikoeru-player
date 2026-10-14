@@ -1,0 +1,9 @@
+node_modules/
+.vitest/
+site/*.264
+site/*.ivf
+media/
+dl/
+dl2/
+img-fx/*.tar.xz
+img-fx/*.tgz
