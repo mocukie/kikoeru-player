@@ -60,6 +60,10 @@ _Avoid_: 取消、cancel（取消指由 App 主動中止）
 使用者要播還是要停，與 Engine 實際所處的狀態分開記錄；程式中以 boolean `paused` 表示（true 表示要停），沿用 `HTMLMediaElement.paused`。
 _Avoid_: 播放狀態、state（指意圖時）
 
+**音訊時鐘（Audio clock）**:
+Engine 唯一的時鐘，指此刻聽到的聲音在媒體時間軸上的位置；沒有音軌或音訊已結束時，以靜音繼續推進到媒體結尾。影片與字幕都依它對齊。
+_Avoid_: 主時鐘、master clock、系統時間
+
 **卡住（Stall）**:
 想播放卻在時限內等不到資料的情況，Engine 會自動嘗試恢復。
 _Avoid_: 凍結、freeze、hang、lag
