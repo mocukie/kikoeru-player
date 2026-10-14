@@ -21,7 +21,7 @@
 - [x] threaded build 對 CI 的影響（2 核、乾淨 build）→ `data/build-times.tsv`：af 110 s、afv 126 s、dav1d 102 s、dav1d wasm+thr 141 s、afv wasm+thr 190 s
 - [x] 外部資料整理（報告 §8）：iOS／iPad dav1d 數據（dav1d 0.2.0：iPhone XS 1080p 80fps，native）、Safari wasm SIMD 16.4／threads 15.2／COEP credentialless 不支援（BCD）、WebKit VideoFrame 格式（原始碼）、WebCodecs AV1 在 Cocoa 預設關
 - [x] 授權／NOTICE（報告 §9）：dav1d BSD-2，glue 的 license header 已自動帶入 dav1d 條文；kikoeru-afv 仍是 LGPL
-- [ ] 報告 `docs/research/wasm-video-decode.md`：已寫 §0 環境、§1 libav.js、§2 單執行緒、§3 編譯選項、§4 threads、§6 VideoFrame、§7 掉格／seek、§8 外部資料、§9 授權；待寫 §5 打包（等 build 時間）、§10 實機清單、§11 未驗證、結論先講、對 #21 的含意、spike 用法、來源
+- [x] 報告 `docs/research/wasm-video-decode.md`：結論先講、對 #21 的含意、§0–§11、spike 用法、來源都已寫完
 - [ ] resolution 文字、一行 gist、branch／SHA
 
-下一步：寫報告 §5 打包（體積＋build 時間），再寫 §10 實機清單、§11 未驗證、結論先講與對 #21 的含意。
+下一步：整理 resolution 文字與一行 gist，交回給 parent session（不碰 issue 與 map）。

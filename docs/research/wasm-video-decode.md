@@ -9,7 +9,7 @@
 
 1. **libav.js 的 dav1d 存在，但只在 master**（PR #108，2026-08-30 merge）。最新 tag `v6.10.9.0` 與 npm 都沒有，要釘 commit（本次用 `c05a676`）自己 build。在自訂 variant 加 `"decoder-libdav1d"` fragment 就能用，build 環境只多 `meson`、`ninja`。預設的 dav1d 是 `-Oz`、沒有任何 SIMD；dav1d 本身也沒有 wasm 的手寫組語（§1）。
 2. **單執行緒在 Engine 現在的條件下（Worker、Asyncify、`-Oz`）連桌面的一顆 Zen 2 核心都跟不上 1080p**：BBB 1080p30 只有 0.62–0.82 倍即時，實拍 ToS（1920×800、24 fps）0.44–0.56 倍；720p 是 1.3–1.8 倍。三個引擎差距在 10% 內（§2）。
-3. **把 dav1d 改成 `-O3 -msimd128`，速度變成 1.7–1.95 倍**：1080p 動畫 1.1–1.5 倍、實拍 1080p 級 0.75–0.99 倍（仍不夠）、720p 2.2–3.3 倍。`-msimd128` 貢獻 50–70%，`-O3` 5–10%，**Asyncify 只佔 1–8%**。只對 dav1d 開這兩個選項（主 variant 其餘維持 `-Oz`）就有最佳的 94–97%（§3）。
+3. **把 dav1d 改成 `-O3 -msimd128`，速度變成 1.7–2.0 倍**：1080p 動畫 1.1–1.5 倍、實拍 1080p 級 0.75–0.99 倍（仍不夠）、720p 2.2–3.3 倍。`-msimd128` 貢獻 50–70%，`-O3` 5–10%，**Asyncify 只佔 1–8%**。只對 dav1d 開這兩個選項（主 variant 其餘維持 `-Oz`）就有最佳的 94–97%（§3）。
 4. **封包的耗時很不平均**：alt-ref 所在的封包單執行緒要 300–370 ms（1080p，`o3s`），所以即使平均跟得上，**也要先解好 250–330 ms（1080p）或 110–160 ms（720p）**；這段時間呼叫端的 Worker 完全被佔住（§2、§7）。
 5. **wasm threads 有效**（需要 `crossOriginIsolated`）：2 threads 1.6–1.75 倍、4 threads 2–2.6 倍（有 tiles 時 3.1 倍），WebKit 也一樣。實拍 1080p 級要 2 條 thread 才即時。threaded build 在 direct 模式有 memory grow 後 heap view 失效的問題（RangeError），要另外處理（§4）。
 6. **體積**：放進主 variant 每個使用者多 164 KiB（`-Oz`）或 201 KiB（dav1d 用 `-O3 -msimd128`）brotli；獨立 wasm 約 334–388 KiB brotli，只有 Safari 遇到 AV1 才下載，而且可以不開 Asyncify。CI 的乾淨 build（2 核）：主 variant 110 s → 加 dav1d 126 s；獨立 dav1d 102 s，再加 thr 版 +39 s；主 variant 做 thr 版 +64 s（§5）。
@@ -150,7 +150,7 @@ decode-only fps（Chromium／WebKit／Firefox）：
 
 - **Asyncify**：同一份物件檔，拿掉 Asyncify 只快 1–8%。原本擔心 dav1d 的 DSP 全是 function pointer 呼叫、會讓 Asyncify 把整個解碼路徑 instrument 起來，實際影響很小。這跟 #17 量到音訊「解碼＋filter」慢 13–25% 相比還更小。
 - **`-O3`**：比 `-Oz` 快 5–10%。
-- **`-msimd128`**：在 `-O3` 之上再快 50–70%，是 `oz` 的 1.7–1.95 倍。所有目標瀏覽器都支援 wasm SIMD（Chrome 91、Firefox 89、Safari 16.4）[已查證：MDN browser-compat-data `webassembly/fixed-width-SIMD`；WebKit「Safari 16.4」release notes]，不需要另做非 SIMD 的 fallback。
+- **`-msimd128`**：在 `-O3` 之上再快 50–70%，是 `oz` 的 1.7–2.0 倍。所有目標瀏覽器都支援 wasm SIMD（Chrome 91、Firefox 89、Safari 16.4）[已查證：MDN browser-compat-data `webassembly/fixed-width-SIMD`；WebKit「Safari 16.4」release notes]，不需要另做非 SIMD 的 fallback。
 - **mix（只有 dav1d 用 `-O3 -msimd128`，FFmpeg 其他部分與 link 維持 `-Oz`）就拿到幾乎全部的好處**：
 
 | 檔案 | `kikoeru-afv` oz（主 variant，Asyncify） | `kikoeru-afv` mix（主 variant，Asyncify） | `kikoeru-dav1d` mix-noasy（獨立 wasm） | `kikoeru-dav1d` o3s-noasy |
