@@ -12,15 +12,15 @@ kikoeru-player 改為 public，Engine 自己的程式碼採 MIT，wasm 維持 LG
 - **維持 private repo**：從 private repo 的 Release 下載需要 token，kikoeru 的 `pnpm install` 與 Docker build 都要帶 token；原始碼也得另找公開的地方提供，兩邊要同步。
 - **發到 npm public registry**：多一個帳號與發版 token，換來的 semver range 與 `pnpm update` 對唯一的使用者 kikoeru 沒有用處。GitHub Packages 的 npm registry 即使是 public package 也要認證才能安裝（ADR-0010 的理由）。
 - **commit wasm 的版本釘選，或以自寫 script 計算輸入 hash**：釘選每次改 `wasm/**` 都要另外 bump；自寫 hash 要處理檔案順序與換行字元。git tree hash 本來就是 `wasm/` 內容的確定 hash，build 又是 bit-for-bit 可重現的，tag 已經足以識別一個 build。
-- **另開 wasm workflow**：Engine 的 CI 要等另一個 workflow 發完 Release，兩者會競爭。改為同一個 `ci.yml` 的第一個 job `ensure-wasm`，其他 job 都 `needs` 它。
+- **另開 wasm workflow**：Engine 的 CI 要等另一個 workflow 發完 Release，兩者會競爭。改為同一個 `ci.yml` 的 job `ensure-wasm`，需要 wasm 的 job 都 `needs` 它。
 - **glue 讓 App 的 bundler 打包**：要靠 bundler 保留 `/*! … */` 的 license header，Vite 或 Rolldown 每次改版都要重新確認。改為把 glue 與 `.wasm` 當成原封不動的資產，App 的 Vite 只複製並加上 hash。
 - **Engine 自己先 bundle（Vite library mode、tsdown）**：Engine 多一套 bundler 設定，App 的 Vite 仍會再處理一次 `new Worker`。改為 tsc 輸出不 bundle 的 ESM，以 Vite fixture App 的驗收擋住出錯。
 
 ## Consequences
 
-- CI 只有一個 `ci.yml`：`ensure-wasm`（tag 已存在就跳過，否則在 Docker 內 build、檢查 `config.h` 為 LGPL、發 Release）→ `check`（lint、typecheck、Vitest）→ `e2e`（Playwright Chromium 跑 Demo 頁，加上 Vite fixture App 的驗收：license header 完整、`application/wasm`、streaming compile）→ `release`（只在 `v*` tag 時執行）。cache 只用來加速：pnpm store、Playwright 的瀏覽器、上游 tarball、產生的測試媒體。
+- push、PR 與 tag 的 CI 只有一個 `ci.yml`：`ensure-wasm`（tag 已存在就跳過，否則在 Docker 內 build、檢查 `config.h` 為 LGPL、發 Release）與 `check`（lint、typecheck、Node 測試）平行 → `browser`（Chromium 與 Firefox 的 Vitest browser mode 與 Playwright 跑 Demo 頁，加上 Vite fixture App 的驗收：license header 完整、`application/wasm`、streaming compile）→ `release`（只在 `v*` tag 時執行）。Safari 的排程 job 另外開，見[測試規範](../testing.md#本機與-ci)。cache 只用來加速：pnpm store、Playwright 的瀏覽器、上游 tarball、產生的測試媒體。
 - `ensure-wasm` 在本 repo 每個 branch 的 push 都會執行，被放棄的 PR 會留下沒人用的 wasm Release。只要有 Engine 版本引用的 wasm Release 就永遠不刪，其他的可以手動清掉。
-- 本機開發用 `pnpm wasm:fetch` 下載與 tree hash 相符的 Release，修改 `wasm/**` 時用 `pnpm wasm:build` 在 Docker 內 build。`dev`、`test`、`build` 會先檢查 `wasm/dist/` 是否符合目前的 tree hash，不符合就停下並提示指令，不會自動下載。
+- 本機開發用 `pnpm wasm:fetch` 下載與 tree hash 相符的 Release，修改 `wasm/**` 時用 `pnpm wasm:build` 在 Docker 內 build。`dev`、`build`、`test:browser`、`e2e` 會先檢查 `wasm/dist/` 是否符合目前的 tree hash，不符合就停下並提示指令，不會自動下載。
 - 打包規則：
   - Worker 一律寫成 `new Worker(new URL('./….js', import.meta.url), { type: 'module' })`，由 App 的 Vite bundle。
   - AudioWorklet 是不 import 任何東西的單一檔案，因為 `addModule(new URL(…))` 只會被原樣複製。

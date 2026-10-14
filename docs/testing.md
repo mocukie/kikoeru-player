@@ -1,0 +1,100 @@
+# kikoeru-player 測試規範
+
+本文件規定測試的分層、瀏覽器、測試媒體、故障注入、實機清單與每張實作 issue 的最低要求。目錄位置見[架構規則「目錄結構」](architecture.md#目錄結構)，指令見 [README「常用指令」](../README.md#常用指令)。
+
+## 測試分層
+
+| 層 | 測什麼 | 位置與檔名 | 指令 |
+|---|---|---|---|
+| Node（Vitest node project） | 純邏輯：指令佇列、取代、epoch、time map、錯誤分類、重試、LRU、ring buffer 水位與 hysteresis | 與原始碼並列的 `*.test.ts` | `pnpm test` |
+| browser mode（Vitest browser project） | libav.js 的 demux 與解碼、media Worker（含真實 Worker 對協定的行為）、filter graph（`atempo`、重採樣、downmix）、`VideoDecoder`、AudioWorklet | 與原始碼並列的 `*.browser.test.ts` | `pnpm test:browser` |
+| E2E（Playwright） | 對 Demo 頁測整個播放流程、A/V 同步、leak | `test/e2e/` | `pnpm e2e` |
+
+### Node 層
+
+- 主執行緒與 Worker 之間的訊息協定是這一層的測試接縫：測試以內部的 `createEngineWith(deps)` 注入假 media Worker 與假音訊輸出來驅動 `Engine`。`createEngineWith` 不放進 package `exports`，公開的 `createEngine()` 只是帶真實 deps 呼叫它。
+- 假 Worker 放在 `test/fakes/`，由測試腳本控制每個回覆的時機與內容，不重新實作 Worker 的行為；協定型別與真實 Worker 共用（`src/protocol/`）。
+- seek／load 被取代、destroy 中途、Worker 崩潰成 `INTERNAL` 這些競態，都在這層以決定性的方式測。
+- 快取與重試用 `test/fakes/` 的記憶體 `Source` 測。
+
+### browser mode
+
+- seek 的起點精準度在這層比對解碼後的 PCM（preroll 依 [ADR-0003](adr/0003-decode-paths.md)）：0 sample；經重採樣的路線 ≤ 1 sample。
+
+### E2E
+
+- 對 Demo 頁執行。Demo 頁沿用 spike 的事件 log，並提供公開 API 的操作。
+- **自動同步斷言**：用 Playwright init script 包住 `AudioNode.prototype.connect`，在接到 `destination` 的地方旁接錄音 worklet 偵測 beep 起點，並讀 canvas pixel 偵測白框。錄音點在 `destination` 之前，比對時要扣掉 Engine 回報的輸出延遲。公開 API 不為此改變。
+
+  | 斷言 | 容差 |
+  |---|---|
+  | beep 起點對 `currentTime` | ≤ 20 ms |
+  | 白框對 beep | ≤ 1 個影片 frame + 1 個 rAF（30 fps 約 50 ms） |
+  | 音軌 offset ±500 ms | 方向正確，誤差 ≤ 20 ms |
+  | `atempo` 1.25x 的 beep 間隔 | 0.8 s ± 10 ms |
+
+  容差寫成常數集中在 `test/e2e/` 的一個檔案，flaky 時只調那裡。
+- **leak 測試**：連續 load 100 次，混入被取代的 load、播放中 destroy、外掛音軌，使用 CI 組的短檔。斷言：
+  - 以 CDP 數 Worker target，並在 GC 後量 JS heap。
+  - `getStats().resources = { workers, libavInstances, openVideoFrames }`：destroy 後全為 0；換檔後 `workers` 為 1、`libavInstances` 等於來源數。
+  - `network.inflight` 為空。
+
+## 瀏覽器
+
+- **Chromium 與 Firefox**：在同一個 Linux 的 Playwright 官方 image 內跑 browser mode 與 E2E，兩者都是 PR 必須通過的檢查。
+  - 只給 Firefox 起 PulseAudio null sink；Chromium 不接 PulseAudio，否則時鐘會亂。
+  - Chromium 用 `--autoplay-policy=no-user-gesture-required`，Firefox 用 `media.autoplay.default=0`，或在出聲前 `userEvent.click()`。不依賴 Playwright `evaluate` 自帶的 gesture。
+  - Firefox 的 H.264／AAC 需要系統的 libavcodec（官方 image 已有）；HEVC 在 Firefox 與 Chromium 都只測不支援路徑。
+  - Firefox 解出的 `VideoFrame` 是 `BGRX`，Chromium 是 `I420`，繪製路徑兩種都要涵蓋。
+  - Linux 的 Playwright WebKit 不跑：媒體走 GStreamer，行為不代表 Safari。
+- **Safari**：macOS runner 上的 job，headed、serial，只跑 browser mode 中和平台有關的一小組測試：AudioWorklet 能出聲、`interrupted` 與解鎖、worklet 收 transferred `MessagePort`、WebCodecs H.264／VP9，以及 AV1 回報 `'platform'` 的路徑。不跑 E2E。job 開始時以 `system_profiler SPAudioDataType` 檢查音訊裝置，沒有就直接失敗。觸發時機：每週排程、手動觸發與 push `v*` tag 發版前，不擋 PR。
+- **iOS／Android**：只用實機，不用 Simulator，見下方「實機清單」。
+
+實作細節（PulseAudio、autoplay、libavcodec、`webdriverio@9` 的坑、runner 的音訊裝置與 Safari 版本）見 [桌面 Firefox、Safari 的媒體測試自動化](https://github.com/mocukie/kikoeru-player/blob/research/browser-automation/docs/research/browser-automation.md)。
+
+## 測試媒體
+
+- 產生 script 在 `test/media/`（`gen-media.sh`、`gen-subs.py`），FFmpeg image 釘 digest，輸出放 gitignored 的 `test/media/out/`。
+- **CI 組**（`pnpm media:gen`）：短檔（幾秒到 20 秒），涵蓋全部 codec、多軌、內嵌 SRT／ASS、外掛音軌，以及壞檔（截斷、壞封包、假副檔名）。
+- **手動組**（`pnpm media:gen:manual`）：長檔（45 分鐘 MP3、660 MB WAV），只在實機或記憶體測試時產生。
+- CI 依 script 內容的 hash 快取產物。
+- 測試只依賴媒體內容的特徵（beep 位置、時長、軌道組成），不依賴 byte 一致。
+- 原則上不 commit 二進位檔；script 做不出來而需要 commit 時，**先問過 user**。
+
+## HTTP 來源與故障注入
+
+`test/server/` 的 Vite middleware 供 browser mode 與 Demo 頁共用：
+
+- `/media/*` 提供 `test/media/out/` 的檔案，支援 Range。
+- 故障由 query 參數控制，例如 `?fault=503@2`、`stall@1MB`、`drop@500KB`、`delay=200`；401 也由它模擬。
+
+不需要 kikoeru 後端。cookie、`.wasm` 的 Content-Type 與壓縮屬於 kikoeru 端的部署驗證。
+
+## 實機清單
+
+- [`device-checklist.md`](device-checklist.md)，桌面（Firefox、Safari）與手機（iOS Safari、Android Chrome）分開列。
+- 桌面部分只留自動化涵蓋不到的項目（真實喇叭與藍牙切換、長時間播放）。
+- Demo 頁的事件 log 有「複製」按鈕；dev server 開 HTTPS（自簽），讓手機以 LAN IP 連線（AudioWorklet 需要 secure context）。
+- 執行時機：每次發 minor 版本前，以及改到 [ADR-0004](adr/0004-audio-output.md)（音訊輸出）或 [ADR-0006](adr/0006-background-playback-module.md)（背景播放模組）的範圍時。結果貼成 issue 留言。
+
+## 本機與 CI
+
+| 場合 | 指令或 job | 內容 |
+|---|---|---|
+| 本機（agent 必須通過） | `pnpm verify` | lint → typecheck → Node 測試 → browser mode（Chromium）→ E2E（Chromium） |
+| 本機重現 CI | `pnpm verify:docker` | 在 Playwright 官方 image 內跑 Chromium 與 Firefox 的完整組合 |
+| CI `ensure-wasm` | | wasm Release 不存在時才 build 並發布（[ADR-0005](adr/0005-wasm-release-and-engine-package.md)） |
+| CI `check` | 與 `ensure-wasm` 平行 | lint、typecheck、Node 測試 |
+| CI `browser` | 依賴 `ensure-wasm` 與媒體快取 | Chromium 與 Firefox 的 browser mode 與 E2E（含 leak 測試），以及 Vite fixture App 的驗收 |
+| CI Safari | macOS runner，排程 | 見上方「瀏覽器」 |
+
+PR 必須 `check` 與 `browser` 都通過。
+
+## 每張實作 issue 的最低要求
+
+1. 新增或修改的純邏輯：Node 測試涵蓋 issue 中列出的邊界情況。新增的指令要有競態測試：被取代、執行中 destroy、Worker 崩潰。
+2. 改到 media Worker、wasm、WebCodecs 或 AudioWorklet：browser mode 測試。
+3. App 看得到的播放行為：Demo 頁加上對應的操作與事件 log，並有 E2E 測試；可以量化同步的地方使用集中管理的容差常數。
+4. 改到 [ADR-0004](adr/0004-audio-output.md) 或 [ADR-0006](adr/0006-background-playback-module.md) 的範圍，或新增平台相關的行為：更新 [`device-checklist.md`](device-checklist.md) 的項目（不必每張 issue 都實際跑一次）。
+5. leak 測試保持通過；新增的資源計入 `getStats().resources`。
+6. 本機 `pnpm verify` 通過，CI 的 `check` 與 `browser` 都通過。
