@@ -314,3 +314,46 @@ decode-only fps（Chromium／WebKit／Firefox）：
 - **只開 8-bit 的 dav1d 體積**、**`ASYNCIFY_REMOVE` 排除 dav1d 函式後主 variant 的速度**：都沒有 build。
 - **libav.js thr build 的 memory grow 問題**：只在本次的 direct 模式用法確認；libav.js 自己的 `threads` 模式、`ALLOW_MEMORY_GROWTH` 與 growable `SharedArrayBuffer` 的組合沒有逐一查證，也還沒回報 upstream。
 - **libav.js 下一個 release**：dav1d 目前只在 master，什麼時候進 tag 未知；之後升級時要重新確認 `mk/libdav1d.mk` 的版本與選項。
+
+## spike 的使用方式
+
+位置：branch `research/wasm-video-decode` 的 `research/wasm-video-decode-spike/`（拋棄式）。build 產物與媒體不進 git；量到的原始數據在 `data/`，進度清單在 `PROGRESS.md`。
+
+```sh
+S=research/wasm-video-decode-spike
+$S/build.sh /tmp/wv oz o3 o3s mix          # libav.js c05a676 + dav1d 1.5.4，產物在 /tmp/wv/dist
+$S/gen-media.sh /tmp/wv/media              # 下載 BBB／ToS（核對 sha256）並用 libaom 編碼
+(cd $S && npm install)                     # playwright 1.63.0，與 Docker image 一致
+$S/bench.sh /tmp/wv/dist /tmp/wv/media /tmp/wv/res single flavors threads pipeline vfcost skip mix
+$S/native-bench.sh /tmp/wv /tmp/wv/media /tmp/wv/res/native.tsv 1 2 4
+$S/build-times.sh /tmp/wv /tmp/wv/res/build-times.tsv
+node $S/measure.mjs /tmp/wv/dist; node $S/summarize.mjs /tmp/wv/res
+```
+
+| 檔案 | 內容 |
+|---|---|
+| `Dockerfile`、`build.sh`、`variants.sh`、`*.patch` | emsdk 6.0.5（digest）＋meson；variant 與 flavor；#10／#17／#18 的 wrapper patch |
+| `gen-media.sh` | 測試媒體 |
+| `lib.mjs`、`dec.mjs` | 載入 libav.js（direct 模式）、demux、dav1d 的開啟與逐封包解碼、I420 取出 |
+| `t-decode.mjs` | §2–§4、§7 的解碼量測（Worker；`node-run.mjs` 可在 Node 跑） |
+| `m-pipeline.mjs` | §6 的完整路徑 |
+| `t-vfcost.mjs` | §6 的 VideoFrame 建立與取出成本 |
+| `run.mjs`、`run-docker.sh`、`server.mjs`、`main.mjs`、`worker.mjs`、`index.html` | Playwright runner（沿用 #17／#18），server 可帶 COOP／COEP |
+| `bench.sh`、`summarize.mjs` | 報告用的整組量測與表格 |
+| `native-bench.sh` | 原生 dav1d 對照 |
+| `build-times.sh` | §5 的 build 時間 |
+| `measure.mjs` | §5 的體積 |
+
+## 來源
+
+- libav.js：PR #108 https://github.com/Yahweasel/libav.js/pull/108 ；commit `f8f1e84`、`430ae83`、`c05a676`（`mk/libdav1d.mk`、`patches/dav1d.diff`、`mk/emscripten.meson.cross`、`configs/fragments/decoder-libdav1d/*`、`configs/configs/decoder-dav1d/*`、`configs/mkconfigs.js`、`Makefile.m4`、`docs/API.md`、`README.md`）；tags 與 Actions 執行紀錄 — https://github.com/Yahweasel/libav.js ；npm `libav.js` 版本列表
+- dav1d 1.5.4：`COPYING`、`README.md`、`NEWS`、`include/dav1d/dav1d.h`（`Dav1dDecodeFrameType`）、`src/lib.c`（`fc_lut`）、`meson.build` — https://code.videolan.org/videolan/dav1d/-/tree/1.5.4 ；release `0.2.0`（iPhone XS 1080p 80 fps）— https://code.videolan.org/videolan/dav1d/-/releases/0.2.0 ；與 wasm 相關的 MR（!606、!1239、!1491、!1492）
+- FFmpeg 9.0：`libavcodec/libdav1d.c`（L206–242：thread、grain、`skip_frame`）、`configure`（`EXTERNAL_LIBRARY_LIST`）— https://ffmpeg.org/releases/ffmpeg-9.0.tar.xz
+- WebKit（main，2026-10-13）：`Source/WebCore/Modules/webcodecs/WebCodecsVideoFrame.cpp`、`VideoPixelFormat.idl`、`Source/WebCore/platform/graphics/cv/VideoFrameCV.mm`、`Source/ThirdParty/libwebrtc/Source/webrtc/webkit_sdk/WebKit/WebKitUtilities.mm`、`Source/WTF/Scripts/Preferences/UnifiedWebPreferences.yaml` — https://github.com/WebKit/WebKit
+- WebKit blog：「WebKit Features in Safari 16.4」https://webkit.org/blog/13966/webkit-features-in-safari-16-4/ ；「New WebKit Features in Safari 15.2」https://webkit.org/blog/12140/new-webkit-features-in-safari-15-2/
+- MDN browser-compat-data：`http/headers/Cross-Origin-Embedder-Policy.json`、`webassembly/fixed-width-SIMD.json`、`webassembly/threads-and-atomics.json`、`webassembly/relaxed-SIMD.json`、`api/VideoFrame.json` — https://github.com/mdn/browser-compat-data
+- ogv.js：`buildscripts/compileDav1dWasm.sh`、`dav1d-wasm-cross.txt`、`compile-options.sh` — https://github.com/bvibber/ogv.js ；av1-demo README — https://github.com/bvibber/av1-demo
+- J-B Kempf「A few reminders about dav1d」（dav1d 0.7.0 mobile）— https://jbkempf.com/blog/dav1d-0.7.0-mobile-focus/
+- SPIE 12226「Benchmarking and analysis of AV1 software decoding on Android devices」（2022，只讀摘要）— https://doi.org/10.1117/12.2633692
+- 媒體：Big Buck Bunny、Tears of Steel（Blender Foundation，CC BY 3.0）— https://download.blender.org/demo/movies/
+- 本 repo 前置研究：#5（`webcodecs-support.md`）、#10（`ffmpeg-wasm-build.md`）、#17（`libavjs-runtime-behavior.md`）、#18（`audiodecoder-evaluation.md`），以及 ADR-0001、0002、0003
