@@ -23,12 +23,21 @@ export interface EngineOptions {
   canvas?: HTMLCanvasElement | null;
   /** timeupdate 的最小間隔（ms），預設 250。 */
   timeUpdateInterval?: number;
-  /** 記憶體上限；數值待「記憶體上限」一題定案，這裡只留入口。 */
+  /**
+   * 記憶體與預讀（ADR-0007）。預讀在 bytes 層的 Range 快取，封包佇列、影片 frame 佇列與 wasm heap 上限
+   * 都是內部常數，不在這裡設定。預設值依 iOS／Android／桌面分級，與 `audioBuffer` 共用平台判斷。
+   */
   limits?: {
-    /** Range 快取（LRU）上限，bytes。 */
+    /**
+     * Range 快取（LRU）上限，bytes，主來源與外掛音軌共用；只有 http 來源經過快取。
+     * 預設：桌面 128 MiB，Android 與 iOS 64 MiB。
+     */
     cacheBytes?: number;
-    /** 解碼前封包佇列上限，秒。 */
-    packetQueueSeconds?: number;
+    /**
+     * 每個選用中來源的預讀目標，秒（以位元組率換算成 bytes）。達到目標就停止抓取，掉到一半以下才恢復；
+     * 單一來源最多用掉 cacheBytes 的 75%。暫停、ready 與背景時也繼續預讀。預設 60。
+     */
+    readaheadSeconds?: number;
   };
   /**
    * 讀取失敗的自動重試：只針對 5xx 與網路錯誤，以指數退避重試；401／403／404 不重試、直接回報。
@@ -90,7 +99,10 @@ export interface Engine extends EventTarget {
   readonly currentTime: number;
   /** 總長度；未知時為 NaN。 */
   readonly duration: number;
-  /** 已緩衝範圍（媒體時間），依起點排序、不重疊。 */
+  /**
+   * 已緩衝範圍（媒體時間），依起點排序、不重疊。是估計值（ADR-0007）：http 來源最多一段，
+   * 從 currentTime 起長 bufferAhead 秒，播放位置之前仍在快取中的資料不列入；bytes／blob 來源為 [0, duration]。
+   */
   readonly buffered: readonly TimeRange[];
   /** 當前媒體的 probe 結果；idle 時為 null。 */
   readonly media: MediaInfo | null;
@@ -169,6 +181,7 @@ export interface Engine extends EventTarget {
    * 不會自動選用；要用 selectTracks({ audio: track.id }) 切過去。
    * 外掛音軌屬於當前媒體，下一次 load()／unload() 時一併移除，reload() 時保留。
    * 載入失敗時 reject 非致命的 EngineError（fatal: false），主媒體繼續播放。
+   * 每份媒體最多 4 條外掛音軌，超過時 reject 非致命的 EngineError('MEMORY_LIMIT')。
    */
   addExternalAudio(source: Source, options?: { offset?: number; label?: string }): Promise<AudioTrack>;
   removeExternalAudio(trackId: string): Promise<void>;
@@ -457,6 +470,7 @@ export declare class TracksChangeEvent extends Event {
   readonly tracks: readonly Track[];
   readonly selected: Readonly<TrackSelection>;
 }
+/** buffered 的終點變動 ≥ 0.5 秒時發出，並受 timeUpdateInterval 節流。 */
 export declare class BufferedChangeEvent extends Event {
   readonly buffered: readonly TimeRange[];
 }
@@ -502,6 +516,7 @@ export type EngineErrorCode =
   | 'AUDIO_OUTPUT' //            AudioContext／AudioWorklet 無法啟動或恢復
   | 'ASSET_LOAD_FAILED' //       wasm／Worker／worklet 載入失敗
   | 'DESTROYED' //               destroy() 之後呼叫指令
+  | 'MEMORY_LIMIT' //            wasm heap 到達上限、交錯不良的檔案讓封包佇列超過硬上限（致命）；外掛音軌超過 4 條（非致命）
   | 'INTERNAL';
 
 /**
@@ -550,7 +565,19 @@ export interface EngineStats {
   audio: { ringMs: number; underruns: number; outputLatencyMs: number };
   video: { decoded: number; dropped: number; decodeQueueSize: number; avgDecodeMs: number } | null;
   packetQueue: { audioSeconds: number; videoSeconds: number; bytes: number };
-  cache: { bytes: number; limitBytes: number; hits: number; misses: number };
+  /**
+   * aheadBytes：選用中來源已預讀、在播放位置之後的 bytes 合計；readaheadTarget：其目標 bytes 合計；
+   * fetching：是否有來源處於 hysteresis 的抓取階段。
+   */
+  cache: {
+    bytes: number;
+    limitBytes: number;
+    aheadBytes: number;
+    readaheadTarget: number;
+    fetching: boolean;
+    hits: number;
+    misses: number;
+  };
   network: { bytesLoaded: number; inflight: { url: string; start: number; end: number; elapsedMs: number }[] };
   /** 所有 wasm instance 的 heap 合計。 */
   wasmHeapBytes: number;
