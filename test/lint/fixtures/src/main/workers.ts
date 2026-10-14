@@ -13,4 +13,5 @@ export const workers = [
   new Worker(new URL('./worker.js', import.meta.url), options),
   new Worker(new URL('./worker.js', import.meta.url), { type: 'module', name: 'media' }),
   new Worker(new URL('/worker.js', import.meta.url), { type: 'module' }),
+  new globalThis.Worker(new URL('./worker.js', import.meta.url), { type: 'module' }),
 ];

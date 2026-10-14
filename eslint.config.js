@@ -16,7 +16,7 @@ const boundaries = /** @type {import('eslint').ESLint.Plugin} */ (
 /** 只有 type 的 import／export，用於 worklet/ 與 protocol/（硬性約束第 7 條）。 */
 const typeOnlyImports = [
   {
-    selector: 'ImportDeclaration[importKind="value"]',
+    selector: ':matches(ImportDeclaration, TSImportEqualsDeclaration)[importKind="value"]',
     message: '這裡只能使用 import type。',
   },
   {
@@ -31,40 +31,52 @@ const typeOnlyImports = [
     selector: 'ImportExpression',
     message: '這裡不能使用動態 import。',
   },
-  {
-    selector: 'TSImportEqualsDeclaration[importKind="value"]',
-    message: '這裡只能使用 import type。',
-  },
 ];
+
+/** protocol/ 只放 type，不宣告任何 runtime 值。 */
+const typeOnlyDeclarations = {
+  selector: [
+    ':matches(Program, ExportNamedDeclaration) > ',
+    ':matches(VariableDeclaration, FunctionDeclaration, ClassDeclaration, TSEnumDeclaration, TSModuleDeclaration, ExpressionStatement)',
+    ', ExportDefaultDeclaration',
+  ].join(''),
+  message: 'protocol/ 只能宣告 type 與 interface。',
+};
 
 /**
  * Worker 只能以字面寫法建立（硬性約束第 6 條）：
  * `new Worker(new URL('./….js', import.meta.url), { type: 'module' })`。
  * 路徑必須是 `./` 或 `../` 開頭、`.js` 結尾的字串字面值（例如主執行緒的 `'../worker/index.js'`）。
  */
-const literalWorker = {
-  selector: [
-    'NewExpression[callee.name="Worker"]:not(',
-    '[arguments.length=2]',
-    '[arguments.0.type="NewExpression"]',
-    '[arguments.0.callee.name="URL"]',
-    '[arguments.0.arguments.length=2]',
-    '[arguments.0.arguments.0.type="Literal"]',
-    String.raw`[arguments.0.arguments.0.value=/^\.\.?\/.*\.js$/]`,
-    '[arguments.0.arguments.1.type="MemberExpression"]',
-    '[arguments.0.arguments.1.object.type="MetaProperty"]',
-    '[arguments.0.arguments.1.object.meta.name="import"]',
-    '[arguments.0.arguments.1.property.name="url"]',
-    '[arguments.1.type="ObjectExpression"]',
-    '[arguments.1.properties.length=1]',
-    '[arguments.1.properties.0.computed=false]',
-    '[arguments.1.properties.0.key.name="type"]',
-    '[arguments.1.properties.0.value.value="module"]',
-    ')',
-  ].join(''),
-  message:
-    "Worker 只能寫成 new Worker(new URL('./….js', import.meta.url), { type: 'module' })，App 的 Vite 才能辨識。",
-};
+const literalWorker = [
+  {
+    selector: [
+      'NewExpression[callee.name="Worker"]:not(',
+      '[arguments.length=2]',
+      '[arguments.0.type="NewExpression"]',
+      '[arguments.0.callee.name="URL"]',
+      '[arguments.0.arguments.length=2]',
+      '[arguments.0.arguments.0.type="Literal"]',
+      String.raw`[arguments.0.arguments.0.value=/^\.\.?\/.*\.js$/]`,
+      '[arguments.0.arguments.1.type="MemberExpression"]',
+      '[arguments.0.arguments.1.object.type="MetaProperty"]',
+      '[arguments.0.arguments.1.object.meta.name="import"]',
+      '[arguments.0.arguments.1.property.name="url"]',
+      '[arguments.1.type="ObjectExpression"]',
+      '[arguments.1.properties.length=1]',
+      '[arguments.1.properties.0.computed=false]',
+      '[arguments.1.properties.0.key.name="type"]',
+      '[arguments.1.properties.0.value.value="module"]',
+      ')',
+    ].join(''),
+    message:
+      "Worker 只能寫成 new Worker(new URL('./….js', import.meta.url), { type: 'module' })，App 的 Vite 才能辨識。",
+  },
+  {
+    selector: 'NewExpression > MemberExpression.callee[property.name="Worker"]',
+    message: 'Worker 只能以全域的 Worker 建立，不能寫成 globalThis.Worker 之類的屬性存取。',
+  },
+];
 
 /**
  * @param {string} rootDir 套件根目錄；依賴規則的路徑都相對於它。lint fixture 測試以 fixture 目錄呼叫。
@@ -88,7 +100,7 @@ export function createConfig(rootDir) {
       rules: {
         '@typescript-eslint/consistent-type-imports': 'error',
         '@typescript-eslint/consistent-type-exports': 'error',
-        'no-restricted-syntax': ['error', literalWorker],
+        'no-restricted-syntax': ['error', ...literalWorker],
       },
     },
     {
@@ -100,10 +112,22 @@ export function createConfig(rootDir) {
       languageOptions: { globals: globals.node },
     },
     {
-      files: ['src/worklet/**', 'src/protocol/**'],
+      files: ['src/worklet/**'],
       ignores: ['**/*.test.ts'],
       rules: {
-        'no-restricted-syntax': ['error', literalWorker, ...typeOnlyImports],
+        'no-restricted-syntax': ['error', ...literalWorker, ...typeOnlyImports],
+      },
+    },
+    {
+      files: ['src/protocol/**'],
+      ignores: ['**/*.test.ts'],
+      rules: {
+        'no-restricted-syntax': [
+          'error',
+          ...literalWorker,
+          ...typeOnlyImports,
+          typeOnlyDeclarations,
+        ],
       },
     },
     {

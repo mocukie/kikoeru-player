@@ -36,6 +36,9 @@ function violationsOf(file: string): Violation[] {
   return found;
 }
 
+const boundary = { ruleId: 'boundaries/dependencies', line: 1 };
+const restricted = (line: number) => ({ ruleId: 'no-restricted-syntax', line });
+
 describe('依賴規則', () => {
   it.each([
     'src/index.ts',
@@ -46,39 +49,37 @@ describe('依賴規則', () => {
     'src/background/index.ts',
     'test/fakes/fake-worker.ts',
     'src/main/engine.test.ts',
+    'demo/main.ts',
   ])('%s 沒有違規', (file) => {
     expect(violationsOf(file)).toEqual([]);
   });
 
-  it('main/ 不能 import worker/', () => {
-    expect(violationsOf('src/main/imports-worker.ts')).toEqual([
-      { ruleId: 'boundaries/dependencies', line: 1 },
-    ]);
-  });
-
-  it('只有測試檔可以 import test/fakes/', () => {
-    expect(violationsOf('src/main/imports-fakes.ts')).toEqual([
-      { ruleId: 'boundaries/dependencies', line: 1 },
-    ]);
-  });
-
-  it('test/fakes/ 只能 import protocol/', () => {
-    expect(violationsOf('test/fakes/imports-main.ts')).toEqual([
-      { ruleId: 'boundaries/dependencies', line: 1 },
-    ]);
-  });
-
-  it('worklet/ 不能 import runtime 值', () => {
-    expect(violationsOf('src/worklet/imports-runtime.ts')).toEqual([
-      { ruleId: 'no-restricted-syntax', line: 1 },
-      { ruleId: 'boundaries/dependencies', line: 1 },
-    ]);
-  });
-
-  it('background/ 不能 import main/', () => {
-    expect(violationsOf('src/background/imports-main.ts')).toEqual([
-      { ruleId: 'boundaries/dependencies', line: 1 },
-    ]);
+  it.each([
+    ['src/index.ts 不能 import worker/', 'src/index-imports-worker.ts', [boundary]],
+    ['main/ 不能 import worker/', 'src/main/imports-worker.ts', [boundary]],
+    ['worker/ 不能 import main/', 'src/worker/imports-main.ts', [boundary]],
+    ['只有測試檔可以 import test/fakes/', 'src/main/imports-fakes.ts', [boundary]],
+    ['test/fakes/ 只能 import protocol/', 'test/fakes/imports-main.ts', [boundary]],
+    ['background/ 不能 import main/', 'src/background/imports-main.ts', [boundary]],
+    ['demo/ 不能 import main/', 'demo/imports-main.ts', [boundary]],
+    [
+      'worklet/ 不能 import runtime 值',
+      'src/worklet/imports-runtime.ts',
+      [restricted(1), boundary],
+    ],
+    [
+      'worklet/ 不能 re-export runtime 值或動態 import',
+      'src/worklet/reexports-runtime.ts',
+      [restricted(1), restricted(2), restricted(3)],
+    ],
+    [
+      'protocol/ 不能 import runtime 值',
+      'src/protocol/imports-runtime.ts',
+      [restricted(1), boundary],
+    ],
+    ['protocol/ 不能宣告 runtime 值', 'src/protocol/runtime-value.ts', [restricted(1)]],
+  ])('%s', (_name, file, expected) => {
+    expect(violationsOf(file)).toEqual(expected);
   });
 });
 
@@ -86,7 +87,7 @@ describe('Worker 的寫法', () => {
   it('只接受字面寫法', () => {
     // 第 5 行是唯一合法的寫法，其餘每一行都是一種非字面寫法。
     expect(violationsOf('src/main/workers.ts')).toEqual(
-      [6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((line) => ({
+      [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].map((line) => ({
         ruleId: 'no-restricted-syntax',
         line,
       })),

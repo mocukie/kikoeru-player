@@ -1,3 +1,3 @@
-import { MESSAGE_TYPES } from '../protocol/messages.js';
+import { createEngine } from '../main/engine.js';
 
-export const types = MESSAGE_TYPES;
+export const engine = createEngine;

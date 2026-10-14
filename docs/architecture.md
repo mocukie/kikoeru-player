@@ -79,7 +79,9 @@ Node 測試（`*.test.ts`）與 browser mode 測試（`*.browser.test.ts`）都�
 
 - `main/` 與 `worker/` 不互相 import。主執行緒只透過 `new Worker(new URL(...))` 啟動 Worker，雙方只以 `protocol/` 的型別溝通。
 - `background/` 只用公開 API，證明 core 提供的 hook 足夠（[ADR-0006](adr/0006-background-playback-module.md)）。
-- 測試檔（`*.test.ts`）可以 import 任何元素；同一個元素內的 import 不受限制，但 `worklet/` 與 `protocol/` 內仍只能 `import type`。
+- 同一個元素內的 import 不受依賴規則限制；但 `worklet/` 與 `protocol/` 的非測試檔一律只能 `import type`，`protocol/` 也不宣告任何 runtime 值。
+- 測試檔（`*.test.ts`）可以 import 任何元素，也不受上一條的 `import type` 限制。
+- `new Worker(...)` 只能用全域的 `Worker` 與下方「不變式」的字面寫法；`globalThis.Worker` 之類的屬性存取一律擋下。
 
 ## tsconfig
 
