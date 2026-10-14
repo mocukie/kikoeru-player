@@ -68,6 +68,10 @@ _Avoid_: 主時鐘、master clock、系統時間
 想播放卻在時限內等不到資料的情況，Engine 會自動嘗試恢復。
 _Avoid_: 凍結、freeze、hang、lag
 
+**預讀（Readahead）**:
+在播放位置之後、事先抓取來源資料，讓網路變慢時仍能繼續播放；以秒數為目標，記憶體上限由 Engine 的設定決定。
+_Avoid_: 預載、緩衝、preload、prefetch、buffer（指這個動作時）
+
 **重新載入（Reload）**:
 以同一份媒體重新開檔，保留位置、播放意圖、選軌、外掛音軌與音軌 offset。
 _Avoid_: 重試、retry、refresh
