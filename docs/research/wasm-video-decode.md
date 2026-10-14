@@ -201,3 +201,21 @@ decode-only fps（Chromium／WebKit／Firefox）：
   - 8-bit 的取出加 VideoFrame 每張 1.5–3 ms，約佔 1080p 解碼時間的 7–10%；`drawImage` 在主執行緒，不佔 Worker。
   - **10-bit 的 JS 轉換每張 7–11 ms（1080p）**，讓 `o3s` 的 1080p 10-bit 從 decode-only 37 fps 掉到 25–28 fps，**從可即時變成跟不上**。這段應該放進 wasm 做（C 迴圈加 `-msimd128`，或在 dav1d wasm 內加一個小的轉換函式），預期可降到接近 8-bit 取出的 1–2 ms [推論，未實作]。用 libswscale 也可以，但 variant 要多帶 swscale。
   - transfer 延遲 p50 ≤ 1 ms（Chromium 偶爾 2.5 ms），與 #17 相同。WebKit 的 1px readback 約 3–4 ms，也與 #17 相同（軟體繪製）。
+
+## 7. 跟不上時能省什麼：掉格、grain、seek
+
+**AV1 的掉格幾乎省不到解碼時間；能省的是 film grain 與輸出端** [實測：`data/skip.json`；原始碼]。
+
+- **只解 reference frame**：FFmpeg 的 `skip_frame=noref` 對應 dav1d 的 `DAV1D_DECODEFRAMETYPE_REFERENCE`。但它只在 `libdav1d_init` 讀一次，執行中要切換就得關掉重開 decoder，而重開只能從 keyframe 開始 [原始碼：FFmpeg 9.0 `libavcodec/libdav1d.c` L237–242；dav1d `include/dav1d/dav1d.h`]。
+
+| 檔案 | 一般（frame 數／fps） | `skip_frame=noref`（frame 數／fps，Chromium／WebKit／Firefox） |
+|---|---|---|
+| bbb-1080-8-2M | 600／43.4 | 582／42.8、42.0、45.2 |
+| bbb-1080-10-6M | 600／33.2 | 587／32.7、33.1、32.4 |
+| tos-800-8-3M-grain | 480／18.6 | 477／18.5、17.9、18.7 |
+
+  libaom（good、alt-ref）的檔案裡 **97–99% 的 frame 都會被參照**，跳過 non-reference frame 只少了 0.6–3% 的 frame，速度幾乎沒變。AV1 的 inter frame 一般都會更新參考緩衝區，不像 H.264 常見的 non-reference B-frame，所以「跟不上就丟 frame」在 AV1 只能丟**輸出**（不取出、不建 VideoFrame、不畫），省下的是 §6 的 1.5–3 ms（8-bit）或 7–11 ms（10-bit 的 JS 轉換），不是解碼本身 [推論，依實測]。
+- **film grain**：`tos-800-8-3M-grain` 關掉 grain 合成（`export_side_data=film_grain`，decoder 只輸出參數）後，從 18.6 fps 回到 22.4–23.0 fps（快 20–24%），與沒有 grain 的同一段（23.5 fps）幾乎相同。代價是畫面少了 grain。這是唯一「執行中可以視情況放棄、又省得多」的項目，但它也只在 open 時讀取，切換需要重開 decoder [原始碼：`libdav1d.c` L219–222]。
+- **解析度上限**：同一部片的 720p 版本比 1080p 快 2–2.4 倍（§2）。如果來源同時提供多種解析度，這是最有效的手段；kikoeru 的媒體通常只有一個檔案，Engine 能做的只有「判斷能不能播」[推論]。
+- **seek 的代價**：精準 seek 要從前一個 keyframe 解到目標。本次的檔案 GOP 4 秒（實際 20 秒內有 9 個 keyframe），以 `o3s` 1080p 的 23–30 ms／frame 計算，最壞要先解約 120 個 frame，也就是 **2.8–3.6 秒**；`oz` 是 4.8–6 秒。實拍 ToS 是 96 個 frame × 42 ms ≈ 4 秒 [推論，依 §2 的 per-frame 時間]。用 keyframe 附近的快速 seek（只對齊到 keyframe）可以避開，但會與 ADR-0003「精準 seek」的定義衝突，要在 #21 決定。
+- **Worker 被佔住的時間**：單執行緒時，一個 alt-ref 封包的解碼最多 300–370 ms（`o3s`，1080p；`oz` 517–644 ms）。這段期間呼叫端的 Worker 完全被佔住。如果 dav1d 跟音訊解碼、Range I/O 放在同一個 media Worker（ADR-0002 現在的分工），音訊的供料會被擋住同樣長的時間 [推論]。
