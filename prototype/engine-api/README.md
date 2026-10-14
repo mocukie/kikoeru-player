@@ -79,3 +79,5 @@
   - `ended` 時 `paused` 維持 false（與 `HTMLMediaElement` 不同），背景接下一首時 anchor 不會停；App 不接下一首時自己 `pause()`。
   - `play()`／`pause()` 改變 `paused` 時，在呼叫內同步發出 `statechange`（`state` 沒變時 `state === previous`）。
   - `LogEntry.scope` 新增 `'background'`。
+- 「測試策略」（#22）：
+  - `EngineStats` 新增 `resources: { workers, libavInstances, openVideoFrames }`，leak 測試以它加上 `network.inflight` 斷言 destroy 後資源歸零。

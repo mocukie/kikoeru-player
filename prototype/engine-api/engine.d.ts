@@ -554,4 +554,9 @@ export interface EngineStats {
   network: { bytesLoaded: number; inflight: { url: string; start: number; end: number; elapsedMs: number }[] };
   /** 所有 wasm instance 的 heap 合計。 */
   wasmHeapBytes: number;
+  /**
+   * 存活中的資源數，用於診斷 leak：destroy() 後全為 0；換檔後 workers 為 1、
+   * libavInstances 等於來源數（主來源加外掛音軌）。
+   */
+  resources: { workers: number; libavInstances: number; openVideoFrames: number };
 }
