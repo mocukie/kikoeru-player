@@ -292,3 +292,25 @@ decode-only fps（Chromium／WebKit／Firefox）：
   - `sources/` 附上 `dav1d-1.5.4.tar.bz2`（BSD-2 不要求附原始碼，但 libav.js 的 `make release` 也是這樣做，`mk/libdav1d.mk` 的 `dav1d-release`），並在 `BUILD.md` 記下版本、sha256 與 meson 選項。
   - dav1d 不改變 FFmpeg 的 LGPL 狀態：configure 裡 `libdav1d` 屬於一般的 `EXTERNAL_LIBRARY_LIST`，不在 GPL／nonfree／version3 清單；`kikoeru-afv` 的 `config.h` 仍是 `CONFIG_GPL 0`、`CONFIG_NONFREE 0`、`LGPL version 2.1 or later` [實測]。
 - 原始碼樹裡 `THANKS.md` 等不需要隨 binary 附上。
+
+## 10. 實機清單
+
+在 Demo 頁上線後，用 iPhone／iPad／Mac 的 Safari 補量（建議至少一台舊機，例如 A12／A13 世代，與一台近兩年的機種）：
+
+- [ ] 單執行緒 dav1d（建議的 `mix` 或 `o3s` flavor）在 720p 與 1080p、8-bit 與 10-bit、動畫與實拍的 decode-only fps 與 preroll。直接用本次的 `t-decode.mjs` 與同一批媒體，讓數字可以和本報告的表對照。
+- [ ] 同上，在 Engine 實際條件下：音訊同時在解碼與 `atempo`、主執行緒在畫 canvas、螢幕亮著與鎖屏、低電量模式、持續 5 分鐘以上（降頻）。
+- [ ] `crossOriginIsolated` 頁面上的 thr build：2／3／4 threads 的 fps，以及效能核心與節能核心的差異。
+- [ ] Safari（CoreVideo）由 I420 buffer 建 `VideoFrame` 的耗時（I420 → NV12 `CVPixelBuffer` 的轉換）、transfer 與 `drawImage` 的成本，以及 10-bit 轉 8-bit 後的畫質是否可接受。
+- [ ] 1080p 播放 10 分鐘的記憶體（獨立 dav1d instance 的 heap 峰值、WebKit 的 PSS），以及 iOS 是否因記憶體壓力殺掉分頁。
+- [ ] 耗電：同一段影片，dav1d 軟解與 H.264 硬解的電量差。
+
+## 11. 未驗證
+
+- **手機上的實際速度**：§8 的推估沒有實機根據；本次所有數字都來自 x86 的伺服器核心、Linux、headless。
+- **10-bit 轉 8-bit 放進 wasm 後的成本**：只推估會接近 8-bit 取出（1–2 ms），沒有實作。
+- **dav1d 的記憶體峰值**：沒有量 1080p／10-bit 時 wasm heap grow 到多大。
+- **SVT-AV1 或其他編碼器的檔案**：本次只用 libaom（good、cpu-used 6）。不同編碼器的 frame 結構（non-reference frame 比例、tiles、alt-ref）會影響 §2 的 preroll 與 §7 的掉格結論；YouTube 等平台的實際檔案沒有測。
+- **60 fps 與 4K**：沒有測。依 per-frame 時間，60 fps 的需求是 30 fps 的兩倍 [推論]。
+- **只開 8-bit 的 dav1d 體積**、**`ASYNCIFY_REMOVE` 排除 dav1d 函式後主 variant 的速度**：都沒有 build。
+- **libav.js thr build 的 memory grow 問題**：只在本次的 direct 模式用法確認；libav.js 自己的 `threads` 模式、`ALLOW_MEMORY_GROWTH` 與 growable `SharedArrayBuffer` 的組合沒有逐一查證，也還沒回報 upstream。
+- **libav.js 下一個 release**：dav1d 目前只在 master，什麼時候進 tag 未知；之後升級時要重新確認 `mk/libdav1d.mk` 的版本與選項。
