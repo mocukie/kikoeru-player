@@ -219,3 +219,23 @@ decode-only fps（Chromium／WebKit／Firefox）：
 - **解析度上限**：同一部片的 720p 版本比 1080p 快 2–2.4 倍（§2）。如果來源同時提供多種解析度，這是最有效的手段；kikoeru 的媒體通常只有一個檔案，Engine 能做的只有「判斷能不能播」[推論]。
 - **seek 的代價**：精準 seek 要從前一個 keyframe 解到目標。本次的檔案 GOP 4 秒（實際 20 秒內有 9 個 keyframe），以 `o3s` 1080p 的 23–30 ms／frame 計算，最壞要先解約 120 個 frame，也就是 **2.8–3.6 秒**；`oz` 是 4.8–6 秒。實拍 ToS 是 96 個 frame × 42 ms ≈ 4 秒 [推論，依 §2 的 per-frame 時間]。用 keyframe 附近的快速 seek（只對齊到 keyframe）可以避開，但會與 ADR-0003「精準 seek」的定義衝突，要在 #21 決定。
 - **Worker 被佔住的時間**：單執行緒時，一個 alt-ref 封包的解碼最多 300–370 ms（`o3s`，1080p；`oz` 517–644 ms）。這段期間呼叫端的 Worker 完全被佔住。如果 dav1d 跟音訊解碼、Range I/O 放在同一個 media Worker（ADR-0002 現在的分工），音訊的供料會被擋住同樣長的時間 [推論]。
+
+## 8. 外部資料：Safari、iPhone／iPad
+
+**適用範圍：Safari 上所有的 AV1 都會走 dav1d，不只是沒有硬體 decoder 的舊機** [已查證]。
+
+- WebKit 的 `WebCodecsAV1Enabled` 是 `preview`，Cocoa 預設 false（GStreamer 才是 true）[原始碼：`UnifiedWebPreferences.yaml`，與 #5 的結論相同]。所以就算 iPhone 15 Pro（A17 Pro）以後與 M3 以後的 Mac 有 AV1 硬體 decoder，`VideoDecoder` 也不接受 `av01`。軟體解碼要覆蓋所有 Safari，包括最舊、最慢的支援機種。
+- Safari 的 wasm 能力：SIMD 128 位 16.4 起 [WebKit「WebKit Features in Safari 16.4」：「In WebAssembly, we've added support for 128-bit SIMD.」]；threads（需 COOP／COEP）15.2 起；COEP `credentialless` 不支援；relaxed SIMD 只在 preview [BCD]。`VideoFrame` 建構子 16.4 起 [BCD]，10-bit buffer 格式見 §6。
+
+**iPhone／iPad 的 dav1d 數據很少，而且都是原生、帶 NEON 組語** [已查證]：
+
+- dav1d 0.2.0（2019）release notes：「achieves 1080p at 80fps on an iPhone XS」[VideoLAN GitLab，tag `0.2.0`]。未註明 thread 數與內容（dav1d 預設用全部核心）。
+- J-B Kempf「dav1d 0.7.0 mobile focus」：Android 手機上 dav1d 可在 LITTLE 核心用 2 threads 解 Netflix 的 Chimera 樣本到 24 fps，結論是「It can decode 1080p with a couple of cores on mobile」。沒有 iOS 數據。
+- SPIE 2022「Benchmarking and analysis of AV1 software decoding on Android devices」：dav1d 4 threads 在高中階 Android 手機可即時 1080p30 @ 4 Mbps，低階機 720p30 @ 2 Mbps（引自摘要）。
+- **找不到 wasm 版 dav1d 在 iPhone／iPad（或任何手機）上的公開數據**。Brion Vibber 的 av1-demo（ogv.js 的 dav1d）README 寫著 Safari 只能單執行緒、沒有 wasm SIMD，「360p30 or 480p24 is about the limit on a fast Mac or iPad」。這是 Safari 16.4 之前、dav1d 早期版本的狀況，只能當下限參考。
+
+**由本次數據推估手機（全部是 [推論]，要實機確認）**：
+
+- 原生數據不能直接套用：本機上 wasm（`o3s`）只有原生組語的 18–31%（§2）。用 iPhone XS 原生 80 fps（多執行緒）乘上 0.2–0.3，單執行緒的 wasm 會遠低於 30 fps。
+- 換個角度：本機一顆 Zen 2 伺服器核心，`o3s` 單執行緒 1080p 動畫有 1.1–1.5 倍、實拍不到 1 倍。近幾代 iPhone 的效能核心單執行緒通常比這顆核心快，但手機會降頻、Safari 也同時在畫 UI，而且 Engine 的音訊解碼與 filter 也要用 CPU。所以合理的預期是：**720p（含 10-bit）單執行緒在近幾代 iPhone／iPad 上可以即時；1080p 只有動畫類、低 bitrate 的內容有機會，實拍 1080p 單執行緒不行**。
+- 舊機（例如 A12／A13 世代，iOS 18 仍支援）與節能模式下的 iPad，連 720p 實拍都可能不夠，需要實機數據才能決定門檻。
