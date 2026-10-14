@@ -22,6 +22,6 @@
 - [x] 外部資料整理（報告 §8）：iOS／iPad dav1d 數據（dav1d 0.2.0：iPhone XS 1080p 80fps，native）、Safari wasm SIMD 16.4／threads 15.2／COEP credentialless 不支援（BCD）、WebKit VideoFrame 格式（原始碼）、WebCodecs AV1 在 Cocoa 預設關
 - [x] 授權／NOTICE（報告 §9）：dav1d BSD-2，glue 的 license header 已自動帶入 dav1d 條文；kikoeru-afv 仍是 LGPL
 - [x] 報告 `docs/research/wasm-video-decode.md`：結論先講、對 #21 的含意、§0–§11、spike 用法、來源都已寫完
-- [ ] resolution 文字、一行 gist、branch／SHA
+- [x] resolution 文字、一行 gist、branch／SHA：已交回 parent session（issue 與 map 由 parent 記錄）
 
-下一步：整理 resolution 文字與一行 gist，交回給 parent session（不碰 issue 與 map）。
+下一步：無（#20 完成）。實機項目見報告 §10。
