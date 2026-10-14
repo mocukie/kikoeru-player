@@ -239,3 +239,16 @@ decode-only fps（Chromium／WebKit／Firefox）：
 - 原生數據不能直接套用：本機上 wasm（`o3s`）只有原生組語的 18–31%（§2）。用 iPhone XS 原生 80 fps（多執行緒）乘上 0.2–0.3，單執行緒的 wasm 會遠低於 30 fps。
 - 換個角度：本機一顆 Zen 2 伺服器核心，`o3s` 單執行緒 1080p 動畫有 1.1–1.5 倍、實拍不到 1 倍。近幾代 iPhone 的效能核心單執行緒通常比這顆核心快，但手機會降頻、Safari 也同時在畫 UI，而且 Engine 的音訊解碼與 filter 也要用 CPU。所以合理的預期是：**720p（含 10-bit）單執行緒在近幾代 iPhone／iPad 上可以即時；1080p 只有動畫類、低 bitrate 的內容有機會，實拍 1080p 單執行緒不行**。
 - 舊機（例如 A12／A13 世代，iOS 18 仍支援）與節能模式下的 iPad，連 720p 實拍都可能不夠，需要實機數據才能決定門檻。
+
+## 9. 授權與 NOTICE
+
+**dav1d 是 BSD-2-Clause，只需要在發布物附上版權聲明、兩條條件與免責聲明；libav.js 的 build 已經自動把它放進 glue 的 license header** [已查證、實測]。
+
+- dav1d 1.5.4 的 `COPYING`：「Copyright © 2018-2025, VideoLAN and dav1d authors. All rights reserved.」加 BSD-2 的兩條條件。第 2 條要求 binary 形式的散布「must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution」。README 說明刻意採用寬鬆授權，以便嵌入任何軟體。
+- wasm 會編進去的 `src/*.c`、`src/*.h` 全部是同一份 BSD-2 header。另有其他授權的檔案只有 `src/ext/x86/x86inc.asm`（ISC）與 `include/compat/getopt.h`（tools 用），在 `-Denable_asm=false`、tools 關閉的 wasm build 都不會用到 [實測：逐檔比對 header]。
+- libav.js 的 `decoder-libdav1d` fragment 帶 `license.js`，build 出來的 `*.wasm.mjs` 開頭 `/*! … */` 會多一段「dav1d:」與完整的 BSD-2 條文（`kikoeru-afv`、`kikoeru-dav1d` 都有，`kikoeru-af` 沒有）[實測]。跟 FFmpeg 的 LGPL header 一樣，**bundler 不能把它剝掉**（#10 的合規清單已有這一項）。
+- 要加進 #10 的 NOTICE／合規清單的項目：
+  - `NOTICE` 列出 dav1d 的版權聲明與 BSD-2 全文（Release tarball 與 App 的授權頁都要能看到）。
+  - `sources/` 附上 `dav1d-1.5.4.tar.bz2`（BSD-2 不要求附原始碼，但 libav.js 的 `make release` 也是這樣做，`mk/libdav1d.mk` 的 `dav1d-release`），並在 `BUILD.md` 記下版本、sha256 與 meson 選項。
+  - dav1d 不改變 FFmpeg 的 LGPL 狀態：configure 裡 `libdav1d` 屬於一般的 `EXTERNAL_LIBRARY_LIST`，不在 GPL／nonfree／version3 清單；`kikoeru-afv` 的 `config.h` 仍是 `CONFIG_GPL 0`、`CONFIG_NONFREE 0`、`LGPL version 2.1 or later` [實測]。
+- 原始碼樹裡 `THANKS.md` 等不需要隨 binary 附上。
