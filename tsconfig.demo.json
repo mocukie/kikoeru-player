@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "types": [],
+    "noEmit": true,
+    "tsBuildInfoFile": "node_modules/.tmp/tsconfig.demo.tsbuildinfo"
+  },
+  "include": ["demo"]
+}
