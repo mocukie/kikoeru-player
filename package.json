@@ -25,7 +25,7 @@
     "LICENSES/"
   ],
   "scripts": {
-    "build": "rm -rf dist && tsc -b tsconfig.build.json --force",
+    "build": "node scripts/check-wasm.ts && rm -rf dist && tsc -b tsconfig.build.json --force",
     "typecheck": "tsc -b",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
@@ -35,7 +35,9 @@
     "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:browser --project chromium && pnpm e2e --project chromium",
     "verify:docker": "test/docker/run.sh sh -c 'pnpm lint && pnpm typecheck && pnpm test && pnpm test:browser && pnpm e2e'",
     "media:gen": "test/media/gen-media.sh ci",
-    "media:gen:manual": "test/media/gen-media.sh manual"
+    "media:gen:manual": "test/media/gen-media.sh manual",
+    "wasm:fetch": "node scripts/wasm-fetch.ts",
+    "wasm:build": "node scripts/wasm-build.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
