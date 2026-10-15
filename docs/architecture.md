@@ -126,7 +126,7 @@ Node 測試（`*.test.ts`）與 browser mode 測試（`*.browser.test.ts`）都�
 
 ### 時間與音訊
 
-- **對外的時間**一律在媒體時間軸上，單位是秒；容器的 pts、time_base、`start_time` 只在 Worker 內換算。
+- **對外的時間**一律在媒體時間軸上，單位是秒；容器的 pts、time_base、`start_time` 只在 Worker 內換算。例外是診斷用的時間戳：`StallEvent.since` 與 `LogEntry.time` 是主執行緒的 `performance.now()`（ms），標示事件發生的時刻，不是媒體位置。
 - **音訊時鐘**是唯一的時鐘，由 worklet 推進；影片與字幕都依它對齊，不使用 `performance.now()` 當播放時鐘（[ADR-0004](adr/0004-audio-output.md)）。
 - **`AudioContext`**：整個 Engine 一個；`suspend()`、`resume()`、`close()` 一律經 Engine 自己的串行佇列，不依賴 `state` 判斷流程。
 - **音訊解碼**只走 wasm，影片解碼只走 WebCodecs（[ADR-0003](adr/0003-decode-paths.md)）。
