@@ -2,7 +2,7 @@
 
 Engine 使用的 FFmpeg wasm：libav.js 的自訂 variant，Asyncify 單一 build。決定與理由見 [ADR-0001](../docs/adr/0001-libavjs-asyncify.md)、[ADR-0003](../docs/adr/0003-decode-paths.md)、[ADR-0005](../docs/adr/0005-wasm-release-and-engine-package.md)。
 
-本目錄的內容決定 wasm Release 的 tag：`ffmpeg-wasm-<libav.js 版本>-<wasm/ 的 git tree hash 前 8 碼>`。改動任何檔案都會產生新的 tag，CI 的 `ensure-wasm` 會 build 並發布新的 Release。
+本目錄的內容決定 wasm Release 的 tag：`ffmpeg-wasm-<libav.js 版本>-<wasm/ 的 git tree hash 前 8 碼>`。改動任何檔案都會產生新的 tag，CI 的 `ensure-wasm` 會 build，`publish-wasm` 發布新的 Release。
 
 | 檔案 | 內容 |
 |---|---|
