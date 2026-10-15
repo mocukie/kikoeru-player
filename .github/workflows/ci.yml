@@ -30,3 +30,35 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+
+  browser:
+    # needs: ensure-wasm 由 media Worker 的 issue 接上。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # 測試媒體依產生 script 的內容快取；script 沒變就不重新產生。
+      - name: Restore test media
+        id: media
+        uses: actions/cache/restore@v6
+        with:
+          path: test/media/out
+          key: test-media-${{ hashFiles('test/media/gen-media.sh', 'test/media/gen-subs.py') }}
+      # 與 pnpm media:gen 相同；這個 job 的 host 不安裝 Node 與 pnpm。
+      - name: Generate test media
+        if: steps.media.outputs.cache-hit != 'true'
+        run: test/media/gen-media.sh ci
+      # 產生完立刻存，後面的測試失敗也不必重新產生。
+      - name: Save test media
+        if: steps.media.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: test/media/out
+          key: ${{ steps.media.outputs.cache-primary-key }}
+      # 瀏覽器在 Playwright image 內，不另外快取；這裡快取 container 內 pnpm install 用的 store。
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/kikoeru-player/docker-pnpm-store
+          key: docker-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: docker-pnpm-store-
+      - name: Browser mode and E2E (Chromium, Firefox)
+        run: test/docker/run.sh sh -c 'pnpm test:browser && pnpm e2e'

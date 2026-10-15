@@ -59,7 +59,8 @@ export default defineConfig({
 ### 環境
 
 - [mise](https://mise.jdx.dev/)：`mise install` 安裝 `mise.toml` 鎖定的 Node 與 pnpm，再 `pnpm install`。
-- Docker：`pnpm wasm:build`、`pnpm media:gen` 與 `pnpm verify:docker` 需要。
+- Docker：`pnpm wasm:build`、`pnpm media:gen` 與 `pnpm verify:docker` 需要；`pnpm media:gen` 另需 python3。
+- 瀏覽器：`pnpm exec playwright install --with-deps chromium`（`pnpm verify` 用；`--with-deps` 以 sudo 安裝系統函式庫）。Firefox 用 `pnpm verify:docker` 在 container 內跑。
 - 第一次開發前先執行 `pnpm wasm:fetch` 與 `pnpm media:gen`。
 
 ### 常用指令
