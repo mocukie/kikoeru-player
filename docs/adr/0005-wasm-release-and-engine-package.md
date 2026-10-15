@@ -2,8 +2,8 @@
 
 wasm 與 Engine 分成兩層產物：
 
-- **wasm Release**：`wasm/` 目錄放 Dockerfile、variant、patch、版本與 sha256 清單、build script。Release tag 為 `ffmpeg-wasm-<libav.js 版本>-<wasm/ 的 git tree hash 前 8 碼>`（`git rev-parse HEAD:wasm`），內容是 `dist/`、`sources/`、`NOTICE`、LGPL 全文與 `SHA256SUMS`。repo 不 commit 任何版本釘選，用哪一個 wasm 由 `wasm/` 的內容決定。
-- **Engine 套件**：套件名稱 `kikoeru-player`，版本號為 SemVer（從 `0.1.0` 開始）。發版時 push `v*` tag，CI 確認 tag 與 `package.json` 的版本一致後 `pnpm pack`，把 tgz 附在 GitHub Release 上。套件內附 wasm、glue、frontend 的複本與 `wasm.json`（對應的 wasm Release tag 與 sha256），不含 `sources/`。kikoeru 的 `package.json` 寫 tarball URL，lockfile 記錄 integrity。
+- **wasm Release**：`wasm/` 目錄放 Dockerfile、variant、patch、版本與 sha256 清單、build script。Release tag 為 `ffmpeg-wasm-<libav.js 版本>-<wasm/ 的 git tree hash 前 8 碼>`（`git rev-parse HEAD:wasm`），內容是 dist 檔案（wasm、glue、frontend 與型別）、`sources.tar`（LGPL 的對應原始碼）、`NOTICE`、LGPL 全文與 `SHA256SUMS`，都是 Release 的平面檔案；`wasm/dist/` 是其中 `sources.tar` 以外的檔案。repo 不 commit 任何版本釘選，用哪一個 wasm 由 `wasm/` 的內容決定。
+- **Engine 套件**：套件名稱 `kikoeru-player`，版本號為 SemVer（從 `0.1.0` 開始）。發版時 push `v*` tag，CI 確認 tag 與 `package.json` 的版本一致後 `pnpm pack`，把 tgz 附在 GitHub Release 上。套件內附 wasm、glue、frontend 的複本與 `wasm.json`（對應的 wasm Release tag 與 sha256），不含 `sources.tar`。kikoeru 的 `package.json` 寫 tarball URL，lockfile 記錄 integrity。
 
 kikoeru-player 改為 public，Engine 自己的程式碼採 MIT，wasm 維持 LGPL-2.1-or-later；公開的 wasm Release 就是 LGPL §6 要求的原始碼提供處。
 

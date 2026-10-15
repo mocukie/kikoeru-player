@@ -93,20 +93,23 @@ for (const file of files) {
   for (const stream of audio) {
     const codec = await libav.avcodec_get_name(stream.codec_id);
     const label = `${file} #${stream.index}（${codec}）`;
-    const r = await decode(stream, packets[stream.index] ?? []);
+    const result = await decode(stream, packets[stream.index] ?? []);
     // 開頭的 priming 與結尾的 padding 不一定被裁掉（ADTS 等），容許 ±10%。
     check(
-      Math.abs(r.samples - SAMPLE_RATE) <= SAMPLE_RATE * 0.1,
-      `${label}：解出 ${r.samples} 個 sample`,
+      Math.abs(result.samples - SAMPLE_RATE) <= SAMPLE_RATE * 0.1,
+      `${label}：解出 ${result.samples} 個 sample`,
     );
     check(
-      r.formats.size === 1 && r.formats.has(libav.AV_SAMPLE_FMT_FLTP),
+      result.formats.size === 1 && result.formats.has(libav.AV_SAMPLE_FMT_FLTP),
       `${label}：輸出不是 fltp`,
     );
-    check(r.rates.size === 1 && r.rates.has(SAMPLE_RATE), `${label}：取樣率不是 ${SAMPLE_RATE}`);
-    check(r.peak > 0.05, `${label}：輸出是靜音（peak ${r.peak}）`);
-    check(r.command === 0, `${label}：avfilter_graph_send_command 回傳 ${r.command}`);
-    console.log(`${label}：${r.samples} samples，peak ${r.peak.toFixed(2)}`);
+    check(
+      result.rates.size === 1 && result.rates.has(SAMPLE_RATE),
+      `${label}：取樣率不是 ${SAMPLE_RATE}`,
+    );
+    check(result.peak > 0.05, `${label}：輸出是靜音（peak ${result.peak}）`);
+    check(result.command === 0, `${label}：avfilter_graph_send_command 回傳 ${result.command}`);
+    console.log(`${label}：${result.samples} samples，peak ${result.peak.toFixed(2)}`);
   }
 
   if (file === 'multi.mka') {

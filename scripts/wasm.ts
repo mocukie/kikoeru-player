@@ -23,6 +23,11 @@ export const SOURCES_ASSET = 'sources.tar';
 /** 標示 wasm/dist/ 對應哪一個 Release tag 的檔案；wasm:fetch 與 wasm:build 最後才寫入。 */
 const STAMP = '.stamp';
 
+/** wasm/build.sh 的工作目錄（gitignored）：release/ 是 Release 的全部檔案，config.h 供 LGPL 檢查。 */
+export function wasmWorkDir(root: string): string {
+  return join(root, 'wasm', '.work');
+}
+
 export function wasmDistDir(root: string): string {
   return join(root, 'wasm', 'dist');
 }

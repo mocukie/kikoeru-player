@@ -4,10 +4,17 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { brotliCompressSync, constants } from 'node:zlib';
-import { checkLgpl, installWasmDist, repoRoot, wasmReleaseTag, wasmReleaseUrl } from './wasm.ts';
+import {
+  checkLgpl,
+  installWasmDist,
+  repoRoot,
+  wasmReleaseTag,
+  wasmReleaseUrl,
+  wasmWorkDir,
+} from './wasm.ts';
 
 const tag = wasmReleaseTag(repoRoot);
-const work = join(repoRoot, 'wasm', '.work');
+const work = wasmWorkDir(repoRoot);
 console.log(`build ${tag}`);
 
 const build = spawnSync(join(repoRoot, 'wasm', 'build.sh'), [tag, wasmReleaseUrl(repoRoot, tag)], {

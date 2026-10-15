@@ -77,7 +77,7 @@ jobs:
       - run: pnpm test
 
   browser:
-    # needs: ensure-wasm 由 media Worker 的 issue 接上。
+    needs: ensure-wasm
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -106,4 +106,4 @@ jobs:
           key: docker-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: docker-pnpm-store-
       - name: Browser mode and E2E (Chromium, Firefox)
-        run: test/docker/run.sh sh -c 'pnpm test:browser && pnpm e2e'
+        run: test/docker/run.sh sh -c 'pnpm wasm:fetch && pnpm test:browser && pnpm e2e'

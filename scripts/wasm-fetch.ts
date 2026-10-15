@@ -10,6 +10,7 @@ import {
   SOURCES_ASSET,
   wasmAssetUrl,
   wasmReleaseTag,
+  wasmWorkDir,
 } from './wasm.ts';
 
 const tag = wasmReleaseTag(repoRoot);
@@ -29,7 +30,7 @@ async function download(file: string): Promise<Uint8Array> {
 
 console.log(`下載 ${tag}`);
 const sums = await download('SHA256SUMS');
-const work = join(repoRoot, 'wasm', '.work');
+const work = wasmWorkDir(repoRoot);
 mkdirSync(work, { recursive: true });
 const tmp = mkdtempSync(join(work, 'fetch-'));
 try {
