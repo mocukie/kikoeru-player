@@ -1,0 +1,70 @@
+# libav.js 的 configuration fragment，一行一個；# 之後為註解。
+# fragment 的命名見 libav.js 的 docs/CONFIG.md：沒有實體目錄的 fragment 會直接變成 FFmpeg 的 --enable-<kind>=<name>。
+# 新增 codec 只要改這裡（ADR-0003）。新增外部 lib 時，對照 FFmpeg configure 的 EXTERNAL_LIBRARY_GPL_LIST，不得連結 GPL 的 lib。
+
+avformat
+avcodec
+avfilter
+
+# demuxer：mov（mp4／m4a）、matroska（mkv／mka／webm）、mp3、aac（ADTS）、flac、ogg、wav、
+# WavPack（fragment 一併開 wavpack decoder）、caf、avi、aiff，以及 raw 的 ac3、eac3。
+demuxer-mp4
+demuxer-matroska
+demuxer-mp3
+demuxer-aac
+demuxer-flac
+demuxer-ogg
+demuxer-wav
+demuxer-wavpack
+demuxer-caf
+demuxer-avi
+demuxer-aiff
+demuxer-ac3
+demuxer-eac3
+
+# 音訊 decoder 全部走 wasm（ADR-0003）。mp3 只開 float 版 mp3float。
+decoder-aac
+decoder-mp3float
+decoder-alac
+decoder-flac
+decoder-vorbis
+decoder-ac3
+decoder-eac3
+decoder-pcm_s16le
+decoder-pcm_s16be
+decoder-pcm_s24le
+decoder-pcm_s24be
+decoder-pcm_s32le
+decoder-pcm_s32be
+decoder-pcm_f32le
+decoder-pcm_f32be
+decoder-pcm_f64le
+decoder-pcm_f64be
+decoder-pcm_u8
+decoder-pcm_s8
+
+# FFmpeg 9.0 的原生 opus decoder 依賴 swresample（configure：opus_decoder_deps="swresample"），
+# 沒開 swresample 時會被靜默停用。swresample 也讓 filter graph 能自動插入 aresample。
+decoder-opus
+swresample
+
+# parser：音訊的 seek 與封包切分；影片只 demux 給 WebCodecs，不開 video decoder 與 bsf。
+parser-aac
+parser-mpegaudio
+parser-flac
+parser-opus
+parser-vorbis
+parser-ac3
+parser-h264
+parser-hevc
+parser-vp9
+parser-av1
+
+# filter graph：重採樣、downmix、atempo；abuffer／abuffersink 由 FFmpeg 固定編入。
+filter-atempo
+filter-aformat
+
+# 字幕（matroska 的 ASS／SRT、mp4 的 mov_text）只要 demuxer，封包原文直接傳出，不開 subtitle decoder。
+
+# 本 repo 的 fragment（wasm/fragments/）：wasm 記憶體上限 512 MiB。
+kikoeru-memory

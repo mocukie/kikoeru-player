@@ -7,3 +7,5 @@ test/media/out/
 test-results/
 playwright-report/
 .vitest/
+wasm/dist/
+wasm/.work/

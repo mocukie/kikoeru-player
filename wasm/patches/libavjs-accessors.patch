@@ -1,0 +1,57 @@
+diff -ru a/funcs.json b/funcs.json
+--- a/funcs.json
++++ b/funcs.json
+@@ -333,11 +333,18 @@
+             ["AVStream", [
+                 "codecpar",
+                 "discard",
++                "disposition",
+                 "duration",
+                 "durationhi",
+                 "metadata",
++                "start_time",
++                "start_timehi",
+                 {"name": "time_base", "rational": true}
+             ]],
++            ["AVIOContext", [
++                "eof_reached",
++                "error"
++            ]],
+             ["AVChapter", [
+                 "end",
+                 "endhi",
+@@ -461,6 +468,7 @@
+             ["avfilter_graph_create_filter_js", "number", ["number", "string", "string", "number", "number"]],
+             ["avfilter_graph_free", null, ["number"]],
+             ["avfilter_graph_parse", "number", ["number", "string", "number", "number", "number"]],
++            ["avfilter_graph_send_command", "number", ["number", "string", "string", "string", "number", "number", "number"]],
+             ["avfilter_inout_alloc", "number", []],
+             ["avfilter_inout_free", null, ["number"]],
+             ["avfilter_link", "number", ["number", "number", "number", "number"]],
+diff -ru a/src/b-avformat.c b/src/b-avformat.c
+--- a/src/b-avformat.c
++++ b/src/b-avformat.c
+@@ -36,8 +36,10 @@
+ #define BL(type, field) AL(AVStream, type, field)
+ B(AVCodecParameters *, codecpar)
+ B(enum AVDiscard, discard)
++B(int, disposition)
+ BL(int64_t, duration)
+ B(AVDictionary *, metadata)
++BL(int64_t, start_time)
+ #undef B
+ #undef BL
+ 
+@@ -55,6 +57,12 @@
+ 
+ RAT(AVChapter, time_base)
+ 
++/* AVIOContext：讀取被中止後，Engine 要清掉 error／eof_reached 才能 seek 繼續讀 */
++#define B(type, field) A(AVIOContext, type, field)
++B(int, eof_reached)
++B(int, error)
++#undef B
++
+ int avformat_seek_file_min(
+     AVFormatContext *s, int stream_index, int64_t ts, int flags
+ ) {

@@ -94,6 +94,9 @@ export function createConfig(rootDir) {
       'test-results/',
       'playwright-report/',
       'test/media/out/',
+      // wasm 的 build 工作目錄（含 libav.js 的 clone）與產物。
+      'wasm/.work/',
+      'wasm/dist/',
     ]),
     js.configs.recommended,
     tseslint.configs.strictTypeChecked,
@@ -119,7 +122,7 @@ export function createConfig(rootDir) {
       extends: [tseslint.configs.disableTypeChecked],
     },
     {
-      files: ['*.config.{js,ts}', 'scripts/**'],
+      files: ['*.config.{js,ts}', 'scripts/**', 'wasm/**'],
       languageOptions: { globals: globals.node },
     },
     {

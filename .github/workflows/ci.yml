@@ -13,6 +13,97 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # wasm 的 Release 以 wasm/ 的 tree hash 定址：tag 已發布就跳過，否則 build、做 LGPL 檢查與 smoke test（ADR-0005）。
+  # build 不互斥：同一份 wasm/ 的產物 bit-for-bit 相同，多個 PR 同時 build 也只是重複工作；發布交給 publish-wasm。
+  ensure-wasm:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      tree: ${{ steps.release.outputs.tree }}
+      exists: ${{ steps.release.outputs.exists }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      - name: Resolve release tag
+        id: release
+        run: |
+          tag=$(node scripts/wasm-tag.ts)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "tree=$(git rev-parse HEAD:wasm)" >> "$GITHUB_OUTPUT"
+          # 只把已發布的 Release 當成存在；draft 是發布到一半的 Release。
+          if [[ $(gh release view "$tag" --json isDraft --jq .isDraft 2> /dev/null) == false ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release $tag 已存在，跳過 build。"
+          fi
+      - name: Restore upstream tarballs
+        if: steps.release.outputs.exists != 'true'
+        uses: actions/cache@v6
+        with:
+          path: wasm/.work/downloads
+          key: wasm-downloads-${{ hashFiles('wasm/versions.env') }}
+      # 包含 LGPL 檢查（config.h）與 smoke test，任一失敗都不發布。
+      - name: Build wasm
+        if: steps.release.outputs.exists != 'true'
+        run: node scripts/wasm-build.ts
+      - name: Upload release files
+        if: steps.release.outputs.exists != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm-release
+          path: wasm/.work/release/
+          if-no-files-found: error
+          retention-days: 1
+
+  # 發布同一個 tag 的 job 跨 PR 互斥（concurrency group 以 tag 命名），互斥區段只有檢查與上傳。
+  # 同一個 group 只保留一個等待中的 job：第三個 job 進來時，等待中的那個會被取消（不是失敗），重新執行即可。
+  publish-wasm:
+    needs: ensure-wasm
+    if: needs.ensure-wasm.outputs.exists != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: wasm-release-${{ needs.ensure-wasm.outputs.tag }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.ensure-wasm.outputs.tag }}
+    steps:
+      # 取得互斥後重新檢查：等待期間可能已由另一個 PR 發布。
+      - name: Check release
+        id: release
+        run: |
+          state=$(gh release view "$TAG" --json isDraft --jq .isDraft 2> /dev/null || true)
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          if [[ $state == false ]]; then
+            echo "Release $TAG 已由其他執行發布，跳過。"
+          fi
+      - name: Download release files
+        if: steps.release.outputs.state != 'false'
+        uses: actions/download-artifact@v8
+        with:
+          name: wasm-release
+          path: release
+      # 先建成 draft、上傳全部檔案後才發布，避免中途失敗留下內容不完整、卻會被當成存在的 Release。
+      # 持有互斥時仍存在的 draft 一定是之前被取消或失敗的發布留下的，沒有其他 job 在使用，刪掉重建。
+      - name: Publish release
+        if: steps.release.outputs.state != 'false'
+        env:
+          STATE: ${{ steps.release.outputs.state }}
+          TREE: ${{ needs.ensure-wasm.outputs.tree }}
+          TARGET: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [[ $STATE == true ]]; then
+            gh release delete "$TAG" --yes
+          fi
+          gh release create "$TAG" --draft --latest=false --target "$TARGET" --title "$TAG" \
+            --notes "FFmpeg（LGPL-2.1-or-later）的 wasm build，由 \`wasm/\`（tree $TREE）產生。授權與原始碼見 NOTICE 與 sources.tar。" \
+            release/*
+          gh release edit "$TAG" --draft=false --latest=false
+
   check:
     runs-on: ubuntu-latest
     steps:
@@ -32,7 +123,9 @@ jobs:
       - run: pnpm test
 
   browser:
-    # needs: ensure-wasm 由 media Worker 的 issue 接上。
+    # Release 已存在時 publish-wasm 是 skipped，仍要執行。
+    needs: [ensure-wasm, publish-wasm]
+    if: ${{ !cancelled() && needs.ensure-wasm.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.publish-wasm.result) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -61,4 +154,4 @@ jobs:
           key: docker-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: docker-pnpm-store-
       - name: Browser mode and E2E (Chromium, Firefox)
-        run: test/docker/run.sh sh -c 'pnpm test:browser && pnpm e2e'
+        run: test/docker/run.sh sh -c 'pnpm wasm:fetch && pnpm test:browser && pnpm e2e'
