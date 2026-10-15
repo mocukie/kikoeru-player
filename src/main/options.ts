@@ -65,11 +65,11 @@ export function resolveEngineOptions(
       readaheadSeconds: positive('limits.readaheadSeconds', o.limits?.readaheadSeconds ?? 60),
     },
     retry: {
-      attempts: count('retry.attempts', o.retry?.attempts ?? 3),
+      attempts: nonNegativeInteger('retry.attempts', o.retry?.attempts ?? 3),
       baseDelayMs: nonNegative('retry.baseDelayMs', o.retry?.baseDelayMs ?? 500),
     },
     stallTimeout: positive('stallTimeout', o.stallTimeout ?? 8000),
-    stallAttempts: count('stallAttempts', o.stallAttempts ?? 2),
+    stallAttempts: nonNegativeInteger('stallAttempts', o.stallAttempts ?? 2),
     preferredLanguages: {
       audio: [...(o.preferredLanguages?.audio ?? [])],
       subtitle: [...(o.preferredLanguages?.subtitle ?? [])],
@@ -99,7 +99,7 @@ function nonNegative(name: string, value: number): number {
   return value;
 }
 
-function count(name: string, value: number): number {
+function nonNegativeInteger(name: string, value: number): number {
   if (!(Number.isInteger(value) && value >= 0)) throw outOfRange(name, value, '0 以上的整數');
   return value;
 }

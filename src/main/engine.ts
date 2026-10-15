@@ -24,12 +24,12 @@ import type {
  * 決定 `audioBuffer` 與 `limits` 的預設值。
  */
 export function createEngine(options?: EngineOptions): Engine {
-  // 補齊的選項由之後的切片交給 Engine 的實作；目前只驗證。
+  // 目前只驗證；補齊的選項由「協定與指令佇列」（#33）的 createEngineWith 交給 Engine 的實作。
   resolveEngineOptions(options, detectPlatform(globalThis.navigator));
   return new EngineImpl();
 }
 
-/** 公開 API 的骨架；行為由之後的切片逐一實作。 */
+/** 公開 API 的骨架；行為由之後的實作 issue 逐一補上。 */
 class EngineImpl extends EventTarget implements Engine {
   get state(): EngineState {
     return notImplemented('state');

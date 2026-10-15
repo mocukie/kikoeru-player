@@ -35,6 +35,11 @@ describe('detectPlatform', () => {
     expect(detectPlatform({ userAgent: ua.macSafari })).toBe('desktop');
   });
 
+  it('iPhone 的 UA 不看觸控點數', () => {
+    expect(detectPlatform({ userAgent: ua.iPhone })).toBe('ios');
+    expect(detectPlatform({ userAgent: ua.iPhone, maxTouchPoints: 0 })).toBe('ios');
+  });
+
   it('沒有 navigator 時視為桌面', () => {
     expect(detectPlatform(undefined)).toBe('desktop');
   });

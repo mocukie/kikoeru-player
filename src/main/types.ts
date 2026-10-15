@@ -118,7 +118,7 @@ export type EngineState =
  *   唯一的例外是 `paused`，它是使用者意圖。
  * - `tracks` 在 `load()` 之後只因指令或降級改變（`addExternalAudio()`、`removeExternalAudio()`、
  *   `setAudioOffset()`、`selectTracks()` 發現 codec 實際不支援、播放中影片解碼失敗而退回只播音訊）。
- *   播放中才出現的 stream 只記 log、不加入。
+ *   播放中才出現的軌道只記 log、不加入。
  *
  * **指令**（`load`、`reload`、`play`、`pause`、`seek`、`selectTracks`、`addExternalAudio`、
  * `removeExternalAudio`、`setAudioOffset`、`unload`、`destroy`）一律回傳 Promise，依呼叫順序執行。
@@ -200,7 +200,7 @@ export interface Engine extends EventTarget {
   /**
    * 以同一份媒體重新開檔，用於 session 失效等錯誤之後的接續；`'ready'` 以後的任何狀態與 `'error'` 都可呼叫。
    * 保留位置（`'error'` 時取 `error.position`）、`paused`、軌道選擇、外掛音軌、各音軌 offset、音量與速度；
-   * track id 不變。重新開檔後 stream 結構與先前不同時 reject `EngineError('SOURCE_CHANGED')`。
+   * track id 不變。重新開檔後軌道的組成與先前不同時 reject `EngineError('SOURCE_CHANGED')`。
    */
   reload(): Promise<MediaInfo>;
 
@@ -320,7 +320,7 @@ export interface LoadOptions {
 
 /**
  * Engine 讀取位元組的對象。用可序列化的描述而不是物件，讓 Engine 能在任何執行緒重建讀取器；
- * 測試用 `'bytes'`，本機檔案用 `'blob'`。
+ * 測試用 `'bytes'`，本機的 `File` 用 `'blob'`。
  */
 export type Source = HttpSource | BytesSource | BlobSource;
 
@@ -332,7 +332,7 @@ export interface HttpSource {
   credentials?: RequestCredentials;
   /** 每個請求附帶的 header。 */
   headers?: Record<string, string>;
-  /** 已知的檔案大小（bytes），可省掉一次探測。 */
+  /** 已知的來源大小（bytes），可省掉一次探測。 */
   size?: number;
 }
 
@@ -372,9 +372,9 @@ export type TrackKind = Track['kind'];
 export interface TrackBase {
   /** Engine 內唯一、跨 load 不重複（`reload()` 保留），例如 `'a:1'`、`'ext:3'`。 */
   id: string;
-  /** `'container'`：容器內的 stream；`'external'`：`addExternalAudio()` 加入的來源。 */
+  /** `'container'`：容器內的軌道；`'external'`：`addExternalAudio()` 加入的來源。 */
   origin: 'container' | 'external';
-  /** 容器內的 stream index；外掛音軌為其來源內的 index。 */
+  /** 軌道在容器內的 index（libavformat 的 stream index）；外掛音軌為其來源內的 index。 */
   streamIndex: number;
   /** FFmpeg 的 codec 名稱，例如 `'aac'`、`'flac'`、`'h264'`、`'ass'`。 */
   codec: string;
@@ -551,7 +551,7 @@ export type StateChangeReason =
  * - `SOURCE_SERVER`：5xx，自動重試後仍失敗。
  * - `SOURCE_NETWORK`：網路中斷、CORS、DNS，自動重試後仍失敗。
  * - `SOURCE_RANGE_UNSUPPORTED`：伺服器不回 206。
- * - `SOURCE_CHANGED`：`reload()` 時 stream 結構與先前不同。
+ * - `SOURCE_CHANGED`：`reload()` 時軌道的組成與先前不同。
  *
  * 格式與解碼：
  * - `FORMAT_UNSUPPORTED`：probe 失敗、不認得的容器。
@@ -564,7 +564,7 @@ export type StateChangeReason =
  * - `AUDIO_OUTPUT`：AudioContext／AudioWorklet 無法啟動或恢復。
  * - `ASSET_LOAD_FAILED`：wasm、glue、Worker 或 worklet 載入失敗。
  * - `DESTROYED`：`destroy()` 之後呼叫指令。
- * - `MEMORY_LIMIT`：wasm heap 到達上限，或交錯不良的檔案讓封包佇列超過硬上限（致命）；外掛音軌超過 4 條（非致命）。
+ * - `MEMORY_LIMIT`：wasm heap 到達上限，或交錯不良的媒體讓封包佇列超過硬上限（致命）；外掛音軌超過 4 條（非致命）。
  *   重新載入也無法解決。
  * - `INTERNAL`：media Worker 崩潰等 Engine 內部的錯誤。
  */
