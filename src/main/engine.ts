@@ -1,8 +1,8 @@
 // createEngine() 與 Engine 的實作：指令佇列、狀態機與狀態鏡像。
 
 import type { ProbedMedia, WireSource, WorkletToMainMessage } from '../protocol/index.js';
-import { abortError, CommandQueue } from './command-queue.js';
-import type { AudioOutput, EngineDeps, MainHost, MediaWorker } from './deps.js';
+import { abortError, CommandQueue, deferred, type Deferred } from './command-queue.js';
+import type { AudioOutput, EngineDeps, MainHost, MediaWorker, WasmAssets } from './deps.js';
 import { EngineError } from './errors.js';
 import {
   DurationChangeEvent,
@@ -19,6 +19,7 @@ import { selectInitialTracks, toContainerTracks } from './tracks.js';
 import type {
   AudioTrack,
   Engine,
+  EngineErrorCode,
   EngineOptions,
   EngineState,
   EngineStats,
@@ -74,12 +75,6 @@ interface LoadContext {
   seek: Deferred<number> | null;
 }
 
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve(value: T): void;
-  reject(reason: unknown): void;
-}
-
 class EngineImpl extends EventTarget implements Engine {
   readonly #deps: EngineDeps;
   readonly #options: ResolvedEngineOptions;
@@ -103,10 +98,10 @@ class EngineImpl extends EventTarget implements Engine {
   #played = false;
   #worker: MediaWorker | null = null;
   #audio: AudioOutput | null = null;
-  #wasm: Promise<{ module: WebAssembly.Module; glueUrl: string }> | null = null;
-  #load: LoadContext | null = null;
+  #wasm: Promise<WasmAssets> | null = null;
+  #loadContext: LoadContext | null = null;
   #isDestroyed = false;
-  #destroyed: Promise<void> | null = null;
+  #destroying: Promise<void> | null = null;
 
   constructor(deps: EngineDeps, options: ResolvedEngineOptions) {
     super();
@@ -174,7 +169,7 @@ class EngineImpl extends EventTarget implements Engine {
   // ───────────────────────────── 指令 ─────────────────────────────
 
   load(source: Source, options: LoadOptions = {}): Promise<MediaInfo> {
-    if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    if (this.#isDestroyed) return Promise.reject(this.#destroyingError());
     return this.#queue.enqueue(
       'load',
       (signal) => this.#runLoad(source, options, signal),
@@ -187,7 +182,7 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   play(): Promise<void> {
-    if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    if (this.#isDestroyed) return Promise.reject(this.#destroyingError());
     this.#setIntent(false);
     return this.#queue.enqueue(
       'play',
@@ -197,7 +192,7 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   pause(): Promise<void> {
-    if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    if (this.#isDestroyed) return Promise.reject(this.#destroyingError());
     this.#setIntent(true);
     return this.#queue.enqueue(
       'pause',
@@ -207,11 +202,11 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   seek(time: number): Promise<number> {
-    if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    if (this.#isDestroyed) return Promise.reject(this.#destroyingError());
     if (!Number.isFinite(time)) {
       return Promise.reject(new TypeError(`seek() 的時間必須是有限數，收到 ${String(time)}`));
     }
-    if (this.#load) return this.#seekWhileLoading(this.#load, time);
+    if (this.#loadContext) return this.#seekWhileLoading(this.#loadContext, time);
     return this.#queue.enqueue(
       'seek',
       (signal) => this.#runSeek(time, signal),
@@ -236,8 +231,8 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   destroy(): Promise<void> {
-    this.#destroyed ??= this.#runDestroy();
-    return this.#destroyed;
+    this.#destroying ??= this.#runDestroy();
+    return this.#destroying;
   }
 
   attachCanvas(): void {
@@ -261,10 +256,10 @@ class EngineImpl extends EventTarget implements Engine {
       selection: noSelection,
       seek: null,
     };
-    this.#load = load;
+    this.#loadContext = load;
     signal.addEventListener('abort', () => {
       load.seek?.reject(abortReason(signal));
-      if (this.#load === load) this.#load = null;
+      if (this.#loadContext === load) this.#loadContext = null;
     });
     this.#played = false;
     this.#error = null;
@@ -281,6 +276,7 @@ class EngineImpl extends EventTarget implements Engine {
         Promise.all([this.#loadWasm(), this.#connect(audio)]),
         signal,
       );
+      signal.throwIfAborted();
       worker.post(
         {
           type: 'init',
@@ -294,8 +290,15 @@ class EngineImpl extends EventTarget implements Engine {
       worker.post({ type: 'load', epoch, source: toWireSource(source) });
 
       const probed = await this.#waitFor(() => load.probed, signal);
+      signal.throwIfAborted();
       const tracks = toContainerTracks(probed.tracks, () => ++this.#trackSeq);
-      load.info = { format: probed.format, duration: probed.duration, size: probed.size, tracks };
+      const info: MediaInfo = {
+        format: probed.format,
+        duration: probed.duration,
+        size: probed.size,
+        tracks,
+      };
+      load.info = info;
       load.selection = selectInitialTracks(tracks, options.tracks, {
         audio: options.preferredLanguages?.audio ?? this.#options.preferredLanguages.audio,
         subtitle: options.preferredLanguages?.subtitle ?? this.#options.preferredLanguages.subtitle,
@@ -315,11 +318,10 @@ class EngineImpl extends EventTarget implements Engine {
         audio: audioTrack?.streamIndex ?? null,
       });
 
-      // worklet 回報後，#reached() 發布媒體並離開 loading。
-      await this.#until(() => this.#state !== 'loading', signal);
-      this.#load = null;
-      load.seek?.resolve(this.#currentTime);
-      return load.info;
+      // worklet 回報後，#applyOutput() 結束 load、發布媒體並離開 loading。
+      await this.#until(() => this.#loadContext !== load, signal);
+      signal.throwIfAborted();
+      return info;
     } catch (error) {
       if (!signal.aborted) this.#fail(this.#toEngineError(error));
       throw error;
@@ -355,20 +357,22 @@ class EngineImpl extends EventTarget implements Engine {
     this.#assertMedia();
     const target = clamp(time, this.#duration);
     this.#beginSeek(target);
-    // worklet 回報後，#reached() 離開 seeking 並發出 seeked。
+    // worklet 回報後，#applyOutput() 離開 seeking 並發出 seeked。
     await this.#until(() => this.#state !== 'seeking', signal);
     return target;
   }
 
   async #runDestroy(): Promise<void> {
     this.#isDestroyed = true;
-    this.#queue.close(() => this.#destroyedError());
-    this.#load = null;
+    this.#queue.close(() => this.#destroyingError());
+    this.#loadContext = null;
     this.#terminateWorker();
     // 主執行緒還沒有持有任何 VideoFrame；影片的 issue 在這裡 close() 它們。
     const audio = this.#audio;
     this.#audio = null;
     audio?.disconnect();
+    this.#error = null;
+    this.#publishMedia(null, noSelection);
     this.#setState('idle', 'command', true);
     try {
       await audio?.close();
@@ -385,7 +389,8 @@ class EngineImpl extends EventTarget implements Engine {
         if (worker !== this.#worker) return;
         switch (message.type) {
           case 'probe':
-            if (this.#load && message.epoch === this.#epoch) this.#load.probed = message.media;
+            if (this.#loadContext && message.epoch === this.#epoch)
+              this.#loadContext.probed = message.media;
             break;
           case 'error': {
             if (message.epoch !== this.#epoch) return;
@@ -402,7 +407,7 @@ class EngineImpl extends EventTarget implements Engine {
           }
           case 'crash':
             this.#fail(
-              this.#internalError(`media Worker 崩潰（${message.reason}）：${message.message}`),
+              this.#fatal('INTERNAL', `media Worker 崩潰（${message.reason}）：${message.message}`),
             );
             break;
         }
@@ -410,7 +415,7 @@ class EngineImpl extends EventTarget implements Engine {
       },
       crash: (cause) => {
         if (worker !== this.#worker) return;
-        this.#fail(this.#internalError('media Worker 崩潰', cause));
+        this.#fail(this.#fatal('INTERNAL', 'media Worker 崩潰', cause));
       },
     });
     this.#worker = worker;
@@ -425,7 +430,7 @@ class EngineImpl extends EventTarget implements Engine {
         break;
       case 'playing':
       case 'paused':
-        this.#reached(message.type);
+        this.#applyOutput(message.type);
         break;
       case 'starved':
         if (this.#state === 'playing') this.#setState('buffering', 'media');
@@ -443,14 +448,19 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   /** worklet 開始輸出（`playing`）或停止輸出、資料已備妥（`paused`）。 */
-  #reached(output: 'playing' | 'paused'): void {
+  #applyOutput(output: 'playing' | 'paused'): void {
     switch (this.#state) {
-      case 'loading':
-        if (this.#load?.info) {
-          this.#publishMedia(this.#load.info, this.#load.selection);
-          this.#setState(output === 'playing' ? 'playing' : 'ready', 'media');
-        }
+      case 'loading': {
+        const load = this.#loadContext;
+        if (!load?.info) break;
+        // 先結束 load，讓 listener 內的 seek() 走一般的 seek，不再改寫起點。
+        this.#loadContext = null;
+        load.seek?.resolve(load.startTime);
+        load.seek = null;
+        this.#publishMedia(load.info, load.selection);
+        this.#setState(output === 'playing' ? 'playing' : 'ready', 'media');
         break;
+      }
       case 'seeking':
         this.#setState(
           output === 'playing' ? 'playing' : this.#played ? 'paused' : 'ready',
@@ -521,7 +531,7 @@ class EngineImpl extends EventTarget implements Engine {
 
   #flushAudio(position: number): void {
     this.#currentTime = position;
-    if (this.#load) this.#load.flushedAt = position;
+    if (this.#loadContext) this.#loadContext.flushedAt = position;
     this.#audio?.post({ type: 'flush', epoch: this.#epoch, position });
   }
 
@@ -533,7 +543,7 @@ class EngineImpl extends EventTarget implements Engine {
   /** 致命錯誤：結束當前媒體，state 進入 `'error'`，未完成的指令都以 `error` reject。不自動 reload。 */
   #fail(error: EngineError): void {
     this.#terminateWorker();
-    this.#load = null;
+    this.#loadContext = null;
     this.#error = error;
     // 停掉 ring 內剩下的聲音。
     this.#epoch++;
@@ -555,12 +565,7 @@ class EngineImpl extends EventTarget implements Engine {
           this.#onWorkletMessage(message);
         });
       } catch (cause) {
-        throw new EngineError('AUDIO_OUTPUT', {
-          fatal: true,
-          position: this.#currentTime,
-          message: '音訊輸出無法啟動',
-          cause,
-        });
+        throw this.#fatal('AUDIO_OUTPUT', '音訊輸出無法啟動', cause);
       }
     }
     return this.#audio;
@@ -570,27 +575,17 @@ class EngineImpl extends EventTarget implements Engine {
     try {
       return await audio.connect();
     } catch (cause) {
-      throw new EngineError('AUDIO_OUTPUT', {
-        fatal: true,
-        position: this.#currentTime,
-        message: 'AudioWorklet 無法接上 media Worker',
-        cause,
-      });
+      throw this.#fatal('AUDIO_OUTPUT', 'AudioWorklet 無法接上 media Worker', cause);
     }
   }
 
   /** wasm 只 compile 一次並持有；失敗時下一次 load 重試。 */
-  #loadWasm(): Promise<{ module: WebAssembly.Module; glueUrl: string }> {
-    this.#wasm ??= new Promise<{ module: WebAssembly.Module; glueUrl: string }>((resolve) => {
+  #loadWasm(): Promise<WasmAssets> {
+    this.#wasm ??= new Promise<WasmAssets>((resolve) => {
       resolve(this.#deps.loadWasm());
     }).catch((cause: unknown) => {
       this.#wasm = null;
-      throw new EngineError('ASSET_LOAD_FAILED', {
-        fatal: true,
-        position: this.#currentTime,
-        message: 'wasm 載入失敗',
-        cause,
-      });
+      throw this.#fatal('ASSET_LOAD_FAILED', 'wasm 載入失敗', cause);
     });
     return this.#wasm;
   }
@@ -636,8 +631,9 @@ class EngineImpl extends EventTarget implements Engine {
     for (const check of [...this.#waiters]) check();
   }
 
-  #internalError(message: string, cause?: unknown): EngineError {
-    return new EngineError('INTERNAL', {
+  /** 以目前位置建立致命的 `EngineError`。 */
+  #fatal(code: EngineErrorCode, message: string, cause?: unknown): EngineError {
+    return new EngineError(code, {
       fatal: true,
       position: this.#currentTime,
       message,
@@ -648,10 +644,10 @@ class EngineImpl extends EventTarget implements Engine {
   #toEngineError(error: unknown): EngineError {
     return error instanceof EngineError
       ? error
-      : this.#internalError(error instanceof Error ? error.message : String(error), error);
+      : this.#fatal('INTERNAL', error instanceof Error ? error.message : String(error), error);
   }
 
-  #destroyedError(): EngineError {
+  #destroyingError(): EngineError {
     return new EngineError('DESTROYED', { fatal: false, position: this.#currentTime });
   }
 }
@@ -659,16 +655,6 @@ class EngineImpl extends EventTarget implements Engine {
 /** 夾在 `[0, duration]`；duration 未知（NaN）時只夾下限。 */
 function clamp(time: number, duration: number): number {
   return Math.max(0, Number.isNaN(duration) ? time : Math.min(time, duration));
-}
-
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
 }
 
 /** signal abort 時以其 reason reject，不等 `promise`。 */

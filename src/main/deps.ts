@@ -15,12 +15,18 @@ export interface MainHost {
   blob: Blob;
 }
 
+/** compile 好的 wasm 與 libav.js glue 的 URL。 */
+export interface WasmAssets {
+  module: WebAssembly.Module;
+  glueUrl: string;
+}
+
 /** `createEngineWith()` 的依賴。 */
 export interface EngineDeps {
   /** 平台；決定 `audioBuffer` 與 `limits` 的預設值。 */
   platform: Platform;
   /** compile wasm 並解析 glue 的 URL；Engine 只在成功前重試，成功後持有結果給每個 Worker。 */
-  loadWasm(): Promise<{ module: WebAssembly.Module; glueUrl: string }>;
+  loadWasm(): Promise<WasmAssets>;
   /** 建立一個新的 media Worker（每次 load 一個）。 */
   createWorker(handlers: MediaWorkerHandlers): MediaWorker;
   /** 建立音訊輸出（整個 Engine 一個）；`onMessage` 接收 AudioWorklet 的訊息。 */
@@ -49,6 +55,9 @@ export interface AudioOutput {
   post(message: MainToWorkletMessage): void;
   /** 斷開 worklet。 */
   disconnect(): void;
-  /** 關閉 `AudioContext`。 */
+  /**
+   * 關閉 `AudioContext`。實作經 Engine 自己的 `AudioContext` 串行佇列並帶 timeout（硬性約束第 4 條、ADR-0004，
+   * 由「AudioContext 生命週期」#41 加入），所以這個 Promise 一定會 settle。
+   */
   close(): Promise<void>;
 }

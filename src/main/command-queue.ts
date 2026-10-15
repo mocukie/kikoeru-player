@@ -7,22 +7,39 @@ interface Entry<K> {
   readonly kind: K;
   readonly run: CommandRun<unknown>;
   readonly controller: AbortController;
-  readonly resolve: (value: unknown) => void;
-  readonly reject: (reason: unknown) => void;
+  readonly result: Deferred<unknown>;
   started: boolean;
   settled: boolean;
 }
 
-/** 被取代的指令 reject 的錯誤。 */
+/** 被取代或中止的指令 reject 的錯誤。 */
 export function abortError(): DOMException {
-  return new DOMException('被較新的指令取代', 'AbortError');
+  return new DOMException('指令被取代或中止', 'AbortError');
+}
+
+/** 可以從外部 resolve／reject 的 Promise（lib 是 es2023，沒有 `Promise.withResolvers`）。 */
+export interface Deferred<T> {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(reason: unknown): void;
+}
+
+export function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 /**
  * 串行的指令佇列。佇列頭的指令在 `enqueue()` 內同步開始執行，完成後下一個指令接著開始。
  *
- * 取代：新指令取代 `supersedes` 為 true 的所有尚未完成的指令（包括執行中的），它們以 AbortError reject，
- * 新指令排在第一個被取代者的位置；被取代的是執行中的指令時，新指令立即開始執行。
+ * 取代：新指令取代 `supersedes` 為 true 的所有尚未完成的指令（包括執行中的），它們以 AbortError reject。
+ * 被取代的包括執行中的指令時，新指令接手它的位置並立即開始執行（例如執行中的 seek 被新的 seek 取代，
+ * 不能等排在後面的 play 先完成）；否則新指令照呼叫順序排在尾端。
  */
 export class CommandQueue<K extends string> {
   readonly #entries: Entry<K>[] = [];
@@ -35,32 +52,21 @@ export class CommandQueue<K extends string> {
   ): Promise<T> {
     if (this.#closed) return Promise.reject(this.#closed());
 
-    let resolve!: (value: unknown) => void;
-    let reject!: (reason: unknown) => void;
-    const promise = new Promise<unknown>((res, rej) => {
-      resolve = res;
-      reject = rej;
-    });
     const entry: Entry<K> = {
       kind,
       run,
       controller: new AbortController(),
-      resolve,
-      reject,
+      result: deferred(),
       started: false,
       settled: false,
     };
 
-    const index = this.#entries.findIndex((e) => supersedes(e.kind));
-    if (index === -1) {
-      this.#entries.push(entry);
-    } else {
-      const superseded = this.#entries.filter((e) => supersedes(e.kind));
-      this.#entries.splice(index, 0, entry);
-      for (const e of superseded) this.#remove(e, abortError());
-    }
+    const superseded = this.#entries.filter((e) => supersedes(e.kind));
+    if (superseded[0]?.started) this.#entries.unshift(entry);
+    else this.#entries.push(entry);
+    for (const e of superseded) this.#remove(e, abortError());
     this.#pump();
-    return promise as Promise<T>;
+    return entry.result.promise as Promise<T>;
   }
 
   /** 以 `error` reject 所有尚未完成的指令；之後仍可加入新的指令。 */
@@ -79,7 +85,7 @@ export class CommandQueue<K extends string> {
     if (index !== -1) this.#entries.splice(index, 1);
     if (!entry.settled) {
       entry.settled = true;
-      entry.reject(reason);
+      entry.result.reject(reason);
     }
     entry.controller.abort(reason);
   }
@@ -95,12 +101,12 @@ export class CommandQueue<K extends string> {
     }).then(
       (value) => {
         this.#finish(head, () => {
-          head.resolve(value);
+          head.result.resolve(value);
         });
       },
       (error: unknown) => {
         this.#finish(head, () => {
-          head.reject(error);
+          head.result.reject(error);
         });
       },
     );

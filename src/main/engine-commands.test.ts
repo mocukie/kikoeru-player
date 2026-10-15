@@ -510,3 +510,100 @@ describe('ended', () => {
     expect(engine.paused).toBe(true);
   });
 });
+
+describe('review 發現的競態', () => {
+  it('load 完成後、resolve 前的 microtask 內呼叫 load()：新的 load 不受舊 load 的後續影響', async () => {
+    const { engine, deps } = setup();
+    const first = engine.load(source);
+    let second: Promise<unknown> | undefined;
+    engine.addEventListener('statechange', (event) => {
+      if (event.state === 'ready' && !second) {
+        queueMicrotask(() => {
+          second = engine.load(source);
+        });
+      }
+    });
+    await deps.workers.last.probe(audioMedia());
+    await deps.workers.last.next('start');
+    deps.audio.reply({ type: 'paused' });
+    await first.catch(() => undefined);
+
+    const worker = deps.workers.last;
+    expect(deps.workers.created).toHaveLength(2);
+    const seeking = engine.seek(3);
+    await worker.probe(audioMedia());
+    expect((await worker.next('start')).time).toBe(3);
+    deps.audio.reply({ type: 'paused' });
+    await expect(second).resolves.toMatchObject({ duration: 10 });
+    await expect(seeking).resolves.toBe(3);
+  });
+
+  it('ready 的 statechange listener 內呼叫 seek()：照一般的 seek 執行', async () => {
+    const { engine, deps } = setup();
+    const loading = engine.load(source);
+    let seeking: Promise<number> | undefined;
+    engine.addEventListener('statechange', (event) => {
+      if (event.state === 'ready' && !seeking) seeking = engine.seek(5);
+    });
+    const worker = deps.workers.last;
+    await worker.probe(audioMedia());
+    await worker.next('start');
+    deps.audio.reply({ type: 'paused' });
+    await loading;
+
+    expect(engine.state).toBe('seeking');
+    expect((await worker.next('seek')).time).toBe(5);
+    deps.audio.reply({ type: 'paused' });
+    await expect(seeking).resolves.toBe(5);
+  });
+
+  it('取代排隊中的 seek 時，新的 seek 排在佇列尾端，維持呼叫順序', async () => {
+    const { engine, deps } = await loaded();
+    const order: string[] = [];
+    void engine.play().then(() => order.push('play 1'));
+    engine.seek(1).catch(() => order.push('seek 1 aborted'));
+    void engine.play().then(() => order.push('play 2'));
+    void engine.seek(2).then(() => order.push('seek 2'));
+
+    deps.audio.reply({ type: 'playing' });
+    await flush();
+    deps.audio.reply({ type: 'playing' });
+    await flush();
+    expect(order).toEqual(['seek 1 aborted', 'play 1', 'play 2', 'seek 2']);
+  });
+
+  it('destroy 之後媒體鏡像清空', async () => {
+    const { engine, worker } = await loaded();
+    worker.crash();
+    await engine.destroy();
+    expect(engine.state).toBe('idle');
+    expect(engine.error).toBeNull();
+    expect(engine.media).toBeNull();
+    expect(engine.tracks).toEqual([]);
+    expect(engine.duration).toBeNaN();
+    expect(engine.selectedTracks).toEqual({ audio: null, video: null, subtitle: null });
+  });
+});
+
+describe('其餘指令的競態', () => {
+  it('play、pause 執行中 destroy：以 AbortError reject', async () => {
+    const { engine } = await loaded({ paused: false });
+    const pausing = engine.pause();
+    await engine.destroy();
+    await expect(rejection(pausing)).resolves.toEqual(abortError);
+
+    const other = await loaded();
+    const playing = other.engine.play();
+    await other.engine.destroy();
+    await expect(rejection(playing)).resolves.toEqual(abortError);
+  });
+
+  it('seek、play 執行中 Worker 崩潰：以 INTERNAL reject', async () => {
+    const { engine, worker } = await loaded();
+    const seeking = engine.seek(4);
+    const playing = engine.play();
+    worker.crash();
+    await expect(rejection(seeking)).resolves.toMatchObject({ code: 'INTERNAL' });
+    await expect(rejection(playing)).resolves.toMatchObject({ code: 'INTERNAL' });
+  });
+});
