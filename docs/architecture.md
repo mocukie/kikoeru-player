@@ -46,7 +46,10 @@ test/
   media/           測試媒體的產生 script；輸出到 gitignored 的 test/media/out/
   server/          Vite middleware：/media/* 的 Range 與故障注入
   fakes/           假 media Worker、假音訊輸出、記憶體 Source
-  e2e/             Playwright 測試
+  e2e/             Playwright 測試（*.spec.ts）
+  smoke/           不屬於任何原始碼的 browser mode smoke test，例如 CI 的音訊環境
+  docker/          Playwright image 加 PulseAudio，pnpm verify:docker 與 CI browser job 的執行環境
+  browser-launch.ts  Vitest browser mode 與 Playwright 共用的瀏覽器啟動設定
   fixture-app/     Vite fixture App（不加入 workspace）
   lint/            ESLint 設定的 Node 測試；fixtures/ 模仿套件目錄，固定依賴規則與 Worker 寫法
 scripts/           wasm 下載與 tree hash 檢查、notices 產生等 build 輔助 script
@@ -91,7 +94,7 @@ Node 測試（`*.test.ts`）與 browser mode 測試（`*.browser.test.ts`）都�
 - `worker`：`lib: webworker`。
 - `worklet`：`audioworklet` 的全域型別。TypeScript 沒有內建這個 lib，改用 DOM lib generator 發布的 `@types/audioworklet`（`types: ["audioworklet"]`）。
 - `protocol`：被以上三者引用，不使用任何環境的全域型別。
-- 測試、Demo 頁、`scripts/` 各自另有 tsconfig，不輸出到 `dist/`。`scripts` 也涵蓋根目錄的 `*.config.{js,ts}`。
+- 測試、Demo 頁、`scripts/` 各自另有 tsconfig，不輸出到 `dist/`。`scripts` 也涵蓋根目錄的 `*.config.{js,ts}`。測試用的 AudioWorklet（`test/**/*.worklet.ts`）由 `test-worklet` 以 `audioworklet` 的全域型別檢查。
 
 `pnpm build` 只 build `tsconfig.build.json` 引用的四個套件 project。`tsc -b` 不能搭配 `--noEmit` 使用 project references，所以 `pnpm typecheck` 也會輸出到 `dist/`；發布用的產物一律以 `pnpm build` 重新產生。
 

@@ -7,8 +7,8 @@
 | 層 | 測什麼 | 位置與檔名 | 指令 |
 |---|---|---|---|
 | Node（Vitest node project） | 純邏輯：指令佇列、取代、epoch、time map、錯誤分類、重試、LRU、ring buffer 水位與 hysteresis | 與原始碼並列的 `*.test.ts` | `pnpm test` |
-| browser mode（Vitest browser project） | libav.js 的 demux 與解碼、media Worker（含真實 Worker 對協定的行為）、filter graph（`atempo`、重採樣、downmix）、`VideoDecoder`、AudioWorklet | 與原始碼並列的 `*.browser.test.ts` | `pnpm test:browser` |
-| E2E（Playwright） | 對 Demo 頁測整個播放流程、A/V 同步、leak | `test/e2e/` | `pnpm e2e` |
+| browser mode（Vitest browser project） | libav.js 的 demux 與解碼、media Worker（含真實 Worker 對協定的行為）、filter graph（`atempo`、重採樣、downmix）、`VideoDecoder`、AudioWorklet | 與原始碼並列的 `*.browser.test.ts`；環境的 smoke test 在 `test/smoke/` | `pnpm test:browser` |
+| E2E（Playwright） | 對 Demo 頁測整個播放流程、A/V 同步、leak | `test/e2e/` 的 `*.spec.ts` | `pnpm e2e` |
 
 ### Node 層
 
@@ -47,6 +47,7 @@
   - Firefox 的 H.264／AAC 需要系統的 libavcodec（官方 image 已有）；HEVC 在 Firefox 與 Chromium 都只測不支援路徑。
   - Firefox 解出的 `VideoFrame` 是 `BGRX`，Chromium 是 `I420`，繪製路徑兩種都要涵蓋。
   - Linux 的 Playwright WebKit 不跑：媒體走 GStreamer，行為不代表 Safari。
+  - 啟動設定集中在 `test/browser-launch.ts`，Vitest 與 Playwright 共用；image 與 PulseAudio 的設定在 `test/docker/`。
 - **Safari**：macOS runner 上的 job，headed、serial，只跑 browser mode 中和平台有關的一小組測試：AudioWorklet 能出聲、`interrupted` 與解鎖、worklet 收 transferred `MessagePort`、WebCodecs H.264／VP9，以及 AV1 回報 `'platform'` 的路徑。不跑 E2E。job 開始時以 `system_profiler SPAudioDataType` 檢查音訊裝置，沒有就直接失敗。觸發時機：每週排程、手動觸發與 push `v*` tag 發版前，不擋 PR。
 - **iOS／Android**：只用實機，不用 Simulator，見下方「實機清單」。
 
@@ -56,7 +57,7 @@
 
 - 產生 script 在 `test/media/`（`gen-media.sh`、`gen-subs.py`），FFmpeg image 釘 digest，輸出放 gitignored 的 `test/media/out/`。
 - **CI 組**（`pnpm media:gen`）：短檔（幾秒到 20 秒），涵蓋全部 codec、多軌、內嵌 SRT／ASS、外掛音軌，以及壞檔（截斷、壞封包、假副檔名）。
-- **手動組**（`pnpm media:gen:manual`）：長檔（45 分鐘 MP3、660 MB WAV），只在實機或記憶體測試時產生。
+- **手動組**（`pnpm media:gen:manual`）：長檔（45 分鐘 MP3、660 MB WAV、1–2 GB MKV），只在實機或記憶體測試時產生。
 - CI 依 script 內容的 hash 快取產物。
 - 測試只依賴媒體內容的特徵（beep 位置、時長、軌道組成），不依賴 byte 一致。
 - 原則上不 commit 二進位檔；script 做不出來而需要 commit 時，**先問過 user**。

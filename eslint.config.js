@@ -83,7 +83,18 @@ const literalWorker = [
  */
 export function createConfig(rootDir) {
   return defineConfig(
-    globalIgnores(['dist/', 'coverage/', '.claude/', 'test/lint/fixtures/']),
+    globalIgnores([
+      'dist/',
+      'coverage/',
+      '.claude/',
+      'test/lint/fixtures/',
+      // 測試產物與 test/docker/run.sh 的 node_modules。
+      '.docker-cache/',
+      '.vitest/',
+      'test-results/',
+      'playwright-report/',
+      'test/media/out/',
+    ]),
     js.configs.recommended,
     tseslint.configs.strictTypeChecked,
     tseslint.configs.stylisticTypeChecked,

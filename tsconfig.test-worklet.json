@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2023"],
+    "types": ["audioworklet"],
+    "noEmit": true,
+    "tsBuildInfoFile": "node_modules/.tmp/tsconfig.test-worklet.tsbuildinfo"
+  },
+  "include": ["test/**/*.worklet.ts"]
+}
