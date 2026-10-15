@@ -246,7 +246,7 @@ export interface Engine extends EventTarget {
   removeExternalAudio(trackId: string): Promise<void>;
 
   /**
-   * 設定音軌的音軌 offset（秒），容器內與外掛音軌都適用；正值表示聲音較晚出現。
+   * 設定指定音軌的音軌 offset（秒），容器內與外掛音軌都適用；正值表示聲音較晚出現。
    * 每條音軌各自記住；改的是目前選中的軌時會立即重新同步（短暫 seeking）。
    */
   setAudioOffset(trackId: string, offset: number): Promise<void>;

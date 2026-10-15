@@ -1,6 +1,6 @@
 /**
- * 檢查目前的瀏覽器能否執行 Engine：WebAssembly、module Worker、AudioWorklet（需要 secure context）。
- * 不檢查 codec，也不要求 WebCodecs：沒有 WebCodecs 時影片軌標為不支援，只播音訊。
+ * 檢查目前的瀏覽器能否執行 Engine：WebAssembly、Worker、AudioWorklet（需要 secure context）。
+ * 不檢查 Worker 是否支援 `type: 'module'`，也不檢查 codec；不要求 WebCodecs：沒有 WebCodecs 時影片軌標為不支援，只播音訊。
  */
 export function isEngineSupported(): boolean {
   // 以 globalThis 存取，讓缺少這些全域的環境（例如 Node、非 secure context）回傳 false 而不是丟 ReferenceError。
