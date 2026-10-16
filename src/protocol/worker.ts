@@ -4,7 +4,11 @@ import type { HostTypes, ProbedMedia, WireError, WireSource } from './media.js';
 
 /** 主執行緒送給 media Worker 的訊息。 */
 export type MainToWorkerMessage<H extends HostTypes> =
-  WorkerInitMessage<H> | WorkerLoadMessage<H> | WorkerStartMessage | WorkerSeekMessage;
+  | WorkerInitMessage<H>
+  | WorkerLoadMessage<H>
+  | WorkerStartMessage
+  | WorkerSeekMessage
+  | WorkerStatsRequestMessage;
 
 /** Worker 建立後的第一個訊息；`workletPort` 以 transfer 傳送。 */
 export interface WorkerInitMessage<H extends HostTypes> {
@@ -19,19 +23,26 @@ export interface WorkerInitMessage<H extends HostTypes> {
   sampleRate: number;
 }
 
-/** 開檔並 probe；完成時回覆 `probe`。 */
+/**
+ * 開檔並 probe；完成時回覆 `probe`。每個來源一個 libav instance。正在 open／probe 或輸出的前一個 `load`
+ * 被取代：它的讀取被中止，instance 被丟棄。
+ */
 export interface WorkerLoadMessage<H extends HostTypes> {
   type: 'load';
   epoch: number;
   source: WireSource<H>;
 }
 
-/** probe 之後開始輸出：選用軌道，從 `time`（秒）開始供料。 */
+/**
+ * probe 之後開始輸出：只讀選用的音軌（其餘 discard），從 `time`（秒）開始供料，之前的 sample 丟掉。
+ * Worker 依 worklet 的 `need` 送出這個 epoch 的 PCM，音訊到結尾時送出 `eof`。每個 load 只送一次；
+ * 之後改變位置經由 `seek`。
+ */
 export interface WorkerStartMessage {
   type: 'start';
   epoch: number;
   time: number;
-  /** 選用音軌的 stream index；null 表示不輸出音訊（worklet 以靜音推進時鐘）。 */
+  /** 選用音軌的 stream index；null 表示不輸出音訊：Worker 立即送出 `eof`，worklet 以靜音推進時鐘。 */
   audio: number | null;
 }
 
@@ -42,8 +53,15 @@ export interface WorkerSeekMessage {
   time: number;
 }
 
+/** 要求 Worker 回報它持有的資源；以 `stats` 回覆同一個 `id`。 */
+export interface WorkerStatsRequestMessage {
+  type: 'stats';
+  id: number;
+}
+
 /** media Worker 送給主執行緒的訊息。 */
-export type WorkerToMainMessage = WorkerProbeMessage | WorkerErrorMessage | WorkerCrashMessage;
+export type WorkerToMainMessage =
+  WorkerProbeMessage | WorkerErrorMessage | WorkerCrashMessage | WorkerStatsMessage;
 
 /** `load` 的 probe 結果。 */
 export interface WorkerProbeMessage {
@@ -64,4 +82,17 @@ export interface WorkerCrashMessage {
   type: 'crash';
   reason: 'wasm-trap' | 'out-of-memory';
   message: string;
+}
+
+/** `stats` 要求的回覆。 */
+export interface WorkerStatsMessage {
+  type: 'stats';
+  id: number;
+  stats: WorkerStats;
+}
+
+/** media Worker 內的計數，主執行緒彙整進 `getStats()`。 */
+export interface WorkerStats {
+  /** 目前存在的 libav instance 數：建立 instance 時加一，被取代或 open／probe 失敗而丟棄時減一。 */
+  libavInstances: number;
 }

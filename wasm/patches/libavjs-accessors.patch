@@ -1,7 +1,15 @@
 diff -ru a/funcs.json b/funcs.json
 --- a/funcs.json
 +++ b/funcs.json
-@@ -333,11 +333,18 @@
+@@ -321,6 +321,7 @@
+                 "duration",
+                 "durationhi",
+                 "flags",
++                "iformat",
+                 "metadata",
+                 "nb_chapters",
+                 "nb_streams",
+@@ -333,11 +334,21 @@
              ["AVStream", [
                  "codecpar",
                  "discard",
@@ -17,10 +25,13 @@ diff -ru a/funcs.json b/funcs.json
 +                "eof_reached",
 +                "error"
 +            ]],
++            ["AVInputFormat", [
++                {"name": "name", "string": true}
++            ]],
              ["AVChapter", [
                  "end",
                  "endhi",
-@@ -461,6 +468,7 @@
+@@ -461,6 +472,7 @@
              ["avfilter_graph_create_filter_js", "number", ["number", "string", "string", "number", "number"]],
              ["avfilter_graph_free", null, ["number"]],
              ["avfilter_graph_parse", "number", ["number", "string", "number", "number", "number"]],
@@ -31,7 +42,15 @@ diff -ru a/funcs.json b/funcs.json
 diff -ru a/src/b-avformat.c b/src/b-avformat.c
 --- a/src/b-avformat.c
 +++ b/src/b-avformat.c
-@@ -36,8 +36,10 @@
+@@ -20,6 +20,7 @@
+ BA(AVChapter *, chapters)
+ BL(int64_t, duration)
+ B(int, flags)
++B(const struct AVInputFormat *, iformat)
+ B(AVDictionary *, metadata)
+ B(unsigned int, nb_chapters)
+ B(unsigned int, nb_streams)
+@@ -36,8 +37,10 @@
  #define BL(type, field) AL(AVStream, type, field)
  B(AVCodecParameters *, codecpar)
  B(enum AVDiscard, discard)
@@ -42,7 +61,7 @@ diff -ru a/src/b-avformat.c b/src/b-avformat.c
  #undef B
  #undef BL
  
-@@ -55,6 +57,12 @@
+@@ -55,6 +58,15 @@
  
  RAT(AVChapter, time_base)
  
@@ -51,6 +70,9 @@ diff -ru a/src/b-avformat.c b/src/b-avformat.c
 +B(int, eof_reached)
 +B(int, error)
 +#undef B
++
++/* AVInputFormat：probe 出的容器格式名稱。只有 getter，不改 libavformat 的靜態資料 */
++const char *AVInputFormat_name(const AVInputFormat *a) { return a->name; }
 +
  int avformat_seek_file_min(
      AVFormatContext *s, int stream_index, int64_t ts, int flags
