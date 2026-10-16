@@ -1,6 +1,6 @@
 # browser mode 與 E2E 的執行環境（docs/testing.md「瀏覽器」）：Playwright 官方 image 加上 Firefox 需要的 PulseAudio。
 # tag 必須與 package.json 的 playwright 版本相同，run.sh 會檢查。
-FROM mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f
+FROM mcr.microsoft.com/playwright:v1.64.1-noble@sha256:7852dc5a7d72f5fe458a597d690f6c42fbc8e9e26ddfa95f8e6ef552558d9bbf
 
 ARG PNPM_VERSION
 
