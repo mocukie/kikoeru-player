@@ -607,3 +607,123 @@ describe('其餘指令的競態', () => {
     await expect(rejection(playing)).resolves.toMatchObject({ code: 'INTERNAL' });
   });
 });
+
+describe('同步事件 listener 內的重入', () => {
+  it('loading 的 statechange listener 內 destroy()：不再建立 Worker 與音訊輸出', async () => {
+    const { engine, deps } = setup();
+    engine.addEventListener('statechange', (event) => {
+      if (event.state === 'loading') void engine.destroy();
+    });
+
+    const loading = engine.load(source);
+
+    await expect(rejection(loading)).resolves.toEqual(abortError);
+    expect(engine.state).toBe('idle');
+    expect(deps.workers.created).toEqual([]);
+    expect(deps.audioCreated).toBe(0);
+  });
+
+  it('load 完成時的 durationchange listener 內 load(B)：B 不被舊 load 的完成覆寫', async () => {
+    const { engine, deps } = setup();
+    const first = engine.load(source);
+    let second: Promise<unknown> | undefined;
+    engine.addEventListener('durationchange', (event) => {
+      if (event.duration === 10 && !second) second = engine.load(source);
+    });
+    const oldWorker = deps.workers.last;
+    await oldWorker.probe(audioMedia());
+    await oldWorker.next('start');
+
+    deps.audio.reply({ type: 'paused' });
+
+    await expect(rejection(first)).resolves.toEqual(abortError);
+    expect(engine.state).toBe('loading');
+    const worker = deps.workers.last;
+    expect(worker).not.toBe(oldWorker);
+    await worker.probe(audioMedia({ duration: 20 }));
+    await worker.next('start');
+    deps.audio.reply({ type: 'paused' });
+    await expect(second).resolves.toMatchObject({ duration: 20 });
+    expect(engine.state).toBe('ready');
+    expect(engine.media?.duration).toBe(20);
+  });
+
+  it('play() 的 statechange listener 內 pause()：較新的 pause 取代 play', async () => {
+    const { engine, deps } = await loaded();
+    let inner: Promise<void> | undefined;
+    engine.addEventListener('statechange', (event) => {
+      if (!event.paused && !inner) inner = engine.pause();
+    });
+
+    const outer = engine.play();
+
+    await expect(rejection(outer)).resolves.toEqual(abortError);
+    await expect(inner).resolves.toBeUndefined();
+    expect(engine.paused).toBe(true);
+    expect(deps.audio.received.slice(-2).map((m) => m.type)).toEqual(['play', 'pause']);
+  });
+
+  it('pause() 的 statechange listener 內 play()：較新的 play 取代 pause', async () => {
+    const { engine, deps } = await loaded({ paused: false });
+    let inner: Promise<void> | undefined;
+    engine.addEventListener('statechange', (event) => {
+      if (event.paused && !inner) inner = engine.play();
+    });
+
+    const outer = engine.pause();
+
+    await expect(rejection(outer)).resolves.toEqual(abortError);
+    await expect(inner).resolves.toBeUndefined();
+    expect(engine.paused).toBe(false);
+    expect(deps.audio.received.slice(-2).map((m) => m.type)).toEqual(['pause', 'play']);
+  });
+
+  it('seek 完成的 statechange listener 內再 seek：不以新的目標提前發出 seeked', async () => {
+    const { engine, deps } = await loaded();
+    const seeked: number[] = [];
+    engine.addEventListener('seeked', (event) => seeked.push(event.currentTime));
+    const first = engine.seek(2);
+    let second: Promise<number> | undefined;
+    engine.addEventListener('statechange', (event) => {
+      if (event.previous === 'seeking' && !second) second = engine.seek(7);
+    });
+
+    deps.audio.reply({ type: 'paused' });
+
+    await expect(rejection(first)).resolves.toEqual(abortError);
+    expect(engine.state).toBe('seeking');
+    expect(seeked).toEqual([]);
+    deps.audio.reply({ type: 'paused' });
+    await expect(second).resolves.toBe(7);
+    expect(seeked).toEqual([7]);
+  });
+
+  it('ended 的 statechange listener 內 load()：不再為舊媒體發出 ended', async () => {
+    const { engine, deps } = await loaded({ paused: false });
+    const ended: Event[] = [];
+    engine.addEventListener('ended', (event) => ended.push(event));
+    engine.addEventListener('statechange', (event) => {
+      if (event.state === 'ended') void engine.load(source).catch(() => undefined);
+    });
+
+    deps.audio.reply({ type: 'ended' });
+
+    expect(ended).toEqual([]);
+    expect(engine.state).toBe('loading');
+  });
+
+  it('error 的 statechange listener 內 load()：不再為舊媒體發出 error，新的 load 不被覆寫', async () => {
+    const { engine, worker } = await loaded();
+    const errors: unknown[] = [];
+    engine.addEventListener('error', (event) => errors.push(event.error));
+    engine.addEventListener('statechange', (event) => {
+      if (event.state === 'error') void engine.load(source).catch(() => undefined);
+    });
+
+    worker.crash();
+
+    expect(errors).toEqual([]);
+    expect(engine.state).toBe('loading');
+    expect(engine.error).toBeNull();
+  });
+});

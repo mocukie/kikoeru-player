@@ -84,6 +84,8 @@ class EngineImpl extends EventTarget implements Engine {
 
   #state: EngineState = 'idle';
   #paused = true;
+  /** 最後一個 statechange 帶的 `paused`；#changeIntent() 到 #announceIntent() 之間與 `#paused` 不同。 */
+  #announcedPaused = true;
   #currentTime = 0;
   #duration = NaN;
   #media: MediaInfo | null = null;
@@ -91,7 +93,11 @@ class EngineImpl extends EventTarget implements Engine {
   #selected: Readonly<TrackSelection> = noSelection;
   #error: EngineError | null = null;
 
-  /** 會改變輸出的指令遞增；Worker 與 worklet 的訊息 epoch 不符即丟棄。 */
+  /**
+   * 會改變輸出的指令（load、seek）、致命錯誤與 destroy 遞增；Worker 與 worklet 的訊息 epoch 不符即丟棄。
+   * 事件一律同步 dispatch，listener 可以在其中呼叫任何指令，所以 dispatch 之後要先以 epoch 確認
+   * 目前的操作沒有被取代，才繼續發布狀態或事件。
+   */
   #epoch = 0;
   #trackSeq = 0;
   /** 這份媒體是否播放過；seek 結束時決定回到 `'ready'` 或 `'paused'`。 */
@@ -169,7 +175,7 @@ class EngineImpl extends EventTarget implements Engine {
   // ───────────────────────────── 指令 ─────────────────────────────
 
   load(source: Source, options: LoadOptions = {}): Promise<MediaInfo> {
-    if (this.#isDestroyed) return Promise.reject(this.#destroyingError());
+    if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
     return this.#queue.enqueue(
       'load',
       (signal) => this.#runLoad(source, options, signal),
@@ -182,27 +188,31 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   play(): Promise<void> {
-    if (this.#isDestroyed) return Promise.reject(this.#destroyingError());
-    this.#setIntent(false);
-    return this.#queue.enqueue(
+    if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    this.#changeIntent(false);
+    const playing = this.#queue.enqueue(
       'play',
       (signal) => this.#runPlay(signal),
       (k) => k === 'pause',
     );
+    this.#announceIntent();
+    return playing;
   }
 
   pause(): Promise<void> {
-    if (this.#isDestroyed) return Promise.reject(this.#destroyingError());
-    this.#setIntent(true);
-    return this.#queue.enqueue(
+    if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    this.#changeIntent(true);
+    const pausing = this.#queue.enqueue(
       'pause',
       (signal) => this.#runPause(signal),
       (k) => k === 'play',
     );
+    this.#announceIntent();
+    return pausing;
   }
 
   seek(time: number): Promise<number> {
-    if (this.#isDestroyed) return Promise.reject(this.#destroyingError());
+    if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
     if (!Number.isFinite(time)) {
       return Promise.reject(new TypeError(`seek() 的時間必須是有限數，收到 ${String(time)}`));
     }
@@ -265,7 +275,9 @@ class EngineImpl extends EventTarget implements Engine {
     this.#error = null;
     this.#currentTime = startTime;
     this.#publishMedia(null, noSelection);
+    signal.throwIfAborted();
     this.#setState('loading', 'command', options.paused ?? true);
+    signal.throwIfAborted();
 
     try {
       const audio = this.#audioOutput();
@@ -364,7 +376,8 @@ class EngineImpl extends EventTarget implements Engine {
 
   async #runDestroy(): Promise<void> {
     this.#isDestroyed = true;
-    this.#queue.close(() => this.#destroyingError());
+    this.#epoch++;
+    this.#queue.close(() => this.#destroyedError());
     this.#loadContext = null;
     this.#terminateWorker();
     // 主執行緒還沒有持有任何 VideoFrame；影片的 issue 在這裡 close() 它們。
@@ -439,8 +452,9 @@ class EngineImpl extends EventTarget implements Engine {
         if (this.#state === 'playing' || this.#state === 'buffering') {
           if (!Number.isNaN(this.#duration)) this.#currentTime = this.#duration;
           // paused 維持 false：App 不接下一首時自己 pause()。
+          const epoch = this.#epoch;
           this.#setState('ended', 'media');
-          this.dispatchEvent(new Event('ended'));
+          if (this.#epoch === epoch) this.dispatchEvent(new Event('ended'));
         }
         break;
     }
@@ -454,21 +468,28 @@ class EngineImpl extends EventTarget implements Engine {
         const load = this.#loadContext;
         if (!load?.info) break;
         // 先結束 load，讓 listener 內的 seek() 走一般的 seek，不再改寫起點。
+        const epoch = this.#epoch;
         this.#loadContext = null;
         load.seek?.resolve(load.startTime);
         load.seek = null;
         this.#publishMedia(load.info, load.selection);
+        if (this.#epoch !== epoch) break;
         this.#setState(output === 'playing' ? 'playing' : 'ready', 'media');
         break;
       }
-      case 'seeking':
+      case 'seeking': {
+        const epoch = this.#epoch;
+        const landing = this.#currentTime;
         this.#setState(
           output === 'playing' ? 'playing' : this.#played ? 'paused' : 'ready',
           'media',
         );
-        this.dispatchEvent(new SeekedEvent({ currentTime: this.#currentTime }));
-        this.dispatchEvent(new TimeUpdateEvent({ currentTime: this.#currentTime }));
+        if (this.#epoch !== epoch) break;
+        this.dispatchEvent(new SeekedEvent({ currentTime: landing }));
+        if (this.#epoch !== epoch) break;
+        this.dispatchEvent(new TimeUpdateEvent({ currentTime: landing }));
         break;
+      }
       case 'ready':
       case 'paused':
         if (output === 'playing') this.#setState('playing', 'command');
@@ -486,18 +507,27 @@ class EngineImpl extends EventTarget implements Engine {
 
   // ───────────────────────────── 內部 ─────────────────────────────
 
-  /** 改變播放意圖：立即告訴 worklet，並在呼叫內同步發出 statechange。 */
-  #setIntent(paused: boolean): void {
+  /**
+   * 改變播放意圖並立即告訴 worklet，但還不發出 statechange：play()／pause() 先把指令入列，
+   * 再以 #announceIntent() 發出，listener 內的較新指令才會取代它，而不是反過來。
+   */
+  #changeIntent(paused: boolean): void {
     if (this.#paused === paused) return;
+    this.#paused = paused;
     this.#audio?.post({ type: paused ? 'pause' : 'play', epoch: this.#epoch });
-    this.#setState(this.#state, 'command', paused);
+  }
+
+  /** 發出還沒發出過的播放意圖；期間的 statechange 已經帶上它時不重複發出。 */
+  #announceIntent(): void {
+    this.#setState(this.#state, 'command');
   }
 
   #setState(state: EngineState, reason: StateChangeReason, paused = this.#paused): void {
     const previous = this.#state;
-    if (state === previous && paused === this.#paused) return;
+    if (state === previous && paused === this.#announcedPaused) return;
     this.#state = state;
     this.#paused = paused;
+    this.#announcedPaused = paused;
     if (state === 'playing') this.#played = true;
     this.dispatchEvent(new StateChangeEvent({ state, previous, paused, reason }));
     this.#notify();
@@ -516,7 +546,9 @@ class EngineImpl extends EventTarget implements Engine {
     this.#duration = duration;
     this.#tracks = tracks;
     this.#selected = selection;
+    const epoch = this.#epoch;
     if (durationChanged) this.dispatchEvent(new DurationChangeEvent({ duration }));
+    if (this.#epoch !== epoch) return;
     if (tracksChanged || selectionChanged) {
       this.dispatchEvent(new TracksChangeEvent({ tracks, selected: selection }));
     }
@@ -546,11 +578,11 @@ class EngineImpl extends EventTarget implements Engine {
     this.#loadContext = null;
     this.#error = error;
     // 停掉 ring 內剩下的聲音。
-    this.#epoch++;
+    const epoch = ++this.#epoch;
     this.#flushAudio(this.#currentTime);
     this.#queue.fail(error);
     this.#setState('error', 'error');
-    this.dispatchEvent(new EngineErrorEvent({ error }));
+    if (this.#epoch === epoch) this.dispatchEvent(new EngineErrorEvent({ error }));
   }
 
   #terminateWorker(): void {
@@ -647,7 +679,7 @@ class EngineImpl extends EventTarget implements Engine {
       : this.#fatal('INTERNAL', error instanceof Error ? error.message : String(error), error);
   }
 
-  #destroyingError(): EngineError {
+  #destroyedError(): EngineError {
     return new EngineError('DESTROYED', { fatal: false, position: this.#currentTime });
   }
 }
