@@ -115,6 +115,7 @@ Node 測試（`*.test.ts`）與 browser mode 測試（`*.browser.test.ts`）都�
 - **Worker 的寫法**：只用字面寫法 `new Worker(new URL('./….js', import.meta.url), { type: 'module' })`，讓 App 的 Vite 能辨識並 bundle。路徑是 `./` 或 `../` 開頭、`.js` 結尾的字串字面值，例如主執行緒的 `'../worker/index.js'`。
 - **AudioWorklet**：`addModule(new URL(…))` 只會原樣複製檔案，所以 worklet 是不 import 任何 runtime 程式碼的單一檔案。
 - **wasm 資產**：glue 與 `.wasm` 是原封不動的資產，以 `new URL('./libav-….wasm.mjs', import.meta.url)` 參照，Worker 用 `import(/* @vite-ignore */ glueUrl)` 載入，license header 不經過 bundler（[ADR-0005](adr/0005-wasm-release-and-engine-package.md)）。
+- **libav.js 的 frontend**：Worker 只在 `worker/libav.ts` 以 package.json 的 subpath import `#libav` 引用它（runtime 是 frontend 的 `.mjs`，型別是同一個 Release 的 `libav.types.d.ts`），libav.js 的型別不離開這個檔案。
 - **wasm 的修改**：只能改 `wasm/` 再重新 build；對 libav.js 的修改是 `wasm/` 內的 patch，不 fork。不得啟用 FFmpeg 的 GPL 元件。
 
 ### 資源

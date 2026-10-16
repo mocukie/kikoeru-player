@@ -43,13 +43,16 @@ export interface WorkletClockMessage {
 /** media Worker 送給 AudioWorklet 的訊息（經 init 時的 `workletPort`）。 */
 export type WorkerToWorkletMessage = WorkletPcmMessage | WorkletEofMessage;
 
-/** 一段 PCM；`channels` 的 buffer 以 transfer 傳送。 */
+/**
+ * 一段 PCM，長 2048–4096 frame（`eof` 前的最後一段可以更短）；`channels` 的 buffer 以 transfer 傳送，
+ * 用完後以 `release` 送回 Worker 重用。
+ */
 export interface WorkletPcmMessage {
   type: 'pcm';
   epoch: number;
   /** 第一個 frame 在媒體時間軸上的位置（秒）。 */
   time: number;
-  /** 一律 stereo、`ctx.sampleRate` 的 float planar。 */
+  /** 一律 stereo、`ctx.sampleRate` 的 float planar；兩個聲道的 view 各自擁有一個 `ArrayBuffer`。 */
   channels: readonly Float32Array[];
 }
 
@@ -60,6 +63,20 @@ export interface WorkletEofMessage {
 }
 
 /** AudioWorklet 送給 media Worker 的訊息。 */
-export type WorkletToWorkerMessage =
-  | { type: 'need'; epoch: number; frames: number }
-  | { type: 'release'; buffers: readonly ArrayBuffer[] };
+export type WorkletToWorkerMessage = WorkletNeedMessage | WorkletReleaseMessage;
+
+/**
+ * 要求這個 epoch 再送 `frames` 個 frame（增量：與之前尚未滿足的要求累加）。Worker 以 2048–4096 frame 的 chunk
+ * 回應，可能多送最多一個 chunk。epoch 比 Worker 目前的新時先記下，Worker 換到該 epoch 時生效；舊的 epoch 丟棄。
+ */
+export interface WorkletNeedMessage {
+  type: 'need';
+  epoch: number;
+  frames: number;
+}
+
+/** 播完的 PCM buffer，transfer 回 Worker 重用。 */
+export interface WorkletReleaseMessage {
+  type: 'release';
+  buffers: readonly ArrayBuffer[];
+}
