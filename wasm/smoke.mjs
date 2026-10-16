@@ -90,6 +90,16 @@ for (const file of files) {
   const audio = streams.filter((s) => s.codec_type === libav.AVMEDIA_TYPE_AUDIO);
   check(audio.length > 0, `${file}：沒有音軌`);
 
+  // 容器格式名稱的 accessor（MediaInfo.format）。
+  const formatName = await libav.AVInputFormat_name(await libav.AVFormatContext_iformat(fmt));
+  check(
+    typeof formatName === 'string' && formatName.length > 0,
+    `${file}：容器格式名稱是 ${formatName}`,
+  );
+  if (file === 'multi.mka') {
+    check(formatName === 'matroska,webm', `multi.mka：容器格式名稱是 ${formatName}`);
+  }
+
   for (const stream of audio) {
     const codec = await libav.avcodec_get_name(stream.codec_id);
     const label = `${file} #${stream.index}（${codec}）`;

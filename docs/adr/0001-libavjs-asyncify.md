@@ -1,6 +1,6 @@
 # FFmpeg 透過自 build 的 libav.js variant，以 Asyncify 銜接，不要求 COOP/COEP
 
-Engine 的 demux 與音訊解碼使用 libav.js 的自訂 variant：釘 libav.js tag，build 時對其 0BSD wrapper 套上我們自己的小 patch（`disposition`／`start_time`、`AVIOContext` 的 `error`／`eof_reached` accessor），不 fork，patch 也不提給 upstream。wasm 同步讀與非同步 fetch 的銜接沿用 libav.js 的 Asyncify，每個來源一個 instance，demux 與 decode 共用。選擇 Asyncify 是因為它涵蓋全部的支援範圍（近兩年的 Chromium、Firefox、Safari），而且不需要 cross-origin isolation。
+Engine 的 demux 與音訊解碼使用 libav.js 的自訂 variant：釘 libav.js tag，build 時對其 0BSD wrapper 套上我們自己的小 patch（`disposition`／`start_time`、`AVIOContext` 的 `error`／`eof_reached`、容器格式名稱的 accessor），不 fork，patch 也不提給 upstream。wasm 同步讀與非同步 fetch 的銜接沿用 libav.js 的 Asyncify，每個來源一個 instance，demux 與 decode 共用。選擇 Asyncify 是因為它涵蓋全部的支援範圍（近兩年的 Chromium、Firefox、Safari），而且不需要 cross-origin isolation。
 
 ## Considered Options
 
