@@ -153,6 +153,22 @@ describe('filter graph', () => {
   });
 });
 
+describe('影片容器內的音軌', () => {
+  test.each([
+    ['video/h264-aac.mp4', 'aac'],
+    ['video/vp9-opus.webm', 'opus'],
+    ['video/h264-mp3.avi', 'mp3'],
+  ])('%s 的 %s 音軌', async (file, codec) => {
+    const { track, pcm } = await decodeFile(file);
+    expect(track.codec).toBe(codec);
+    expect(Math.abs(pcm.left.length / 48_000 - SECONDS)).toBeLessThan(0.05);
+    const onsets = beepOnsets(pcm.left, 48_000).slice(-(SECONDS - 1));
+    onsets.forEach((onset, i) => {
+      expect(Math.abs(onset - (i + 1))).toBeLessThanOrEqual(0.025);
+    });
+  });
+});
+
 describe('probe 與選軌', () => {
   test('多軌 MKV：軌道組成、語言、標題與旗標', async () => {
     const driver = await WorkerDriver.init(inPage());

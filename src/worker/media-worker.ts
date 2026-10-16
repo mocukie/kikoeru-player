@@ -41,6 +41,8 @@ interface Load {
   media: LibavMedia | null;
   /** 開檔、probe 中。start 等它完成。 */
   opening: Promise<void>;
+  /** 已建立（或正在建立）libav instance，計入 `libavInstances`。 */
+  hasInstance: boolean;
   disposed: boolean;
 }
 
@@ -110,10 +112,10 @@ export class MediaWorker {
       controller: new AbortController(),
       media: null,
       opening: Promise.resolve(),
+      hasInstance: false,
       disposed: false,
     };
     this.#load = load;
-    this.#libavInstances++;
     load.opening = this.#open(load, message.source);
   }
 
@@ -124,6 +126,8 @@ export class MediaWorker {
       const open = this.#deps.openSource ?? openSource;
       const source = await open(wire, signal);
       signal.throwIfAborted();
+      load.hasInstance = true;
+      this.#libavInstances++;
       const media = await LibavMedia.open(env.assets, source, signal);
       signal.throwIfAborted();
       const probed = toProbedMedia(media.raw);
@@ -201,7 +205,7 @@ export class MediaWorker {
     load.disposed = true;
     load.controller.abort();
     load.media = null;
-    this.#libavInstances--;
+    if (load.hasInstance) this.#libavInstances--;
     if (this.#load === load) this.#load = null;
   }
 

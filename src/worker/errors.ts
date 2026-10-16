@@ -2,21 +2,19 @@
 
 import type { WireError, WorkerErrorCode } from '../protocol/index.js';
 
-/** 帶錯誤碼的錯誤；Worker 以 `error` 訊息回報給主執行緒。 */
+/** 帶錯誤碼的致命錯誤；Worker 以 `error` 訊息回報給主執行緒。 */
 export class WorkerError extends Error {
   readonly code: WorkerErrorCode;
-  readonly fatal: boolean;
   readonly detail: WireError['detail'];
 
   constructor(
     code: WorkerErrorCode,
     message: string,
-    options: { fatal?: boolean; detail?: WireError['detail']; cause?: unknown } = {},
+    options: { detail?: WireError['detail']; cause?: unknown } = {},
   ) {
     super(message, { cause: options.cause });
     this.name = 'WorkerError';
     this.code = code;
-    this.fatal = options.fatal ?? true;
     this.detail = options.detail;
   }
 }
@@ -26,7 +24,7 @@ export function toWireError(error: unknown): WireError {
   if (error instanceof WorkerError) {
     return {
       code: error.code,
-      fatal: error.fatal,
+      fatal: true,
       message: error.message,
       ...(error.detail && { detail: error.detail }),
     };
@@ -34,11 +32,6 @@ export function toWireError(error: unknown): WireError {
   return { code: 'INTERNAL', fatal: true, message: errorMessage(error) };
 }
 
-export function errorMessage(error: unknown): string {
+function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-/** 是否為中止造成的錯誤（`AbortSignal` 的預設 reason）。 */
-export function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError';
 }

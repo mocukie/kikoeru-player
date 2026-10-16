@@ -2,7 +2,6 @@
 // 測試扮演主執行緒與 AudioWorklet：init 時給 MessageChannel 的一端，從另一端送 need、收 pcm／eof。
 
 import type {
-  HostTypes,
   MainToWorkerMessage,
   ProbedAudioTrack,
   ProbedMedia,
@@ -10,17 +9,13 @@ import type {
   WorkerToWorkletMessage,
   WorkletPcmMessage,
 } from '../src/protocol/index.js';
-
-export interface BrowserHost extends HostTypes {
-  wasmModule: WebAssembly.Module;
-  messagePort: MessagePort;
-  blob: Blob;
-}
+import type { WorkerHost as BrowserHost } from '../src/worker/host.js';
+import type { LibavAssets } from '../src/worker/libav.js';
 
 /** 主執行緒 compile 一次、分給每個 Worker 的 wasm（與 Engine 相同的做法）。 */
-let assets: Promise<{ module: WebAssembly.Module; glueUrl: string }> | null = null;
+let assets: Promise<LibavAssets> | null = null;
 
-export function wasmAssets(): Promise<{ module: WebAssembly.Module; glueUrl: string }> {
+export function wasmAssets(): Promise<LibavAssets> {
   assets ??= (async () => {
     const base = new URL('/wasm/dist/', location.href);
     const module = await WebAssembly.compileStreaming(

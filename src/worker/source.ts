@@ -36,7 +36,10 @@ export async function openSource(
 function bytesSource(data: Uint8Array): ByteSource {
   return {
     size: data.length,
-    read: (offset, length) => Promise.resolve(data.subarray(offset, offset + length)),
+    read: (offset, length, signal) =>
+      signal.aborted
+        ? Promise.reject(signal.reason as Error)
+        : Promise.resolve(data.subarray(offset, offset + length)),
   };
 }
 

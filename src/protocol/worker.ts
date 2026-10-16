@@ -35,7 +35,8 @@ export interface WorkerLoadMessage<H extends HostTypes> {
 
 /**
  * probe 之後開始輸出：只讀選用的音軌（其餘 discard），從 `time`（秒）開始供料，之前的 sample 丟掉。
- * Worker 依 worklet 的 `need` 送出這個 epoch 的 PCM，音訊到結尾時送出 `eof`。
+ * Worker 依 worklet 的 `need` 送出這個 epoch 的 PCM，音訊到結尾時送出 `eof`。每個 load 只送一次；
+ * 之後改變位置經由 `seek`。
  */
 export interface WorkerStartMessage {
   type: 'start';
@@ -92,6 +93,6 @@ export interface WorkerStatsMessage {
 
 /** media Worker 內的計數，主執行緒彙整進 `getStats()`。 */
 export interface WorkerStats {
-  /** 目前存在的 libav instance 數：open 開始時加一，被取代或 open／probe 失敗而丟棄時減一。 */
+  /** 目前存在的 libav instance 數：建立 instance 時加一，被取代或 open／probe 失敗而丟棄時減一。 */
   libavInstances: number;
 }

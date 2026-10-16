@@ -187,6 +187,13 @@ describe('供料', () => {
     expect(posted.at(-1)?.message).toEqual({ type: 'eof', epoch });
   });
 
+  test('最後一段送出後，不等下一個要求就送出 EOF', async () => {
+    const { demand, posted, running, epoch } = setup({ batches: [[{ frames: 3000 }]] });
+    demand.need(epoch, 3000);
+    await running;
+    expect(posted.map((p) => p.message.type)).toEqual(['pcm', 'eof']);
+  });
+
   test('decoder 在結尾排出的資料也會送出', async () => {
     const { demand, pcm, running, epoch } = setup({
       batches: [[{ frames: 1000 }]],
@@ -343,7 +350,7 @@ describe('錯誤', () => {
       batches: [[{ frames: 1024 }, ...Array.from({ length: 10 }, () => bad), { frames: 1024 }]],
     });
     demand.need(epoch, 1_000_000);
-    await expect(running).rejects.toMatchObject({ code: 'DECODE_FAILED', fatal: true });
+    await expect(running).rejects.toMatchObject({ code: 'DECODE_FAILED' });
   });
 
   test('中間有成功的封包就重新累計', async () => {
@@ -355,6 +362,24 @@ describe('錯誤', () => {
     demand.need(epoch, 1_000_000);
     await running;
     expect(posted.at(-1)?.message.type).toBe('eof');
+  });
+
+  test('沒有時長、也還沒有成功過的壞封包仍計入 1 秒的上限', async () => {
+    const bad = { frames: 0, duration: 0, fail: true };
+    const { demand, running, epoch } = setup({
+      batches: [Array.from({ length: 200 }, () => bad)],
+      decoder: new FakeDecoder(2, null),
+    });
+    demand.need(epoch, 1_000_000);
+    await expect(running).rejects.toMatchObject({ code: 'DECODE_FAILED' });
+  });
+
+  test('wasm trap 不當成壞封包，原樣丟出', async () => {
+    const decoder = new FakeDecoder();
+    decoder.decode = () => Promise.reject(new WebAssembly.RuntimeError('unreachable'));
+    const { demand, running, epoch } = setup({ decoder });
+    demand.need(epoch, 4096);
+    await expect(running).rejects.toBeInstanceOf(WebAssembly.RuntimeError);
   });
 
   test('demux 的錯誤原樣丟出', async () => {

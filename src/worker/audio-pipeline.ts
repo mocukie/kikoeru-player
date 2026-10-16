@@ -10,6 +10,8 @@ export const MIN_CHUNK_FRAMES = 2048;
 export const MAX_CHUNK_FRAMES = 4096;
 /** 連續解碼失敗累計到這個媒體秒數才是 fatal。 */
 const MAX_FAILED_SECONDS = 1;
+/** 壞封包沒有時長、也還沒有成功解碼過的封包可以參考時，以這個秒數計（約一個 AAC frame）。 */
+const FALLBACK_PACKET_SECONDS = 0.02;
 /** 時間戳比前一段的結尾晚超過這個秒數，視為中間的資料遺失（例如 decoder 丟掉的壞封包），補上靜音。 */
 const GAP_SECONDS = 0.01;
 /** pool 保留的 buffer 上限；多的交給 GC。 */
@@ -237,7 +239,7 @@ export interface AudioPipelineOptions<P> {
 
 /** 一個 epoch 的音訊輸出。 */
 export class AudioPipeline<P> {
-  readonly #o: AudioPipelineOptions<P>;
+  readonly #options: AudioPipelineOptions<P>;
   readonly #queue: PcmQueue;
   #ended = false;
   /** 連續解碼失敗所補的靜音 frame 數。 */
@@ -246,7 +248,7 @@ export class AudioPipeline<P> {
   #lastPacketFrames = 0;
 
   constructor(options: AudioPipelineOptions<P>) {
-    this.#o = options;
+    this.#options = options;
     this.#queue = new PcmQueue(options.sampleRate, options.startTime);
   }
 
@@ -255,18 +257,20 @@ export class AudioPipeline<P> {
    * 致命錯誤以 `WorkerError` reject。
    */
   async run(): Promise<void> {
-    const { demand, epoch, signal, pool, post } = this.#o;
+    const { demand, epoch, signal, pool, post } = this.#options;
     for (;;) {
+      // 資料送完就立即送出 EOF，不等 worklet 的下一個要求。
+      if (this.#ended && this.#queue.frames === 0) {
+        post({ type: 'eof', epoch }, []);
+        return;
+      }
       await demand.wait(epoch, signal);
       const want = Math.min(Math.max(demand.credit(epoch), MIN_CHUNK_FRAMES), MAX_CHUNK_FRAMES);
       while (this.#queue.frames < want && !this.#ended) {
         await this.#decodeMore();
         signal.throwIfAborted();
       }
-      if (this.#queue.frames === 0) {
-        post({ type: 'eof', epoch }, []);
-        return;
-      }
+      if (this.#queue.frames === 0) continue;
       const { time, channels } = this.#queue.take(Math.min(want, this.#queue.frames), pool);
       post({ type: 'pcm', epoch, time, channels }, [channels[0].buffer, channels[1].buffer]);
       demand.consume(epoch, channels[0].length);
@@ -274,28 +278,33 @@ export class AudioPipeline<P> {
   }
 
   async #decodeMore(): Promise<void> {
-    const { packets, eof } = await this.#o.reader.read();
+    const { packets, eof } = await this.#options.reader.read();
     for (const packet of packets) {
-      this.#o.signal.throwIfAborted();
+      this.#options.signal.throwIfAborted();
       await this.#decode(packet);
     }
     if (eof) {
-      this.#push(await this.#o.decoder.flush());
+      this.#push(await this.#options.decoder.flush());
       this.#queue.finish();
       this.#ended = true;
     }
   }
 
   async #decode(packet: P): Promise<void> {
-    const { decoder, sampleRate, signal } = this.#o;
+    const { decoder, sampleRate, signal } = this.#options;
     let decoded: DecodedAudio[];
     try {
       decoded = await decoder.decode(packet);
     } catch (error) {
       signal.throwIfAborted();
+      // wasm trap 之後 instance 不能再用，不是壞封包。
+      if (error instanceof WebAssembly.RuntimeError) throw error;
       // 壞的封包補上等長的靜音；連續失敗累計 1 媒體秒才放棄。
       const duration = decoder.packetDuration(packet);
-      const frames = duration > 0 ? Math.round(duration * sampleRate) : this.#lastPacketFrames;
+      const frames =
+        duration > 0
+          ? Math.round(duration * sampleRate)
+          : this.#lastPacketFrames || Math.round(FALLBACK_PACKET_SECONDS * sampleRate);
       this.#failedFrames += frames;
       if (this.#failedFrames >= MAX_FAILED_SECONDS * sampleRate) {
         throw new WorkerError('DECODE_FAILED', '音訊連續 1 秒無法解碼', { cause: error });

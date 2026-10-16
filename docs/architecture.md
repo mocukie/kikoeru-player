@@ -46,6 +46,7 @@ test/
   media/           測試媒體的產生 script；輸出到 gitignored 的 test/media/out/
   server/          Vite middleware：/media/* 的 Range 與故障注入
   fakes/           假 media Worker、假音訊輸出、記憶體 Source
+  media-worker-harness.ts  browser mode 測試以協定驅動 media Worker 的 helper（wasm 資產、測試媒體、訊號分析）
   e2e/             Playwright 測試（*.spec.ts）
   smoke/           不屬於任何原始碼的 browser mode smoke test，例如 CI 的音訊環境
   docker/          Playwright image 加 PulseAudio，pnpm verify:docker 與 CI browser job 的執行環境

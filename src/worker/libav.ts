@@ -33,6 +33,7 @@ const READ_BLOCK = 256 * 1024;
 /** 每次 demux 讀出的封包量（bytes）。 */
 const READ_LIMIT = 32 * 1024;
 
+const AV_DISCARD_DEFAULT = 0;
 const AV_DISCARD_ALL = 48;
 const AV_CHANNEL_MONO = 0x4;
 const AV_CHANNEL_STEREO = 0x3;
@@ -61,6 +62,8 @@ export class LibavMedia {
   readonly #libav: LibAV;
   readonly #fmt: number;
   readonly #streams: readonly libavjs.Stream[];
+  /** 目前音軌的 decoder；換一個 start 時釋放。 */
+  #decoder: LibavAudioDecoder | null = null;
 
   private constructor(
     libav: LibAV,
@@ -107,7 +110,7 @@ export class LibavMedia {
       [fmt, streams] = await libav.ff_init_demuxer_file(DEVICE);
     } catch (error) {
       signal.throwIfAborted();
-      if (error instanceof WorkerError) throw error;
+      if (error instanceof WorkerError || error instanceof WebAssembly.RuntimeError) throw error;
       throw new WorkerError('FORMAT_UNSUPPORTED', '無法辨識的媒體格式', { cause: error });
     }
     signal.throwIfAborted();
@@ -132,7 +135,10 @@ export class LibavMedia {
     return new LibavMedia(libav, fmt, streams, raw, start === null ? 0 : start / 1e6);
   }
 
-  /** 只讀選用的音軌（其餘 discard），建立它的 decoder 與 filter graph，回傳這個 epoch 的供料。 */
+  /**
+   * 只讀選用的音軌（其餘 discard），建立它的 decoder 與 filter graph，回傳這個 epoch 的供料。
+   * 呼叫端要先停下前一個供料；demuxer 不會倒回，回到較早的位置要經 seek（#37）。
+   */
   async startAudio(
     streamIndex: number,
     options: Omit<AudioPipelineOptions<Packet>, 'reader' | 'decoder'>,
@@ -141,9 +147,11 @@ export class LibavMedia {
     const stream = this.#streams[streamIndex];
     if (!stream) throw new WorkerError('INTERNAL', `沒有 stream ${String(streamIndex)}`);
     for (const s of this.#streams) {
-      if (s !== stream) await libav.AVStream_discard_s(s.ptr, AV_DISCARD_ALL);
+      await libav.AVStream_discard_s(s.ptr, s === stream ? AV_DISCARD_DEFAULT : AV_DISCARD_ALL);
     }
+    await this.#decoder?.free();
     const decoder = await LibavAudioDecoder.create(libav, stream, this.origin, options.sampleRate);
+    this.#decoder = decoder;
     const reader: PacketReader<Packet> = {
       read: async () => {
         const [result, packets] = await libav.ff_read_frame_multi(this.#fmt, decoder.pkt, {
@@ -243,6 +251,13 @@ class LibavAudioDecoder implements AudioDecoder<Packet> {
     return this.#filter(frames, true);
   }
 
+  /** 釋放 decoder 與 filter graph。 */
+  async free(): Promise<void> {
+    if (this.#graph) await this.#libav.avfilter_graph_free_js(this.#graph.graph);
+    this.#graph = null;
+    await this.#libav.ff_free_decoder(this.#ctx, this.pkt, this.#frame);
+  }
+
   packetDuration(packet: Packet): number {
     const duration = (packet.duration ?? 0) + (packet.durationhi ?? 0) * 2 ** 32;
     const num = packet.time_base_num ?? 0;
@@ -303,10 +318,11 @@ class LibavAudioDecoder implements AudioDecoder<Packet> {
   }
 
   #time(frame: Frame): number | null {
-    const pts = int64(this.#libav, frame.pts ?? 0, frame.ptshi ?? 0);
     const num = frame.time_base_num ?? 0;
     const den = frame.time_base_den ?? 0;
-    if (pts === null || frame.pts === undefined || !(num > 0 && den > 0)) return null;
+    if (frame.pts === undefined || !(num > 0 && den > 0)) return null;
+    const pts = int64(this.#libav, frame.pts, frame.ptshi ?? 0);
+    if (pts === null) return null;
     return (pts * num) / den - this.#origin;
   }
 }
