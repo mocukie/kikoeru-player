@@ -207,6 +207,8 @@ export interface Engine extends EventTarget {
   /**
    * 設定 `paused = false`，resolve 於 state 真正進入 `'playing'`（音訊開始輸出）。
    * 在 `'ended'` 時呼叫會從頭播放。之後若有 `pause()` 或 `load()` 先完成，reject AbortError。
+   * 執行時沒有媒體（state 為 `'idle'` 或 `'error'`）則以 `DOMException`（name `'InvalidStateError'`）reject，
+   * `paused` 仍然改為 false。
    */
   play(): Promise<void>;
 
@@ -217,6 +219,8 @@ export interface Engine extends EventTarget {
    * 精準 seek（影片到 frame、音訊到 sample），resolve 實際落點（夾在 `[0, duration]`）。
    * 連續呼叫時只執行最後一個，被取代的 reject AbortError。
    * loading 期間呼叫時改寫該次 load 的起點，於 load 完成時一起 resolve。
+   * `time` 不是有限數時 reject `TypeError`；執行時沒有媒體（state 為 `'idle'` 或 `'error'`）則以
+   * `DOMException`（name `'InvalidStateError'`）reject。
    */
   seek(time: number): Promise<number>;
 
@@ -257,6 +261,7 @@ export interface Engine extends EventTarget {
   /**
    * 立即釋放所有資源：中止讀取、關閉 decoder、terminate Worker、關閉 AudioContext。
    * 所有未完成的指令 reject AbortError，之後任何指令都 reject `EngineError('DESTROYED')`。可重複呼叫。
+   * 完成後 state 為 `'idle'`、`paused` 為 true。
    */
   destroy(): Promise<void>;
 
