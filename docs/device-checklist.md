@@ -51,10 +51,10 @@ Safari 不跑 E2E，共同項目都要做。
 ### iOS Safari
 
 - [ ] AudioWorklet 能接收 transfer 過來的 `MessagePort`：load 之後能出聲。
-- [ ] 靜音鍵開啟時的行為（記下有沒有聲音；背景播放模組完成後應該要有聲音）。
+- [ ] 靜音鍵開啟時的行為：關掉 Demo 頁的「背景播放模組」記下有沒有聲音；打開時應該要有聲音（`audioSession.type = "playback"`）。
 - [ ] 有線耳機、藍牙耳機的拔除與連接：播放不中斷，或依系統行為暫停後能再按 play 恢復。
 - [ ] **系統中斷**：播放中以來電、Siri 或計時器響鈴中斷，事件 log 出現 `paused=true reason=interrupted`；中斷結束後**不會**自動恢復出聲（WebKit 自己 resume `AudioContext` 時 worklet 仍輸出靜音），按 play 出現 `beforeaudiostart cause=resume` 並恢復播放。若中斷尚未結束就按 play，記下是否得到 `AUDIO_OUTPUT`（`play()` 的非致命 reject，`paused` 回到 true）。
-- [ ] **鎖屏控制**：沒有背景播放模組時，鎖屏的 Now Playing 是 `AudioContext`；以鎖屏的暫停、播放鍵操作，事件 log 出現 `reason=external`，`paused` 跟著改變。
+- [ ] **鎖屏控制**：關掉 Demo 頁的「背景播放模組」（沒有 anchor）時，鎖屏的 Now Playing 是 `AudioContext`；以鎖屏的暫停、播放鍵操作，事件 log 出現 `reason=external`，`paused` 跟著改變。
 - [ ] **長時間暫停後的 resume**：暫停 40 秒以上（Engine 已 suspend `AudioContext`）後，分別以頁面的 play、鎖屏的播放鍵恢復，記下哪一種需要 gesture、有沒有聲音。
 
 ### Android Chrome
@@ -64,12 +64,28 @@ Safari 不跑 E2E，共同項目都要做。
 
 ## 背景與鎖屏
 
-背景播放模組（`kikoeru-player/background`）完成後才執行。底稿來自 kikoeru 的行動瀏覽器背景播放 research；Android 只在使用靜音 anchor 時才有背景播放（[ADR-0006](adr/0006-background-playback-module.md)）。
+使用背景播放模組（`kikoeru-player/background`，Demo 頁預設打開「背景播放模組」）。底稿來自 kikoeru 的行動瀏覽器背景播放 research；Android 只在使用靜音 anchor 時才有背景播放（[ADR-0006](adr/0006-background-playback-module.md)）。Demo 頁沒有設定 Media Session 的 handler 與 metadata（App 負責），以下項目記下的是沒有 handler 時的行為；Media Session 的上一首、下一首、seek、metadata、artwork 與進度條在 kikoeru 驗證。模組的 log 以 `[background]` 開頭出現在事件 log。
 
-- [ ] 鎖屏後連續播放 30 分鐘以上不中斷，並記錄耗電。
-- [ ] 背景中能自動播下一個檔案，包括背景中的 fetch、demux 與 decoder 初始化。
-- [ ] 鎖屏控制：play、pause、上一首、下一首、seek；metadata 與 artwork 正確，進度條同步。
-- [ ] 中斷與恢復：來電、Siri、鬧鐘或計時器、拔除耳機；iOS 的 `interrupted` 狀態與恢復路徑。
-- [ ] 在鎖屏暫停 10 秒以上再按播放（iOS 的 process 可能已經被 suspend）。
-- [ ] iPhone 靜音鍵開啟時仍有聲音。
+### 共同（iOS Safari、Android Chrome）
+
+- [ ] **鎖屏**：播放中鎖屏，連續播放 30 分鐘以上不中斷，並記錄耗電。
+- [ ] **背景接下一首**：勾選「播完接下一首」，播放一個短檔後鎖屏或切到其他 App；播完時自動 load 下一個檔案並出聲（背景中的 fetch、demux 與 decoder 初始化，不需要 gesture），anchor 在換曲之間不中斷。
+- [ ] **buffering 時不被凍結**：故障注入選「delay=200」或「stall@1MB」，在背景中播放到 buffering；恢復後繼續出聲（anchor 在 buffering 時繼續播放，process 沒有被凍結）。
+- [ ] **暫停後從鎖屏恢復**：播放中從頁面按 pause，鎖屏的播放器仍在；從鎖屏按播放能恢復，事件 log 出現 `paused=false reason=command`（anchor 的外部播放鏡像為 `engine.play()`）。另外暫停 40 秒以上（Engine 已 suspend `AudioContext`）再從鎖屏按播放，記下是否出聲、是否得到 `AUDIO_LOCKED`。
+- [ ] **中斷與恢復**：來電、鬧鐘或計時器、拔除耳機；事件 log 的 reason（`interrupted`、`external` 或 anchor 鏡像的 `command`），以及之後按 play 能恢復。
+- [ ] **detach**：播放中取消勾選「背景播放模組」，鎖屏的播放器消失或不再控制 Engine；再勾選時立即回來。
+
+### iOS Safari
+
+- [ ] **Now Playing**：播放中鎖屏，Now Playing 顯示的是 anchor（media element），而不是 `AudioContext`；鎖屏的暫停、播放鍵讓 Engine 跟著停止與播放（事件 log 的 `reason=command`），不是 WebKit 直接 suspend `AudioContext`（`reason=external`）。
+- [ ] **暫停後的 Now Playing**：播放中按 pause，30 秒內（`AudioContext` 仍在執行）鎖屏，Now Playing 是否仍是 anchor、從鎖屏按播放是否正常（ADR-0006 留給實機驗證）。
+- [ ] **靜音鍵**：靜音鍵開啟時仍有聲音。
+- [ ] **鎖屏暫停 10 秒以上再播放**：process 可能已經被 suspend，按播放後能恢復出聲。
+- [ ] **背景接下一首時 anchor 持續播放**：上方「背景接下一首」時 Now Playing 不被搶走、不消失。
 - [ ] 鎖屏上沒有沒作用的按鈕（Now Playing 是 `AudioContext` 時的上一首、下一首）。
+
+### Android Chrome
+
+- [ ] **通知**：播放時出現媒體通知；通知的暫停、播放讓 Engine 跟著停止與播放（`reason=command`）。換曲（「播完接下一首」）時通知不閃爍、不消失。
+- [ ] **audio focus**：播放中開啟其他 App 播放音樂，Engine 跟著暫停（anchor 被搶走 focus 的 pause 鏡像為 `engine.pause()`）；回來按 play 能恢復。
+- [ ] **來電**：來電時 Engine 暫停，掛斷後依系統行為恢復或停在 paused，記下結果。

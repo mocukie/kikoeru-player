@@ -1,7 +1,15 @@
 // Demo 頁：以公開 API 操作 Engine，顯示狀態並記錄事件（docs/testing.md「實機清單」、「E2E」）。
 // E2E 與實機除錯可以從 console 以 `engine` 直接使用同一個 Engine。
 
-import { createEngine, EngineError, isAbortError, type Engine, type Source } from '../src/index.js';
+import { attachBackgroundPlayback, type BackgroundPlayback } from '../src/background/index.js';
+import {
+  createEngine,
+  EngineError,
+  isAbortError,
+  type Engine,
+  type LogEntry,
+  type Source,
+} from '../src/index.js';
 
 declare global {
   var engine: Engine;
@@ -23,6 +31,8 @@ const urlInput = element('url', HTMLInputElement);
 const fileInput = element('file', HTMLInputElement);
 const logList = element('log', HTMLOListElement);
 const autoplayInput = element('autoplay', HTMLInputElement);
+const backgroundInput = element('background', HTMLInputElement);
+const nextOnEndedInput = element('next-on-ended', HTMLInputElement);
 
 // ───────────────────────────── 事件 log ─────────────────────────────
 
@@ -96,6 +106,55 @@ function setupEngine(): void {
   target.addEventListener('beforeaudiostart', (e) => {
     log(`beforeaudiostart cause=${e.cause}`);
   });
+  target.addEventListener('destroy', () => {
+    log('destroy');
+    // 背景播放模組已經自己 detach。
+    if (engine === target) background = null;
+  });
+  target.addEventListener('ended', () => {
+    if (nextOnEndedInput.checked) playNext();
+  });
+  if (backgroundInput.checked) attachBackground();
+}
+
+// ───────────────────────────── 背景播放模組 ─────────────────────────────
+
+/** 目前 Engine 上的背景播放模組；沒有 attach 時為 null。 */
+let background: BackgroundPlayback | null = null;
+
+function logBackground(entry: LogEntry): void {
+  const data = entry.data ? ` ${JSON.stringify(entry.data)}` : '';
+  log(`[${entry.scope}] ${entry.level} ${entry.message}${data}`);
+}
+
+function attachBackground(): void {
+  background = attachBackgroundPlayback(engine, { log: logBackground });
+  log('背景播放模組 attach');
+}
+
+backgroundInput.addEventListener('change', () => {
+  if (backgroundInput.checked) {
+    if (!background) attachBackground();
+  } else if (background) {
+    background.detach();
+    background = null;
+    log('背景播放模組 detach');
+  }
+});
+
+/**
+ * 播完後接 CI 組媒體清單的下一個（實機清單的「背景接下一首」）：`ended` 時 `paused` 仍為 false，
+ * 以 `load(…, { paused: false })` 接續，anchor 不中斷、不需要 gesture。
+ */
+function playNext(): void {
+  const options = [...mediaSelect.options];
+  const next = options[(mediaSelect.selectedIndex + 1) % options.length];
+  if (!next) return;
+  mediaSelect.value = next.value;
+  const url = mediaUrl();
+  command(`load ${url}（下一首，paused: false）`, () =>
+    engine.load({ kind: 'http', url }, { paused: false }).then((info) => info.format),
+  );
 }
 
 setupEngine();
@@ -209,6 +268,7 @@ const mediaText = element('media-info', HTMLElement);
 const errorText = element('error', HTMLElement);
 const audioStatsText = element('audio-stats', HTMLElement);
 const resourcesText = element('resources', HTMLElement);
+const backgroundText = element('background-state', HTMLElement);
 
 // getStats() 是非同步的：每秒取一次 ring 水位、underrun、輸出延遲（實機檢查藍牙延遲用）與存活的資源數。
 setInterval(() => {
@@ -239,6 +299,7 @@ function render(): void {
     seekTime.value = engine.currentTime.toFixed(3);
   }
   errorText.textContent = engine.error ? describeError(engine.error) : '—';
+  backgroundText.textContent = background ? 'attached' : 'detached';
   const media = engine.media;
   mediaText.textContent = media
     ? `${media.format}，${String(media.size)} bytes，${media.tracks

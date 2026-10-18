@@ -654,6 +654,7 @@ class EngineImpl extends EventTarget implements Engine {
     this.#queue.close(() => this.#destroyedError());
     // 主執行緒還沒有持有任何 VideoFrame；影片的 issue 在這裡 close() 它們。
     this.#clearMedia();
+    this.dispatchEvent(new Event('destroy'));
     // 斷開 worklet 並經佇列 close()；佇列的 timeout 保證一定會 settle，失敗也不讓 destroy() 失敗。
     const closing = this.#context.close();
     this.#stopWatchdog();
