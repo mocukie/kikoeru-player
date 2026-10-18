@@ -34,8 +34,9 @@ function handlers(): AudioOutputHandlers {
   };
 }
 
-function open(): AudioOutput {
-  output = createWebAudioOutput(handlers(), { audioBuffer });
+/** 預設硬切（`audioFadeMs` 0），讓逐 sample 的比對不受淡入淡出影響。 */
+function open(audioFadeMs = 0): AudioOutput {
+  output = createWebAudioOutput(handlers(), { audioBuffer, audioFadeMs });
   return output;
 }
 
@@ -163,7 +164,112 @@ test('新的 epoch 讓 ring 內的舊資料不被播出；暫停時時鐘不前�
 test('worklet 載入失敗時 connect() 以 AssetLoadError reject', async () => {
   output = createWebAudioOutput(handlers(), {
     audioBuffer,
+    audioFadeMs: 0,
     workletUrl: new URL('/does-not-exist/worklet.js', location.href),
   });
   await expect(output.connect()).rejects.toBeInstanceOf(AssetLoadError);
+});
+
+/** 相鄰 sample 差的最大值。 */
+function maxStep(samples: Float32Array): number {
+  let max = 0;
+  for (let i = 1; i < samples.length; i++) {
+    max = Math.max(max, Math.abs((samples[i] ?? 0) - (samples[i - 1] ?? 0)));
+  }
+  return max;
+}
+
+/** 落在 (low, high) 之間（不含兩端）的 sample 數：淡入淡出途中的 sample。 */
+function countBetween(samples: Float32Array, low: number, high: number): number {
+  const eps = 1e-6;
+  return samples.filter((v) => v > low + eps && v < high - eps).length;
+}
+
+/** 以 `sources` 供料、開始播放 epoch 1（長 3 秒），等到 worklet 回報 playing。 */
+async function startPlaying(
+  audio: AudioOutput,
+  sources: (sampleRate: number) => Record<number, [Float32Array, Float32Array]>,
+): Promise<void> {
+  audio.post({ type: 'flush', epoch: 1, position: 0 });
+  audio.post({ type: 'duration', epoch: 1, duration: 3 });
+  audio.post({ type: 'play', epoch: 1 });
+  feed(await audio.connect(), audio.sampleRate, sources(audio.sampleRate));
+  await audio.resume();
+  await until(reported('playing', 1));
+}
+
+/** 再錄 `seconds` 秒。 */
+async function record(seconds: number, sampleRate: number): Promise<void> {
+  const from = capture.frames;
+  await until(() => capture.frames > from + sampleRate * seconds);
+}
+
+test('audioFadeMs：開始播放時淡入、pause 時淡出，長度符合設定，沒有不連續的跳點', async () => {
+  const audio = open(10);
+  const fade = Math.round(audio.sampleRate / 100);
+  await startPlaying(audio, (sr) => ({ 1: constantPcm(sr * 3, 0.5) }));
+  await record(0.2, audio.sampleRate);
+  audio.post({ type: 'pause', epoch: 1 });
+  await until(reported('paused', 1));
+  await settle();
+
+  const [left] = capture.channels();
+  // 淡入與淡出各有 fade − 1 個介於 0 與 0.5 之間的 sample。
+  expect(countBetween(left, 0, 0.5)).toBe(2 * (fade - 1));
+  expect(maxStep(left)).toBeLessThanOrEqual(0.5 / fade + 1e-6);
+  expect(left.at(-1)).toBe(0);
+  // 時鐘停在淡出結束的位置：淡出的 sample 也算進去。
+  const played = left.filter((v) => v !== 0).length + 1;
+  const stopped = reports.findLast((r) => r.type === 'clock');
+  expect(stopped?.position).toBeCloseTo(played / audio.sampleRate, 4);
+});
+
+test('audioFadeMs：seek（新的 epoch）時舊資料淡出、新資料淡入，沒有不連續的跳點', async () => {
+  const audio = open(10);
+  const fade = Math.round(audio.sampleRate / 100);
+  await startPlaying(audio, (sr) => ({ 1: constantPcm(sr * 3, 0.5), 2: constantPcm(sr, -0.25) }));
+  await record(0.2, audio.sampleRate);
+  audio.post({ type: 'flush', epoch: 2, position: 1 });
+  await until(reported('playing', 2));
+  await record(0.1, audio.sampleRate);
+
+  const [left] = capture.channels();
+  // 舊資料的淡出與新資料的淡入可能重疊（新的 epoch 很快就補滿），兩者相加仍然連續。
+  expect(maxStep(left)).toBeLessThanOrEqual(0.75 / fade + 1e-6);
+  const fadeOutFrom = left.lastIndexOf(0.5) + 1;
+  const lastOld = left.findLastIndex((v) => v > 0);
+  const firstNew = left.indexOf(-0.25);
+  // 舊資料在 audioFadeMs 內淡完；新資料淡入 audioFadeMs 才到原本的音量。
+  expect(lastOld - fadeOutFrom).toBeLessThan(fade);
+  expect(firstNew - fadeOutFrom).toBeGreaterThanOrEqual(fade - 1);
+  expect(left.subarray(firstNew).every((v) => v === -0.25)).toBe(true);
+});
+
+test('audioFadeMs 0：硬切', async () => {
+  const audio = open(0);
+  await startPlaying(audio, (sr) => ({ 1: constantPcm(sr * 3, 0.5) }));
+  await record(0.1, audio.sampleRate);
+  audio.post({ type: 'pause', epoch: 1 });
+  await until(reported('paused', 1));
+  await settle();
+
+  const [left] = capture.channels();
+  expect(countBetween(left, 0, 0.5)).toBe(0);
+  expect(maxStep(left)).toBe(0.5);
+});
+
+test('setGain：以 setTargetAtTime 平滑地改變音量', async () => {
+  const audio = open(0);
+  await startPlaying(audio, (sr) => ({ 1: constantPcm(sr * 3, 0.5) }));
+  await record(0.1, audio.sampleRate);
+  audio.setGain(0.25, true);
+  await record(0.3, audio.sampleRate);
+
+  const [left] = capture.channels();
+  const start = left.findIndex((v) => v !== 0);
+  const steady = left.subarray(start + 1);
+  // time constant 10 ms：每個 sample 最多變化 (0.5 − 0.125) / 480 左右。
+  expect(maxStep(steady)).toBeLessThan(0.002);
+  expect(left.at(-1)).toBeCloseTo(0.125, 3);
+  expect(countBetween(steady, 0.125 + 1e-3, 0.5 - 1e-3)).toBeGreaterThan(audio.sampleRate / 200);
 });

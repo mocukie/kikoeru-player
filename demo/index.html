@@ -110,6 +110,12 @@
       <input id="seek" type="range" min="0" max="0" step="0.001" value="0" disabled />
       <output id="seek-time" for="seek">0.000</output>
     </div>
+    <div class="row">
+      <label for="volume">volume</label>
+      <input id="volume" type="range" min="0" max="1" step="0.01" value="1" />
+      <output id="volume-value" for="volume">1.00</output>
+      <label><input id="muted" type="checkbox" /> muted</label>
+    </div>
 
     <h2>狀態</h2>
     <dl>
@@ -127,6 +133,8 @@
       <dd id="error">—</dd>
       <dt>media</dt>
       <dd id="media-info">—</dd>
+      <dt>audio</dt>
+      <dd id="audio-stats">—</dd>
     </dl>
 
     <h2>事件 log <button id="copy-log" type="button">複製</button></h2>

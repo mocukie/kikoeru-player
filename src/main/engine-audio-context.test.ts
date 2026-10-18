@@ -488,7 +488,7 @@ describe('watchdog', () => {
     expect(fresh.received).toEqual([
       { type: 'flush', epoch: fresh.epoch, position: 2 },
       { type: 'duration', epoch: fresh.epoch, duration: 10 },
-      { type: 'pause', epoch: fresh.epoch },
+      { type: 'pause', epoch: fresh.epoch, immediate: true },
       { type: 'play', epoch: fresh.epoch },
     ]);
     expect(fresh.calls).toEqual(['resume', 'connect']);

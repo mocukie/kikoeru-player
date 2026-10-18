@@ -44,6 +44,11 @@ function recordChanges(target: Engine): StateChangeEvent[] {
   return changes;
 }
 
+/** 振幅的最大值。 */
+function peak(samples: Float32Array): number {
+  return samples.reduce((max, v) => Math.max(max, Math.abs(v)), 0);
+}
+
 /** 經 Demo 頁之外的方式取得 Engine 的 AudioContext：錄音 helper 記下了接到 destination 的 context。 */
 function context(): AudioContext {
   const ctx = capture.context;
@@ -138,4 +143,27 @@ test('beforeaudiostart 在 gesture 的同步段內發出：listener 內可以同
   await expect(started).resolves.toBeUndefined();
   await until(() => target.audioUnlocked);
   audio.pause();
+});
+
+test('muted：輸出變為靜音，currentTime 照常前進；取消後恢復出聲', async () => {
+  engine = createEngine();
+  await engine.load(source, { paused: false });
+  await until(() => (engine?.currentTime ?? 0) > 0.2);
+
+  engine.muted = true;
+  const at = engine.currentTime;
+  // GainNode 以 time constant 10 ms 趨近 0：等 100 ms 之後才開始錄。
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const from = capture.frames;
+  await until(() => (engine?.currentTime ?? 0) > at + 0.5);
+  expect(engine.state).toBe('playing');
+  const [left] = capture.channels();
+  expect(peak(left.subarray(from))).toBeLessThan(1e-3);
+
+  engine.muted = false;
+  const unmuted = capture.frames;
+  // flac.flac 每秒一個 beep：再錄 1.2 秒一定會聽到。
+  await until(() => capture.frames > unmuted + context().sampleRate * 1.2);
+  const [after] = capture.channels();
+  expect(peak(after.subarray(unmuted))).toBeGreaterThan(0.2);
 });

@@ -66,9 +66,15 @@ function silence(count: number): number[] {
   return Array<number>(count).fill(0);
 }
 
-function setup() {
+/** `audioFadeMs` 預設 0（硬切），讓與淡入淡出無關的測試直接比對 sample。 */
+function setup(audioFadeMs = 0) {
   const reports: WorkletToMainMessage[] = [];
-  const core = new OutputCore({ sampleRate, audioBuffer, report: (m) => reports.push(m) });
+  const core = new OutputCore({
+    sampleRate,
+    audioBuffer,
+    audioFadeMs,
+    report: (m) => reports.push(m),
+  });
   const worker = new FakeTransport();
   core.connect(worker);
   let frame = 0;
@@ -420,5 +426,121 @@ describe('connect', () => {
   it('flush 之前不要求資料', () => {
     const { worker } = setup();
     expect(worker.sent).toEqual([]);
+  });
+});
+
+/** `count` 個 1。 */
+function ones(count: number): number[] {
+  return Array<number>(count).fill(1);
+}
+
+/** 逐 sample 的線性斜坡：`from` 起每個 sample 加 `step`，共 `count` 個（以 1e-6 的精度比較）。 */
+function linear(count: number, from: number, step: number, scale = 1): number[] {
+  return Array.from({ length: count }, (_, i) => round((from + step * i) * scale));
+}
+
+function round(value: number): number {
+  return Math.round(value * 1e6) / 1e6;
+}
+
+function rounded(values: number[]): number[] {
+  return values.map(round);
+}
+
+describe('淡入淡出（audioFadeMs 10：10 frame）', () => {
+  /** 已補滿、播放意圖為播放；ring 內是 `frames` 個 1。 */
+  function playing(frames = 150) {
+    const t = setup(10);
+    t.send({ type: 'flush', epoch: 1, position: 0 });
+    t.send({ type: 'play', epoch: 1 });
+    t.worker.pcm(1, 0, ones(frames));
+    return t;
+  }
+
+  it('開始輸出時以 audioFadeMs 線性淡入', () => {
+    const { renderFrames } = playing();
+    expect(rounded(renderFrames(20))).toEqual([...linear(10, 0.1, 0.1), ...ones(10)]);
+  });
+
+  it('pause：淡出結束才回報 paused，時鐘停在淡出結束的位置', () => {
+    const { send, render, renderFrames, states, lastClock } = playing();
+    renderFrames(30);
+    send({ type: 'pause', epoch: 1 });
+    expect(states()).toEqual(['playing']);
+
+    expect(rounded([...render(), ...render()])).toEqual([...linear(10, 0.9, -0.1), ...silence(10)]);
+    expect(states()).toEqual(['playing', 'paused']);
+    // 淡出的 10 個 sample 照常推進時鐘；停在第 40 個 sample，於 context frame 40 進入 graph。
+    expect(lastClock()).toMatchObject({ position: 0.04, frame: 40 });
+    expect(renderFrames(20)).toEqual(silence(20));
+  });
+
+  it('淡出途中 play：從目前的音量淡入回來，不回報 paused', () => {
+    const { core, send, renderFrames, states } = playing();
+    renderFrames(30);
+    const renderLeft = (frames: number, at: number) => {
+      const output = [new Float32Array(frames), new Float32Array(frames)];
+      core.render(output, at);
+      return rounded([...(output[0] ?? [])]);
+    };
+    send({ type: 'pause', epoch: 1 });
+    expect(renderLeft(4, 30)).toEqual([0.9, 0.8, 0.7, 0.6]);
+    send({ type: 'play', epoch: 1 });
+    expect(renderLeft(6, 34)).toEqual([0.7, 0.8, 0.9, 1, 1, 1]);
+    expect(states()).toEqual(['playing']);
+  });
+
+  it('immediate 的 pause（AudioContext 沒在 render）立即停止並回報', () => {
+    const { send, renderFrames, states, lastClock } = playing();
+    renderFrames(30);
+    send({ type: 'pause', epoch: 1, immediate: true });
+    expect(states()).toEqual(['playing', 'paused']);
+    expect(lastClock()).toMatchObject({ position: 0.03, frame: 30 });
+    expect(renderFrames(10)).toEqual(silence(10));
+  });
+
+  it('flush（seek）：舊資料接下來的一段淡出，新 epoch 的資料淡入', () => {
+    const { worker, send, render, renderFrames, states } = playing();
+    renderFrames(30);
+    send({ type: 'flush', epoch: 2, position: 5 });
+    expect(rounded(render())).toEqual(linear(10, 0.9, -0.1));
+    expect(render()).toEqual(silence(10));
+
+    worker.pcm(2, 5, Array<number>(150).fill(2));
+    expect(states()).toEqual(['playing', 'playing']);
+    expect(rounded(render())).toEqual(linear(10, 0.1, 0.1, 2));
+  });
+
+  it('underrun：ring 用完之前淡出，補回 target 才淡入', () => {
+    const { worker, renderFrames, states } = playing();
+    const left = renderFrames(150);
+    expect(rounded(left.slice(130))).toEqual([...ones(10), ...linear(10, 0.9, -0.1)]);
+    renderFrames(10);
+    expect(states()).toEqual(['playing', 'starved']);
+
+    worker.pcm(1, 0.15, ones(150));
+    expect(states()).toEqual(['playing', 'starved', 'playing']);
+    expect(rounded(renderFrames(10))).toEqual(linear(10, 0.1, 0.1));
+  });
+
+  it('underrun 前及時補到資料：淡出中斷、淡入回來', () => {
+    const { worker, renderFrames, states } = playing();
+    renderFrames(145);
+    worker.pcm(1, 0.15, ones(150));
+    const left = renderFrames(20);
+    expect(Math.min(...left)).toBeGreaterThan(0);
+    expect(left.at(-1)).toBe(1);
+    expect(states()).toEqual(['playing']);
+  });
+
+  it('audioFadeMs 0：硬切', () => {
+    const { send, worker, render, renderFrames, states } = setup(0);
+    send({ type: 'flush', epoch: 1, position: 0 });
+    send({ type: 'play', epoch: 1 });
+    worker.pcm(1, 0, ones(150));
+    expect(render()).toEqual(ones(10));
+    send({ type: 'pause', epoch: 1 });
+    expect(states()).toEqual(['playing', 'paused']);
+    expect(renderFrames(10)).toEqual(silence(10));
   });
 });

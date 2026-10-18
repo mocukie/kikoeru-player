@@ -1,7 +1,8 @@
 // Demo 頁的純音訊播放（#36）：以 Demo 頁的按鈕操作 Engine，錄下送到 destination 的聲音。
 //
 // init script 載入 test/audio-capture.ts：包住 `AudioNode.prototype.connect`，在接到 destination 的地方旁接錄音 worklet；
-// 並在每個 rAF 記下 Engine 的 `currentTime` 與 `getOutputTimestamp()`。
+// 並在每個 rAF 記下 Engine 的 `currentTime` 與 context 的時間。錄音點在 destination 之前，比對時扣掉 Engine 回報的
+// 輸出延遲（`getStats().audio.outputLatencyMs`，docs/testing.md「E2E」）。
 import { expect, test, type Page } from '@playwright/test';
 import type * as AudioCaptureModule from '../audio-capture.js';
 import type { DestinationCapture } from '../audio-capture.js';
@@ -14,7 +15,7 @@ interface Sample {
   perf: number;
   /** Engine 的 `currentTime`（秒）。 */
   time: number;
-  /** 依 `getOutputTimestamp()`：聽到 context 時間 0 的 `performance.now()`（ms）；取不到 timestamp 時依 `currentTime`。 */
+  /** 聽到 context 時間 0 的 `performance.now()`（ms）：context 的 `currentTime` 扣掉 Engine 回報的輸出延遲。 */
   heardOrigin: number;
 }
 
@@ -24,7 +25,7 @@ interface PageEngine {
   paused: boolean;
   currentTime: number;
   duration: number;
-  getStats(): Promise<{ resources: { workers: number } }>;
+  getStats(): Promise<{ resources: { workers: number }; audio: { outputLatencyMs: number } }>;
 }
 
 interface E2EWindow {
@@ -42,18 +43,22 @@ test.beforeEach(async ({ page }) => {
       m.captureDestination(),
     );
     w.e2eSamples = [];
+    // Engine 回報的輸出延遲（ms）；getStats() 是非同步的，約每 250 ms 更新一次。
+    let latencyMs = NaN;
+    let latencyAt = -Infinity;
     const sample = () => {
       const engine = (w as Partial<E2EWindow>).engine;
       void w.e2eCapture.then((capture) => {
         const context = capture.context as AudioContext | null;
         if (!engine || !context || engine.state !== 'playing') return;
         const perf = performance.now();
+        if (perf - latencyAt > 250) {
+          latencyAt = perf;
+          void engine.getStats().then((stats) => (latencyMs = stats.audio.outputLatencyMs));
+        }
+        if (Number.isNaN(latencyMs)) return;
         const time = engine.currentTime;
-        const { contextTime = 0, performanceTime = 0 } = context.getOutputTimestamp();
-        const heardOrigin =
-          contextTime > 0
-            ? performanceTime - contextTime * 1000
-            : perf - context.currentTime * 1000;
+        const heardOrigin = perf - context.currentTime * 1000 + latencyMs;
         w.e2eSamples.push({ perf, time, heardOrigin });
       });
       requestAnimationFrame(sample);
@@ -126,6 +131,21 @@ function expectBeepsOnTime(beeps: HeardBeep[], expected: number[]): void {
   }
 }
 
+/**
+ * 暫停後 currentTime 停住的位置：淡出結束之後，輸出延遲內聽到的還是之前的 sample，currentTime 會再走一小段才停。
+ */
+async function settledTime(page: Page): Promise<number> {
+  let last = NaN;
+  await expect
+    .poll(async () => {
+      const previous = last;
+      last = await currentTime(page);
+      return last === previous;
+    })
+    .toBe(true);
+  return last;
+}
+
 function now(page: Page): Promise<number> {
   return page.evaluate(() => performance.now());
 }
@@ -181,6 +201,25 @@ test('暫停中 seek 再播放：從落點開始，beep 起點對 currentTime �
   expectBeepsOnTime(await heardBeeps(page, before), [7, 8]);
 });
 
+test('pause 後 resume：beep 起點對 currentTime 仍 ≤ 20 ms', async ({ page }) => {
+  await load(page, 'audio/flac.flac');
+  await page.locator('#play').click();
+  await expect.poll(() => currentTime(page)).toBeGreaterThan(1.3);
+  await page.locator('#pause').click();
+  await expect(page.locator('#state')).toHaveText('paused');
+  const paused = await settledTime(page);
+
+  const before = await now(page);
+  await page.locator('#play').click();
+  await expect(page.locator('#state')).toHaveText('playing');
+  const next = Math.ceil(paused + 0.05);
+  await expect.poll(() => currentTime(page), { timeout: 5000 }).toBeGreaterThan(next + 1.3);
+  expectBeepsOnTime(
+    (await heardBeeps(page, before)).filter((b) => b.time > paused),
+    [next, next + 1],
+  );
+});
+
 test('播放中 reload：從原本的位置接續播放，舊的 Worker 被 terminate', async ({ page }) => {
   await load(page, 'audio/flac.flac');
   await page.locator('#play').click();
@@ -226,7 +265,7 @@ test('CI 組的純音訊檔都能播放與暫停，並輸出聲音', async ({ pa
       await page.locator('#pause').click();
       await expect(page.locator('#state')).toHaveText('paused');
 
-      const paused = await currentTime(page);
+      const paused = await settledTime(page);
       expect(paused).toBeGreaterThan(0.3);
       const peak = await page.evaluate(async (from) => {
         const capture = await (window as unknown as E2EWindow).e2eCapture;
