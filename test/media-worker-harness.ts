@@ -134,9 +134,19 @@ export class WorkerDriver {
     options: { epoch?: number; time?: number; frames?: number } = {},
   ): Promise<DecodedPcm> {
     const epoch = options.epoch ?? 1;
-    const frames = options.frames ?? 1e12;
-    const from = this.worklet.length;
     this.post({ type: 'start', epoch, time: options.time ?? 0, audio });
+    return this.collect(epoch, options.frames);
+  }
+
+  /** seek 到 `time`，以新的 `epoch` 要 `frames` 個 frame（預設全部），等到 EOF 或送滿。 */
+  async seek(time: number, epoch: number, frames?: number): Promise<DecodedPcm> {
+    this.post({ type: 'seek', epoch, time });
+    return this.collect(epoch, frames);
+  }
+
+  /** 要 `epoch` 的 `frames` 個 frame（預設全部），收集之後送來的 PCM，等到 EOF 或送滿。 */
+  async collect(epoch: number, frames = 1e12): Promise<DecodedPcm> {
+    const from = this.worklet.length;
     this.need(epoch, frames);
     const ofEpoch = () => this.worklet.slice(from).filter((m) => m.epoch === epoch);
     const pcm = () => ofEpoch().filter((m): m is WorkletPcmMessage => m.type === 'pcm');

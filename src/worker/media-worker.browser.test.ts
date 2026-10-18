@@ -6,6 +6,7 @@ import {
   audioTracks,
   beepOnsets,
   beepWav,
+  type DecodedPcm,
   importOnlyWasm,
   mediaBytes,
   peak,
@@ -256,6 +257,222 @@ describe('供料', () => {
     await driver.load({ kind: 'blob', blob });
     const pcm = await driver.decode(0);
     expect(pcm.left.length).toBe(SECONDS * 48_000);
+  });
+});
+
+/**
+ * `seeked`（從 seek 落點開始的 PCM）與 `reference`（從頭解碼的 PCM）在 `reference[start]` 附近的對齊：
+ * 在 ±`range` sample 內找平方誤差最小的位移，回傳位移與該位移的 RMS 誤差。
+ */
+function alignment(
+  reference: Float32Array,
+  start: number,
+  seeked: Float32Array,
+  length: number,
+  range = 32,
+): { lag: number; rms: number } {
+  let best = { lag: NaN, rms: Infinity };
+  for (let lag = -range; lag <= range; lag++) {
+    let sum = 0;
+    for (let i = 0; i < length; i++) {
+      const d = (seeked[i] ?? 0) - (reference[start + lag + i] ?? 0);
+      sum += d * d;
+    }
+    const rms = Math.sqrt(sum / length);
+    if (rms < best.rms) best = { lag, rms };
+  }
+  return best;
+}
+
+describe('精準 seek', () => {
+  /** 落點：整秒附近、beep 中間、不落在 sample 整數倍上的時間，以及回到開頭。比對的範圍（1.1 秒）一定含一個完整的 beep。 */
+  const targets = [0.5, 3.03, 4.123_456, 7.95, 0];
+
+  /**
+   * 和從頭解碼的結果比對：起點誤差 0 sample，經重採樣的路線 ≤ 1 sample。輸出的第一個 sample 是落點捨入到的那個
+   * sample，回報的時間是它的位置。不經重採樣時，lossless 逐 sample 相同；有損 codec 的 preroll 讓內容收斂
+   *（ADR-0003），誤差遠小於差一個 sample 的程度（比對範圍內，880 Hz、振幅 0.5 的 beep 差一個 sample 約 0.012 RMS）。
+   */
+  async function expectPreciseSeeks(
+    driver: WorkerDriver,
+    reference: DecodedPcm,
+    options: { resampled: boolean; lossless: boolean; maxLag?: number },
+  ): Promise<void> {
+    let epoch = 100;
+    for (const target of targets) {
+      const at = `${String(target)} s`;
+      const seeked = await driver.seek(target, ++epoch);
+      expect(seeked.chunks.every((c) => c.epoch === epoch)).toBe(true);
+      expect(Math.abs(seeked.time - target) * 48_000, at).toBeLessThanOrEqual(0.5 + 1e-6);
+      const start = Math.round(target * 48_000);
+      const length = seeked.left.length - (reference.left.length - start);
+      const { lag, rms } = alignment(reference.left, start, seeked.left, 1.1 * 48_000, 64);
+      if (options.maxLag !== undefined) {
+        expect(Math.abs(length), at).toBeLessThanOrEqual(options.maxLag);
+        expect(Math.abs(lag), at).toBeLessThanOrEqual(options.maxLag);
+        expect(rms, at).toBeLessThan(0.002);
+      } else if (options.resampled) {
+        expect(Math.abs(length), at).toBeLessThanOrEqual(1);
+        expect(Math.abs(lag), at).toBeLessThanOrEqual(1);
+        expect(rms, at).toBeLessThan(0.01);
+      } else {
+        expect(length, at).toBe(0);
+        expect(lag, at).toBe(0);
+        if (options.lossless) expect(rms, at).toBe(0);
+        else expect(rms, at).toBeLessThan(0.002);
+      }
+    }
+  }
+
+  test.each(audioFiles)('$file', async ({ file, lossless }) => {
+    const { driver, track, pcm: reference } = await decodeFile(`audio/${file}`);
+    await expectPreciseSeeks(driver, reference, {
+      resampled: track.sampleRate !== 48_000,
+      lossless,
+    });
+  });
+
+  /**
+   * 影片容器內的音軌。Matroska／WebM 的時間戳以 ms 為單位，封包的位置本身就有 ±0.5 ms 的捨入，從頭解碼與 seek 後
+   * 各自取整：容許 1 ms（48 sample）。
+   */
+  test.each([
+    ['video/h264-aac.mp4', 1, 0],
+    ['video/h264-mp3.avi', 1, 0],
+    ['video/vp9-opus.webm', 1, 48],
+    ['video/multi-track.mkv', 1, 48],
+    ['video/multi-track.mkv', 2, 48],
+  ])('影片容器 %s 的 stream %i', async (file, stream, maxLag) => {
+    const driver = await WorkerDriver.init(inPage());
+    await driver.load({ kind: 'bytes', data: await mediaBytes(file) });
+    const reference = await driver.decode(stream);
+    await expectPreciseSeeks(driver, reference, { resampled: false, lossless: false, maxLag });
+  });
+});
+
+describe('seek 與讀取中止', () => {
+  /**
+   * 包住一份 bytes 的來源；`stallNext()` 之後的下一個讀取掛起，直到被中止。用 PCM 的 WAV（約 1.9 MB）：
+   * 每 256 KB（約 1.4 秒）讀一次，開檔的 probe 會先讀進約 5 秒。
+   */
+  function stallableSource(data: Uint8Array) {
+    const stalled: AbortSignal[] = [];
+    let stall = false;
+    const source: ByteSource = {
+      size: data.length,
+      read: (offset, length, signal) => {
+        if (!stall) return Promise.resolve(data.subarray(offset, offset + length));
+        stall = false;
+        stalled.push(signal);
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => {
+            reject(signal.reason as Error);
+          });
+        });
+      },
+    };
+    return {
+      stalled,
+      stallNext: () => {
+        stall = true;
+      },
+      driver: () =>
+        WorkerDriver.init(inPage({ openSource: () => Promise.resolve(source) })).then(
+          async (driver) => {
+            await driver.load({ kind: 'http', url: 'stallable' });
+            return driver;
+          },
+        ),
+    };
+  }
+
+  /** 從 `time` 到結尾的 beep 起點：每整秒一個（門檻在 beep 開始後第 2 個 sample 越過）。精準度見「精準 seek」。 */
+  function expectBeepsFrom(pcm: DecodedPcm, time: number): void {
+    const expected = beeps.filter((b) => b >= time).map((b) => b - time);
+    const onsets = beepOnsets(pcm.left, 48_000);
+    expect(onsets).toHaveLength(expected.length);
+    onsets.forEach((onset, i) => {
+      expect(Math.abs(onset - (expected[i] ?? NaN))).toBeLessThanOrEqual(3 / 48_000);
+    });
+  }
+
+  test('供料中讀取掛起時 seek：讀取被中止，seek 之後照常供料到結尾', async () => {
+    const media = stallableSource(new Uint8Array(await mediaBytes('audio/pcm-s16.wav')));
+    const driver = await media.driver();
+    await driver.decode(0, { frames: 4096 });
+
+    media.stallNext();
+    // 開檔時 probe 已經讀進約 5 秒的封包，之後的讀取才會掛起。
+    driver.need(1, 48_000 * 8);
+    await expect.poll(() => media.stalled.length).toBe(1);
+    const pcm = await driver.seek(2.5, 2);
+
+    expect(media.stalled[0]?.aborted).toBe(true);
+    expect(pcm.time).toBe(2.5);
+    expect(pcm.left.length).toBe(7.5 * 48_000);
+    expectBeepsFrom(pcm, 2.5);
+    expect(driver.messages.filter((m) => m.type === 'error' || m.type === 'crash')).toEqual([]);
+  });
+
+  test('seek 本身的讀取掛起時再 seek：舊的 seek 被中止，只輸出最後一個 epoch', async () => {
+    const media = stallableSource(new Uint8Array(await mediaBytes('audio/pcm-s16.wav')));
+    const driver = await media.driver();
+    await driver.decode(0);
+
+    media.stallNext();
+    driver.post({ type: 'seek', epoch: 2, time: 1.5 });
+    driver.need(2, 48_000);
+    await expect.poll(() => media.stalled.length).toBe(1);
+    const sent = driver.worklet.length;
+    const pcm = await driver.seek(3.25, 3);
+
+    expect(media.stalled[0]?.aborted).toBe(true);
+    expect(driver.worklet.slice(sent).every((m) => m.epoch === 3)).toBe(true);
+    expect(pcm.time).toBe(3.25);
+    expectBeepsFrom(pcm, 3.25);
+    expect(driver.messages.filter((m) => m.type === 'error' || m.type === 'crash')).toEqual([]);
+  });
+
+  test('連續 seek 數十次後 Worker 沒有卡住：最後一個 seek 照常輸出到結尾', async () => {
+    const media = stallableSource(new Uint8Array(await mediaBytes('audio/pcm-s16.wav')));
+    const driver = await media.driver();
+    await driver.decode(0, { frames: 4096 });
+
+    for (let epoch = 2; epoch < 52; epoch++) {
+      if (epoch % 7 === 0) media.stallNext();
+      driver.post({ type: 'seek', epoch, time: (epoch * 0.37) % 9 });
+      driver.need(epoch, 8192);
+      // 有的 seek 在 Worker 開始處理之前就被取代，有的在供料中被取代。
+      if (epoch % 3 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    const pcm = await driver.seek(4, 52);
+
+    expect(pcm.time).toBe(4);
+    expect(pcm.left.length).toBe(6 * 48_000);
+    expectBeepsFrom(pcm, 4);
+    expect(media.stalled.length).toBeGreaterThan(0);
+    expect(media.stalled.every((signal) => signal.aborted)).toBe(true);
+    expect(driver.messages.filter((m) => m.type === 'error' || m.type === 'crash')).toEqual([]);
+    expect(await driver.stats()).toEqual({ libavInstances: 1 });
+  });
+
+  test('EOF 之後 seek：從新的位置播到結尾', async () => {
+    const driver = await WorkerDriver.init(inPage());
+    await driver.load({ kind: 'bytes', data: await mediaBytes('audio/opus.opus') });
+    await driver.decode(0);
+    const pcm = await driver.seek(8, 2);
+    expect(pcm.time).toBe(8);
+    expect(pcm.left.length).toBe(2 * 48_000);
+    expect(driver.worklet.at(-1)).toEqual({ type: 'eof', epoch: 2 });
+  });
+
+  test('不輸出音軌時，seek 也立即送出這個 epoch 的 EOF', async () => {
+    const driver = await WorkerDriver.init(inPage());
+    await driver.load({ kind: 'bytes', data: await mediaBytes('audio/flac.flac') });
+    await driver.decode(null);
+    const pcm = await driver.seek(3, 2);
+    expect(pcm.chunks).toEqual([]);
+    expect(driver.worklet.at(-1)).toEqual({ type: 'eof', epoch: 2 });
   });
 });
 

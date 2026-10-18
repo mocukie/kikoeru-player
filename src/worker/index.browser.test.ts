@@ -46,6 +46,22 @@ test('http 來源：回覆 probe 結果與帶 epoch 的 PCM，直到 EOF', async
   expect(await driver.stats()).toEqual({ libavInstances: 1 });
 });
 
+test('http 來源：連續 seek 時中止讀取，最後一個 seek 從落點輸出到結尾', async () => {
+  const driver = await spawn();
+  await driver.load({ kind: 'http', url: mediaUrl('audio/pcm-s16.wav') });
+  await driver.decode(0, { frames: 4096 });
+  for (let epoch = 2; epoch < 32; epoch++) {
+    driver.post({ type: 'seek', epoch, time: (epoch * 1.37) % 9.5 });
+    driver.need(epoch, 48_000);
+    if (epoch % 4 === 0) await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  const pcm = await driver.seek(7.25, 32);
+  expect(pcm.time).toBe(7.25);
+  expect(pcm.chunks.every((c) => c.epoch === 32)).toBe(true);
+  expect(pcm.left.length).toBe(2.75 * 48_000);
+  expect(driver.messages.filter((m) => m.type === 'error' || m.type === 'crash')).toEqual([]);
+});
+
 test('bytes 來源以 transfer 傳入；每個聲道的 PCM 各自一個 transfer 過來的 buffer', async () => {
   const driver = await spawn();
   const data = await (await fetch(mediaUrl('audio/opus.opus'))).arrayBuffer();

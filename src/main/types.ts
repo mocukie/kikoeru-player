@@ -200,7 +200,13 @@ export interface Engine extends EventTarget {
   /**
    * 以同一份媒體重新開檔，用於 session 失效等錯誤之後的接續；`'ready'` 以後的任何狀態與 `'error'` 都可呼叫。
    * 保留位置（`'error'` 時取 `error.position`）、`paused`、軌道選擇、外掛音軌、各音軌 offset、音量與速度；
-   * track id 不變。重新開檔後軌道的組成與先前不同時 reject `EngineError('SOURCE_CHANGED')`。
+   * track id 不變。重新開檔後軌道的組成（軌道數、各軌的 kind 與 codec）與先前不同時 reject 致命的
+   * `EngineError('SOURCE_CHANGED')`，state 變為 `'error'`。
+   *
+   * 執行期間 state 為 `'loading'`，`media`、`tracks`、`selectedTracks` 維持原狀，期間的 `seek()` 改寫起點；
+   * resolve 時 state 同 `load()`：`paused` 時為 `'ready'`，否則為 `'playing'`。最近一次 `load()` 沒有完成就失敗時
+   *（例如 401），以同樣的來源與選項重新 load。沒有載入過媒體（state 為 `'idle'`）時以 `DOMException`
+   *（name `'InvalidStateError'`）reject。
    */
   reload(): Promise<MediaInfo>;
 
@@ -220,6 +226,8 @@ export interface Engine extends EventTarget {
 
   /**
    * 精準 seek（影片到 frame、音訊到 sample），resolve 實際落點（夾在 `[0, duration]`）。
+   * 執行期間 state 為 `'seeking'`；完成時發出 `seeked` 並補發一次 `timeupdate`，之後依 `paused` 回到
+   * `'playing'` 或 `'paused'`（還沒播放過時為 `'ready'`）。`'ended'` 時 seek 也一樣，從新的位置繼續。
    * 連續呼叫時只執行最後一個，被取代的 reject AbortError。
    * loading 期間呼叫時改寫該次 load 的起點，於 load 完成時一起 resolve。
    * `time` 不是有限數時 reject `TypeError`；執行時沒有媒體（state 為 `'idle'` 或 `'error'`）則以
@@ -309,7 +317,10 @@ export interface Engine extends EventTarget {
 
 /** `load()` 的選項。 */
 export interface LoadOptions {
-  /** 起始位置（秒），預設 0。用於 session 失效後重新載入。 */
+  /**
+   * 起始位置（秒），預設 0。用於 session 失效後重新載入。夾在 `[0, duration]`，與 `seek()` 一樣精準：
+   * 輸出的第一個 sample 就在這個位置。loading 期間的 `seek()` 改寫它。
+   */
   startTime?: number;
   /** false 時載入完成後直接播放（等同 load 完成再 `play()`）。預設 true：停在 `'ready'`。 */
   paused?: boolean;

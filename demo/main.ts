@@ -105,6 +105,23 @@ element('play', HTMLElement).addEventListener('click', () => {
 element('pause', HTMLElement).addEventListener('click', () => {
   command('pause', () => engine.pause());
 });
+element('reload', HTMLElement).addEventListener('click', () => {
+  command('reload', () => engine.reload().then((info) => info.format));
+});
+
+// 進度條：拖曳中只更新顯示的時間，放開（change）時才 seek；其餘時候跟著 currentTime。
+const seekBar = element('seek', HTMLInputElement);
+const seekTime = element('seek-time', HTMLOutputElement);
+let seekDragging = false;
+seekBar.addEventListener('input', () => {
+  seekDragging = true;
+  seekTime.value = Number(seekBar.value).toFixed(3);
+});
+seekBar.addEventListener('change', () => {
+  seekDragging = false;
+  const time = Number(seekBar.value);
+  command(`seek ${time.toFixed(3)}`, () => engine.seek(time));
+});
 // 選了本機檔案或填了 URL 之後，清掉另一個，避免不知道用的是哪一個。
 fileInput.addEventListener('change', () => {
   urlInput.value = '';
@@ -126,6 +143,13 @@ function render(): void {
   pausedText.textContent = String(engine.paused);
   currentTimeText.textContent = engine.currentTime.toFixed(3);
   durationText.textContent = String(engine.duration);
+  const duration = engine.duration;
+  seekBar.disabled = !Number.isFinite(duration);
+  seekBar.max = Number.isFinite(duration) ? String(duration) : '0';
+  if (!seekDragging) {
+    seekBar.value = String(engine.currentTime);
+    seekTime.value = engine.currentTime.toFixed(3);
+  }
   const media = engine.media;
   mediaText.textContent = media
     ? `${media.format}，${String(media.size)} bytes，${media.tracks

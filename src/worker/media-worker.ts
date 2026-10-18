@@ -1,11 +1,10 @@
-// media Worker 的訊息處理：init、load（開檔與 probe）、start（音訊供料）與 stats。
+// media Worker 的訊息處理：init、load（開檔與 probe）、start 與 seek（音訊供料）、stats。
 // 主執行緒每次 load 都 terminate 舊的 Worker（ADR-0002），但 Worker 也處理同一個 Worker 內的 load 取代：
 // 前一個 load 的讀取被中止、instance 被丟棄。
 
 import type {
   MainToWorkerMessage,
   WorkerLoadMessage,
-  WorkerStartMessage,
   WorkerToMainMessage,
   WorkerToWorkletMessage,
   WorkletToWorkerMessage,
@@ -35,6 +34,16 @@ interface Environment {
   sampleRate: number;
 }
 
+/** 一個 epoch 的輸出：`start` 或 `seek`。 */
+interface OutputRequest {
+  epoch: number;
+  time: number;
+  /** 選用音軌的 stream index；null 表示不輸出音訊。 */
+  audio: number | null;
+  /** 先 seek 到 `time`；false 時接著 demuxer 目前的位置（開檔後的開頭）讀。 */
+  seek: boolean;
+}
+
 /** 一次 load：一個來源與它的 libav instance。 */
 interface Load {
   epoch: number;
@@ -58,6 +67,8 @@ export class MediaWorker {
   #output: AbortController | null = null;
   /** 前一個 start 的供料，結束（含被中止）時 resolve；同一個 demuxer 上的下一個 start 等它停下。 */
   #outputDone: Promise<void> = Promise.resolve();
+  /** `start` 選用的音軌；之後的 `seek` 沿用。`start` 之前為 undefined。 */
+  #audio: number | null | undefined = undefined;
   #libavInstances = 0;
 
   constructor(deps: MediaWorkerDeps) {
@@ -84,10 +95,13 @@ export class MediaWorker {
         this.#startLoad(message);
         break;
       case 'start':
-        this.#start(message);
+        this.#audio = message.audio;
+        // 開檔後 demuxer 在開頭；從其他位置開始要先 seek。
+        this.#startOutput({ ...message, seek: message.time > 0 });
         break;
       case 'seek':
-        // 精準 seek 與讀取中止後的恢復由「精準 seek 與 reload」#37 加入。
+        if (this.#audio === undefined) break;
+        this.#startOutput({ ...message, audio: this.#audio, seek: true });
         break;
       case 'stats':
         this.#deps.postMessage({
@@ -112,6 +126,7 @@ export class MediaWorker {
 
   #startLoad(message: WorkerLoadMessage<WorkerHost>): void {
     this.#stopOutput();
+    this.#audio = undefined;
     if (this.#load) this.#dispose(this.#load);
     const load: Load = {
       epoch: message.epoch,
@@ -150,10 +165,15 @@ export class MediaWorker {
     }
   }
 
-  #start(message: WorkerStartMessage): void {
+  /**
+   * 開始一個 epoch 的輸出，取代前一個：中止前一個的讀取，等它的 libav 呼叫結束，再 seek 並供料。
+   * 被取代的輸出不論 libav 回傳什麼都不回報，判斷只看這個輸出是否還是目前的（epoch）。
+   */
+  #startOutput(message: OutputRequest): void {
     const load = this.#load;
     if (!load) return;
     this.#stopOutput();
+    load.media?.abortReads();
     const output = new AbortController();
     this.#output = output;
     this.#demand.setEpoch(message.epoch);
@@ -166,11 +186,7 @@ export class MediaWorker {
     })();
   }
 
-  async #runOutput(
-    load: Load,
-    message: WorkerStartMessage,
-    output: AbortController,
-  ): Promise<void> {
+  async #runOutput(load: Load, message: OutputRequest, output: AbortController): Promise<void> {
     const { signal } = output;
     if (signal.aborted || !load.media) return;
     try {
@@ -186,6 +202,7 @@ export class MediaWorker {
       const pipeline = await load.media.startAudio(message.audio, {
         sampleRate: env.sampleRate,
         startTime: Math.max(0, message.time),
+        seek: message.seek,
         epoch: message.epoch,
         demand: this.#demand,
         pool: this.#pool,
