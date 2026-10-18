@@ -2,6 +2,7 @@
 
 import type { ProbedMedia, WireSource, WorkletToMainMessage } from '../protocol/index.js';
 import { abortError, CommandQueue, deferred, type Deferred } from './command-queue.js';
+import { createWebAudioOutput } from './audio-output.js';
 import type { AudioOutput, EngineDeps, MainHost, MediaWorker, WasmAssets } from './deps.js';
 import { EngineError } from './errors.js';
 import {
@@ -40,13 +41,13 @@ import type {
  * 決定 `audioBuffer` 與 `limits` 的預設值。
  */
 export function createEngine(options?: EngineOptions): Engine {
-  // 真實的 media Worker、wasm 與音訊輸出由「純音訊播放的串接」（#36）接上。
+  // 真實的 media Worker 與 wasm 由「純音訊播放的串接」（#36）接上。
   return createEngineWith(
     {
       platform: detectPlatform(globalThis.navigator),
       loadWasm: () => notImplemented('wasm 的載入'),
       createWorker: () => notImplemented('media Worker'),
-      createAudioOutput: () => notImplemented('音訊輸出'),
+      createAudioOutput: createWebAudioOutput,
     },
     options,
   );
@@ -189,10 +190,12 @@ class EngineImpl extends EventTarget implements Engine {
 
   play(): Promise<void> {
     if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    // 在呼叫內同步解鎖，user gesture 才算數（完整的生命週期由 #41 加入）。
+    const unlocking = this.#audio?.unlock() ?? Promise.resolve(true);
     this.#changeIntent(false);
     const playing = this.#queue.enqueue(
       'play',
-      (signal) => this.#runPlay(signal),
+      (signal) => this.#runPlay(unlocking, signal),
       (k) => k === 'pause',
     );
     this.#announceIntent();
@@ -322,6 +325,8 @@ class EngineImpl extends EventTarget implements Engine {
         this.#epoch++;
         this.#flushAudio(load.startTime);
       }
+      // worklet 以 duration 截掉多的音訊、在 eof 之後補靜音並判定 ended；Worker 開始供料之前送到。
+      audio.post({ type: 'duration', epoch: this.#epoch, duration: probed.duration });
       const audioTrack = tracks.find((t) => t.id === load.selection.audio);
       worker.post({
         type: 'start',
@@ -355,8 +360,19 @@ class EngineImpl extends EventTarget implements Engine {
     return seek.promise;
   }
 
-  async #runPlay(signal: AbortSignal): Promise<void> {
+  async #runPlay(unlocking: Promise<boolean>, signal: AbortSignal): Promise<void> {
     this.#assertMedia();
+    if (!(await abortable(unlocking, signal))) {
+      signal.throwIfAborted();
+      // 沒有 user gesture：播放意圖回到暫停。
+      this.#changeIntent(true);
+      this.#announceIntent();
+      throw new EngineError('AUDIO_LOCKED', {
+        fatal: false,
+        position: this.#currentTime,
+        message: '沒有 user gesture，AudioContext 無法開始',
+      });
+    }
     if (this.#state === 'ended') this.#beginSeek(0);
     await this.#until(() => this.#state === 'playing', signal);
   }
@@ -593,9 +609,16 @@ class EngineImpl extends EventTarget implements Engine {
   #audioOutput(): AudioOutput {
     if (!this.#audio) {
       try {
-        this.#audio = this.#deps.createAudioOutput((message) => {
-          this.#onWorkletMessage(message);
-        });
+        const { audioBuffer, assets } = this.#options;
+        this.#audio = this.#deps.createAudioOutput(
+          (message) => {
+            this.#onWorkletMessage(message);
+          },
+          {
+            audioBuffer,
+            ...(assets.workletUrl !== undefined && { workletUrl: assets.workletUrl }),
+          },
+        );
       } catch (cause) {
         throw this.#fatal('AUDIO_OUTPUT', '音訊輸出無法啟動', cause);
       }

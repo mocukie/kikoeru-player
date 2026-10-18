@@ -1,6 +1,6 @@
 // 組好 createEngineWith() 的假 deps。
 
-import { FakeAudioOutput } from './audio-output.js';
+import { FakeAudioOutput, type FakeAudioOutputConfig } from './audio-output.js';
 import { FakeMediaWorkers } from './media-worker.js';
 import type { WorkletToMainMessage } from '../../src/protocol/index.js';
 
@@ -11,7 +11,10 @@ export interface FakeEngineDeps {
   platform: 'desktop';
   loadWasm(): Promise<{ module: WebAssembly.Module; glueUrl: string }>;
   createWorker: FakeMediaWorkers['create'];
-  createAudioOutput(onMessage: (message: WorkletToMainMessage) => void): FakeAudioOutput;
+  createAudioOutput(
+    onMessage: (message: WorkletToMainMessage) => void,
+    config: FakeAudioOutputConfig,
+  ): FakeAudioOutput;
   workers: FakeMediaWorkers;
   /** 第一次 load 時建立；之前讀取會丟錯。 */
   readonly audio: FakeAudioOutput;
@@ -26,9 +29,9 @@ export function createFakeDeps(): FakeEngineDeps {
     platform: 'desktop',
     loadWasm: () => Promise.resolve({ module: emptyModule, glueUrl: '/libav.wasm.mjs' }),
     createWorker: workers.create,
-    createAudioOutput(onMessage) {
+    createAudioOutput(onMessage, config) {
       this.audioCreated++;
-      audio = new FakeAudioOutput(onMessage);
+      audio = new FakeAudioOutput(onMessage, config);
       return audio;
     },
     workers,

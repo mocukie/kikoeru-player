@@ -209,6 +209,9 @@ export interface Engine extends EventTarget {
    * 在 `'ended'` 時呼叫會從頭播放。之後若有 `pause()` 或 `load()` 先完成，reject AbortError。
    * 執行時沒有媒體（state 為 `'idle'` 或 `'error'`）則以 `DOMException`（name `'InvalidStateError'`）reject，
    * `paused` 仍然改為 false。
+   *
+   * 在呼叫內同步 resume AudioContext，所以在 user gesture 內呼叫時會自動解鎖。沒有 gesture 而 AudioContext
+   * 無法開始時，以非致命的 `EngineError('AUDIO_LOCKED')` reject，`paused` 回到 true。
    */
   play(): Promise<void>;
 

@@ -30,7 +30,18 @@ export interface EngineDeps {
   /** 建立一個新的 media Worker（每次 load 一個）。 */
   createWorker(handlers: MediaWorkerHandlers): MediaWorker;
   /** 建立音訊輸出（整個 Engine 一個）；`onMessage` 接收 AudioWorklet 的訊息。 */
-  createAudioOutput(onMessage: (message: WorkletToMainMessage) => void): AudioOutput;
+  createAudioOutput(
+    onMessage: (message: WorkletToMainMessage) => void,
+    config: AudioOutputConfig,
+  ): AudioOutput;
+}
+
+/** 音訊輸出的設定，取自 `EngineOptions`。 */
+export interface AudioOutputConfig {
+  /** ring buffer 的水位（ms），補上預設值之後。 */
+  audioBuffer: { targetMs: number; refillMs: number; capacityMs: number };
+  /** `EngineOptions.assets.workletUrl`；沒給時用套件內的 worklet。 */
+  workletUrl?: string | URL;
 }
 
 /** media Worker 的回呼。 */
@@ -52,7 +63,13 @@ export interface AudioOutput {
   readonly sampleRate: number;
   /** 建立新的 `MessageChannel`，一端接上 worklet，回傳交給新的 media Worker 的另一端。 */
   connect(): Promise<MessagePort>;
+  /** 送給 worklet；worklet 還沒載入完成時先排隊，載入後依序送出。 */
   post(message: MainToWorkletMessage): void;
+  /**
+   * 在呼叫內同步 resume `AudioContext`：在 user gesture 的同步段內呼叫才能解鎖。context 開始時 resolve true；
+   * 被拒絕或逾時（沒有 gesture）時 resolve false。完整的串行佇列由「AudioContext 生命週期」#41 加入。
+   */
+  unlock(): Promise<boolean>;
   /** 斷開 worklet。 */
   disconnect(): void;
   /**
