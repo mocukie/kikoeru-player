@@ -5,16 +5,31 @@ import type { MainToWorkletMessage, WorkletToMainMessage } from '../../src/proto
 /** 省略 epoch 的 worklet 訊息（逐一套用到 union 的每個成員）。 */
 type WithOptionalEpoch<T> = T extends unknown ? Omit<T, 'epoch'> & { epoch?: number } : never;
 
+/** Engine 建立音訊輸出時給的設定（同 `AudioOutputConfig`）。 */
+export interface FakeAudioOutputConfig {
+  audioBuffer: { targetMs: number; refillMs: number; capacityMs: number };
+  workletUrl?: string | URL;
+}
+
 export class FakeAudioOutput {
   readonly sampleRate = 48_000;
   readonly received: MainToWorkletMessage[] = [];
-  /** 依發生順序記錄 connect／disconnect／close，用來檢查 destroy 的步驟。 */
-  readonly calls: ('connect' | 'disconnect' | 'close')[] = [];
+  /** 依發生順序記錄 connect／disconnect／close／unlock，用來檢查步驟。 */
+  readonly calls: ('connect' | 'disconnect' | 'close' | 'unlock')[] = [];
+  /** `unlock()` 的結果；false 模擬沒有 user gesture。 */
+  unlockResult = true;
+  readonly config: FakeAudioOutputConfig;
   readonly #onMessage: (message: WorkletToMainMessage) => void;
   readonly #channels: MessageChannel[] = [];
 
-  constructor(onMessage: (message: WorkletToMainMessage) => void) {
+  constructor(onMessage: (message: WorkletToMainMessage) => void, config: FakeAudioOutputConfig) {
     this.#onMessage = onMessage;
+    this.config = config;
+  }
+
+  unlock(): Promise<boolean> {
+    this.calls.push('unlock');
+    return Promise.resolve(this.unlockResult);
   }
 
   connect(): Promise<MessagePort> {

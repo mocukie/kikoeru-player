@@ -1,11 +1,23 @@
 // AudioWorklet 與主執行緒、media Worker 之間的訊息。會影響輸出的訊息都帶 epoch，收方丟棄過期的 epoch。
 
+import type { HostTypes } from './media.js';
+
+/** `registerProcessor()` 與 `AudioWorkletNode` 共用的 processor 名稱；兩邊各自以這個型別寫出字面值。 */
+export type WorkletProcessorName = 'kikoeru-player-output';
+
+/** `AudioWorkletNode` 的 `processorOptions`。 */
+export interface WorkletProcessorOptions {
+  /** ring buffer 的水位（ms），即 `EngineOptions.audioBuffer` 補上預設值之後。 */
+  audioBuffer: { targetMs: number; refillMs: number; capacityMs: number };
+}
+
 /** 主執行緒送給 AudioWorklet 的訊息（經 `AudioWorkletNode.port`）。 */
-export type MainToWorkletMessage = WorkletFlushMessage | WorkletPlayMessage | WorkletPauseMessage;
+export type MainToWorkletMessage =
+  WorkletFlushMessage | WorkletPlayMessage | WorkletPauseMessage | WorkletDurationMessage;
 
 /**
  * 換成新的 epoch：丟掉 ring 內與之後收到的舊 epoch 資料，時鐘停在 `position`（秒），等新 epoch 的資料
- * 補到目標水位。補滿後依播放意圖回報 `playing` 或 `paused`。
+ * 補到目標水位（或收到 `eof`）。補滿後依播放意圖回報 `playing` 或 `paused`。播放意圖與 `duration` 不受 flush 影響。
  */
 export interface WorkletFlushMessage {
   type: 'flush';
@@ -13,16 +25,42 @@ export interface WorkletFlushMessage {
   position: number;
 }
 
-/** 播放意圖改為播放：資料足夠時開始輸出並回報 `playing`。 */
+/**
+ * 播放意圖改為播放：資料足夠時開始輸出並回報 `playing`。flush 之後還沒補滿時，等補滿才回報；
+ * starved 時等 ring 補回目標水位才回報。
+ */
 export interface WorkletPlayMessage {
   type: 'play';
   epoch: number;
 }
 
-/** 播放意圖改為暫停：停止輸出、時鐘停住後回報 `paused`。 */
+/**
+ * 播放意圖改為暫停：停止輸出、時鐘停住後回報 `paused`。flush 之後還沒補滿時，等補滿才回報；
+ * 已經 `ended` 時不回報。
+ */
 export interface WorkletPauseMessage {
   type: 'pause';
   epoch: number;
+}
+
+/**
+ * 媒體的長度（秒，未知時為 NaN），沿用到下一個 `duration`，不受 flush 影響。音訊超出 `duration` 的部分截掉；
+ * 收到 `eof` 而時鐘還沒到 `duration` 時以靜音推進到 `duration`，到了就回報 `ended`。
+ * 未知時，`eof` 之後 ring 播完就回報 `ended`。
+ */
+export interface WorkletDurationMessage {
+  type: 'duration';
+  epoch: number;
+  duration: number;
+}
+
+/**
+ * 主執行緒的音訊輸出送給 AudioWorklet：接上新的 media Worker 的 `MessageChannel` 一端（以 transfer 傳送）。
+ * 之前的 port 關閉，從它收到、還沒用到的訊息丟掉。不帶 epoch，與其他訊息依送出順序處理。
+ */
+export interface WorkletConnectMessage<H extends HostTypes> {
+  type: 'connect';
+  port: H['messagePort'];
 }
 
 /** AudioWorklet 送給主執行緒的訊息，都帶 worklet 目前的 epoch。 */
@@ -33,11 +71,23 @@ export type WorkletToMainMessage =
   | { type: 'ended'; epoch: number }
   | WorkletClockMessage;
 
-/** 音訊時鐘：此刻播出的位置（媒體時間軸，秒）。 */
+/**
+ * 音訊時鐘。時鐘前進時約每 250 ms 一次；`playing`、`paused`、`starved`、`ended` 之前也各送一次。
+ */
 export interface WorkletClockMessage {
   type: 'clock';
   epoch: number;
+  /** 下一個要播出的 sample 在媒體時間軸上的位置（秒）。 */
   position: number;
+  /**
+   * `position` 的 sample 進入 audio graph 的 context frame（`currentFrame`）。時鐘前進時，context 時間
+   * `t` 秒進入 graph 的媒體位置為 `position + (t × sampleRate − frame) / sampleRate`（尚未扣掉輸出延遲）。
+   */
+  frame: number;
+  /** ring 內目前的 frame 數。 */
+  buffered: number;
+  /** ring 用完（starved）的累計次數。 */
+  underruns: number;
 }
 
 /** media Worker 送給 AudioWorklet 的訊息（經 init 時的 `workletPort`）。 */
@@ -75,7 +125,7 @@ export interface WorkletNeedMessage {
   frames: number;
 }
 
-/** 播完的 PCM buffer，transfer 回 Worker 重用。 */
+/** 收進 ring 之後不再需要的 PCM buffer，transfer 回 Worker 重用。 */
 export interface WorkletReleaseMessage {
   type: 'release';
   buffers: readonly ArrayBuffer[];

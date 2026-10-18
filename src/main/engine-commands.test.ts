@@ -269,7 +269,14 @@ describe('過期的 epoch', () => {
     const { engine, deps } = await loaded({ paused: false });
     const oldEpoch = deps.audio.epoch;
     const seeking = engine.seek(2);
-    deps.audio.reply({ type: 'clock', epoch: oldEpoch, position: 9 });
+    deps.audio.reply({
+      type: 'clock',
+      epoch: oldEpoch,
+      position: 9,
+      frame: 0,
+      buffered: 0,
+      underruns: 0,
+    });
     deps.audio.reply({ type: 'ended', epoch: oldEpoch });
     expect(engine.currentTime).toBe(2);
 
@@ -334,7 +341,7 @@ describe('destroy', () => {
 describe('Worker 崩潰', () => {
   it('播放中 onerror：state 進入 error，回報帶 position 的 fatal INTERNAL，不自動 reload', async () => {
     const { engine, deps, worker } = await loaded({ paused: false });
-    deps.audio.reply({ type: 'clock', position: 4.5 });
+    deps.audio.reply({ type: 'clock', position: 4.5, frame: 0, buffered: 0, underruns: 0 });
     const errors: unknown[] = [];
     engine.addEventListener('error', (event) => errors.push(event.error));
     const pausing = engine.pause();
@@ -725,5 +732,54 @@ describe('同步事件 listener 內的重入', () => {
     expect(errors).toEqual([]);
     expect(engine.state).toBe('loading');
     expect(engine.error).toBeNull();
+  });
+});
+
+describe('音訊輸出', () => {
+  it('以補上預設值的 audioBuffer 與 workletUrl 建立', async () => {
+    const deps = createFakeDeps();
+    const engine = createEngineWith(deps, {
+      audioBuffer: { targetMs: 200 },
+      assets: { workletUrl: '/worklet.js' },
+    });
+    void engine.load(source);
+    await deps.workers.last.next('load');
+    expect(deps.audio.config).toEqual({
+      audioBuffer: { targetMs: 200, refillMs: 75, capacityMs: 400 },
+      workletUrl: '/worklet.js',
+    });
+  });
+
+  it('probe 之後、start 之前把 duration 告訴 worklet', async () => {
+    const { engine, deps } = setup();
+    void engine.load(source, { startTime: 30 });
+    const worker = deps.workers.last;
+    await worker.probe(audioMedia({ duration: 10 }));
+    const start = await worker.next('start');
+    // 起點被 duration 夾住而換了 epoch：duration 帶新的 epoch，排在 flush 之後。
+    expect(deps.audio.received.slice(-2)).toEqual([
+      { type: 'flush', epoch: start.epoch, position: 10 },
+      { type: 'duration', epoch: start.epoch, duration: 10 },
+    ]);
+  });
+
+  it('play() 在呼叫內同步解鎖 AudioContext', async () => {
+    const { engine, deps } = await loaded();
+    void engine.play();
+    expect(deps.audio.calls.at(-1)).toBe('unlock');
+  });
+
+  it('沒有 user gesture 而無法解鎖時，play() 以非致命的 AUDIO_LOCKED reject，paused 回到 true', async () => {
+    const { engine, deps } = await loaded();
+    deps.audio.unlockResult = false;
+    const changes: StateChangeEvent[] = [];
+    engine.addEventListener('statechange', (event) => changes.push(event));
+
+    const error = await rejection(engine.play());
+    expect(error).toMatchObject({ name: 'EngineError', code: 'AUDIO_LOCKED', fatal: false });
+    expect(engine.paused).toBe(true);
+    expect(engine.state).toBe('ready');
+    expect(changes.map((c) => c.paused)).toEqual([false, true]);
+    expect(deps.audio.received.at(-1)).toEqual({ type: 'pause', epoch: deps.audio.epoch });
   });
 });
