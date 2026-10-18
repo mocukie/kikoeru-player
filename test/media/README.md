@@ -52,6 +52,7 @@
 | `hevc-aac.mp4` | 10 s | HEVC（`hvc1`） | AAC | 瀏覽器只測不支援的路徑 |
 | `h264-mp3.avi` | 10 s | H.264（無 B-frame） | MP3 | AVI |
 | `rotated-90.mp4` | 10 s | H.264 | AAC | 與 `h264-aac.mp4` 相同，只加上 display matrix：逆時針旋轉 90°，顯示為 180×320 |
+| `bad-interleave.mp4` | 10 s | H.264 2 Mbps CBR | AAC | 交錯不良：fragmented MP4，每 5 秒一個 fragment，fragment 內影片的 sample 在前、音訊在後；0 秒的音訊在約 1.2 MB 處 |
 | `multi-track.mkv` | 20 s | H.264 | 2 軌，見下表 | 另有 2 條內嵌字幕軌 |
 | `external-audio-440.flac` | 20 s | — | FLAC，基準頻率 440 Hz | 外掛音軌，與 `multi-track.mkv` 同長 |
 

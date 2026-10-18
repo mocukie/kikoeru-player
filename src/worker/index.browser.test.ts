@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, test } from 'vitest';
 import {
   audioTracks,
+  beepOnsets,
   faultyMediaUrl,
   importOnlyWasm,
   mediaUrl,
@@ -197,5 +198,60 @@ describe('http 的故障（test/server 的故障注入）', () => {
     expect(audioTracks(media)).toHaveLength(1);
     expect(await driver.stats()).toMatchObject({ libavInstances: 1 });
     expect(driver.messages.filter((m) => 'epoch' in m && m.epoch === 1)).toEqual([]);
+  });
+});
+
+describe('Range 快取與預讀', () => {
+  /** 等到預讀停下（抓到目標或檔尾）、沒有進行中的請求。 */
+  async function settled(driver: WorkerDriver) {
+    for (;;) {
+      const stats = await driver.stats();
+      if (!stats.cache.fetching && stats.network.inflight.length === 0) return stats;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  }
+
+  test('往前 seek 落在預讀範圍內時命中快取，不發出新的請求', async () => {
+    const driver = await spawn();
+    await driver.load({ kind: 'http', url: mediaUrl('audio/pcm-s16.wav') });
+    await driver.decode(0, { epoch: 2, frames: 48_000 });
+    const before = await settled(driver);
+    expect(before.cache.aheadBytes).toBeGreaterThan(0);
+
+    const pcm = await driver.seek(6, 3, 48_000);
+    expect(pcm.time).toBe(6);
+    const after = await driver.stats();
+    expect(after.cache.hits).toBeGreaterThan(before.cache.hits);
+    expect(after.cache.misses).toBe(before.cache.misses);
+    expect(after.network.bytesLoaded).toBe(before.network.bytesLoaded);
+  });
+
+  test('交錯不良的檔案（音訊在 5 秒的影片之後）照常播放', async () => {
+    const driver = await spawn();
+    const media = await driver.load({ kind: 'http', url: mediaUrl('video/bad-interleave.mp4') });
+    const [track] = audioTracks(media);
+    const pcm = await driver.decode(track?.streamIndex ?? -1, { epoch: 2 });
+    // AAC 結尾多出的 sample 由 worklet 依 duration 截掉。
+    expect(pcm.left.length).toBeGreaterThanOrEqual(10 * 48_000);
+    // 沒有 edit list 的 fragmented MP4：影片的 composition offset（2 個 frame）讓整條時間軸後移約 67 ms，
+    // 這是容器的時間戳，不是 demux 的問題；只檢查 10 個 beep 都在、間隔 1 秒。
+    const onsets = beepOnsets(pcm.left, 48_000);
+    expect(onsets).toHaveLength(10);
+    const [first = NaN] = onsets;
+    expect(first).toBeLessThan(0.1);
+    onsets.forEach((onset, i) => {
+      expect(onset - first).toBeCloseTo(i, 3);
+    });
+  });
+
+  test('封包佇列超過硬上限時回報 fatal 的 MEMORY_LIMIT', async () => {
+    // 以很小的硬上限模擬：一批 demux 出的封包就超過。只播音訊時要有兩條選用中的軌才會真的超過（影片的 issue）。
+    const driver = await spawn(undefined, undefined, { packetQueueBytes: 1024 });
+    await driver.load({ kind: 'http', url: mediaUrl('audio/pcm-s16.wav') });
+    await expect(driver.decode(0, { epoch: 2 })).rejects.toMatchObject({
+      type: 'error',
+      epoch: 2,
+      error: { code: 'MEMORY_LIMIT', fatal: true },
+    });
   });
 });
