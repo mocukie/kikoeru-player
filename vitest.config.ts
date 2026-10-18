@@ -1,6 +1,7 @@
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 import { browsers } from './test/browser-launch.ts';
+import { testServer } from './test/server/index.ts';
 
 export default defineConfig({
   test: {
@@ -14,6 +15,7 @@ export default defineConfig({
         },
       },
       {
+        plugins: [testServer()],
         test: {
           name: 'browser',
           include: ['src/**/*.browser.test.ts', 'test/**/*.browser.test.ts'],

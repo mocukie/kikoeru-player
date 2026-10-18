@@ -5,6 +5,8 @@
 const captureUrl = new URL('./capture.worklet.ts', import.meta.url);
 
 interface CaptureBatch {
+  /** 這批第一個 sample 的 context frame。 */
+  frame: number;
   left: Float32Array;
   right: Float32Array;
 }
@@ -12,6 +14,10 @@ interface CaptureBatch {
 export interface DestinationCapture {
   /** 到目前為止錄到的 frame 數（只算第一個接到 destination 的 node）。 */
   readonly frames: number;
+  /** 錄到的第一個 sample 的 context frame（`currentFrame`）；還沒錄到時為 NaN。 */
+  readonly startFrame: number;
+  /** 被錄音的 node 所屬的 context；還沒有 node 接到 destination 時為 null。 */
+  readonly context: BaseAudioContext | null;
   /** 錄到的左、右聲道。 */
   channels(): [Float32Array, Float32Array];
   /** 還原被包住的方法。 */
@@ -21,7 +27,7 @@ export interface DestinationCapture {
 export function captureDestination(): DestinationCapture {
   const batches: CaptureBatch[] = [];
   let frames = 0;
-  let captured = false;
+  let context: BaseAudioContext | null = null;
   const loaded = new WeakSet<AudioWorklet>();
 
   // 原本的方法之後以 call() 帶入正確的 this。
@@ -52,10 +58,10 @@ export function captureDestination(): DestinationCapture {
     output?: number,
     input?: number,
   ) {
-    if (!(destination instanceof AudioDestinationNode) || captured) {
+    if (!(destination instanceof AudioDestinationNode) || context) {
       return connect.call(this, destination, output, input);
     }
-    captured = true;
+    context = this.context;
     const capture = new AudioWorkletNode(this.context, 'capture', {
       numberOfInputs: 1,
       numberOfOutputs: 1,
@@ -75,6 +81,12 @@ export function captureDestination(): DestinationCapture {
   return {
     get frames() {
       return frames;
+    },
+    get startFrame() {
+      return batches[0]?.frame ?? NaN;
+    },
+    get context() {
+      return context;
     },
     channels() {
       const join = (pick: (b: CaptureBatch) => Float32Array) => {

@@ -39,7 +39,26 @@ export default defineConfig({
 
 ### 最小範例
 
-（待補）
+```ts
+import { createEngine, isAbortError } from 'kikoeru-player';
+
+// 整個 App 一個 Engine，換檔用 load()。
+const engine = createEngine();
+
+engine.addEventListener('statechange', (e) => console.log(e.state, e.paused));
+engine.addEventListener('timeupdate', (e) => console.log(e.currentTime));
+
+// resolve 時 state 為 'ready'，duration、tracks 已就緒。
+await engine.load({ kind: 'http', url: '/media/track.flac' });
+
+// 指令被較新的指令取代時以 AbortError reject，忽略即可。
+const report = (error: unknown) => {
+  if (!isAbortError(error)) console.error(error);
+};
+// play() 要在 user gesture 內呼叫，AudioContext 才能解鎖。
+playButton.addEventListener('click', () => engine.play().catch(report));
+pauseButton.addEventListener('click', () => engine.pause().catch(report));
+```
 
 ### 背景播放模組
 

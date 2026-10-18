@@ -18,6 +18,12 @@ export class FakeAudioOutput {
   readonly calls: ('connect' | 'disconnect' | 'close' | 'unlock')[] = [];
   /** `unlock()` 的結果；false 模擬沒有 user gesture。 */
   unlockResult = true;
+  /** `heardFrame()` 的回傳值：此刻聽到的 context frame；null 表示 context 還沒開始。 */
+  frameNow: number | null = null;
+  /** `outputLatency()` 的回傳值（秒）。 */
+  latency = 0;
+  /** 設定時 `connect()` 以它 reject，模擬 worklet 載入或建立失敗。 */
+  connectError: Error | null = null;
   readonly config: FakeAudioOutputConfig;
   readonly #onMessage: (message: WorkletToMainMessage) => void;
   readonly #channels: MessageChannel[] = [];
@@ -34,9 +40,18 @@ export class FakeAudioOutput {
 
   connect(): Promise<MessagePort> {
     this.calls.push('connect');
+    if (this.connectError !== null) return Promise.reject(this.connectError);
     const channel = new MessageChannel();
     this.#channels.push(channel);
     return Promise.resolve(channel.port2);
+  }
+
+  heardFrame(): number | null {
+    return this.frameNow;
+  }
+
+  outputLatency(): number {
+    return this.latency;
   }
 
   post(message: MainToWorkletMessage): void {

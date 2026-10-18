@@ -8,7 +8,7 @@ import type {
   WorkletToWorkerMessage,
 } from '../protocol/index.js';
 import { createWebAudioOutput } from './audio-output.js';
-import type { AudioOutput } from './deps.js';
+import { AssetLoadError, type AudioOutput } from './deps.js';
 
 const audioBuffer = { targetMs: 150, refillMs: 75, capacityMs: 400 };
 
@@ -151,4 +151,12 @@ test('新的 epoch 讓 ring 內的舊資料不被播出；暫停時時鐘不前�
   expect(left.includes(0.75)).toBe(false);
   const start = left.findIndex((v) => v !== 0);
   expect(firstMismatch(left, start, pcm[0])).toBe(-1);
+});
+
+test('worklet 載入失敗時 connect() 以 AssetLoadError reject', async () => {
+  output = createWebAudioOutput((message) => reports.push(message), {
+    audioBuffer,
+    workletUrl: new URL('/does-not-exist/worklet.js', location.href),
+  });
+  await expect(output.connect()).rejects.toBeInstanceOf(AssetLoadError);
 });

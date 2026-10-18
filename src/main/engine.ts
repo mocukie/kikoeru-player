@@ -1,9 +1,21 @@
 // createEngine() 與 Engine 的實作：指令佇列、狀態機與狀態鏡像。
 
-import type { ProbedMedia, WireSource, WorkletToMainMessage } from '../protocol/index.js';
+import type {
+  ProbedMedia,
+  WireSource,
+  WorkletClockMessage,
+  WorkletToMainMessage,
+} from '../protocol/index.js';
 import { abortError, CommandQueue, deferred, type Deferred } from './command-queue.js';
 import { createWebAudioOutput } from './audio-output.js';
-import type { AudioOutput, EngineDeps, MainHost, MediaWorker, WasmAssets } from './deps.js';
+import {
+  AssetLoadError,
+  type AudioOutput,
+  type EngineDeps,
+  type MainHost,
+  type MediaWorker,
+  type WasmAssets,
+} from './deps.js';
 import { EngineError } from './errors.js';
 import {
   DurationChangeEvent,
@@ -15,8 +27,10 @@ import {
 } from './events.js';
 import { notImplemented } from './not-implemented.js';
 import { resolveEngineOptions, type ResolvedEngineOptions } from './options.js';
+import { createWebMediaWorker } from './media-worker.js';
 import { detectPlatform } from './platform.js';
 import { selectInitialTracks, toContainerTracks } from './tracks.js';
+import { loadWasmAssets } from './wasm.js';
 import type {
   AudioTrack,
   Engine,
@@ -41,12 +55,11 @@ import type {
  * 決定 `audioBuffer` 與 `limits` 的預設值。
  */
 export function createEngine(options?: EngineOptions): Engine {
-  // 真實的 media Worker 與 wasm 由「純音訊播放的串接」（#36）接上。
   return createEngineWith(
     {
       platform: detectPlatform(globalThis.navigator),
-      loadWasm: () => notImplemented('wasm 的載入'),
-      createWorker: () => notImplemented('media Worker'),
+      loadWasm: () => loadWasmAssets(options?.assets),
+      createWorker: createWebMediaWorker,
       createAudioOutput: createWebAudioOutput,
     },
     options,
@@ -87,7 +100,21 @@ class EngineImpl extends EventTarget implements Engine {
   #paused = true;
   /** 最後一個 statechange 帶的 `paused`；#changeIntent() 到 #announceIntent() 之間與 `#paused` 不同。 */
   #announcedPaused = true;
+  /** 鏡像的位置：時鐘停住時就是 `currentTime`；播放中是內插的基準之一（見 `currentTime`）。 */
   #currentTime = 0;
+  /** 這個 epoch 最後一個 clock；播放中以它與此刻聽到的 frame 內插 `currentTime`。flush 時清掉。 */
+  #clock: WorkletClockMessage | null = null;
+  /** 這次進入 playing 之後 `currentTime` 回傳過的最大值；內插的結果不低於它，也不低於開始播放的位置。 */
+  #heardFloor = 0;
+  /** ring 的 frame 數與累計的 underrun，取自最後一個 clock，供 `getStats().audio`。 */
+  #ringFrames = 0;
+  #underruns = 0;
+  /** playing 期間依 `timeUpdateInterval` 發出 timeupdate 的 timer。 */
+  #timeUpdateTimer: ReturnType<typeof setInterval> | null = null;
+  #lastTimeUpdate = NaN;
+  /** 等待 Worker 回覆的 `stats` 要求；Worker 被 terminate 時以 0 個 instance resolve。 */
+  readonly #statsRequests = new Map<number, (libavInstances: number) => void>();
+  #statsSeq = 0;
   #duration = NaN;
   #media: MediaInfo | null = null;
   #tracks: readonly Track[] = [];
@@ -123,7 +150,17 @@ class EngineImpl extends EventTarget implements Engine {
     return this.#paused;
   }
   get currentTime(): number {
-    return this.#currentTime;
+    const clock = this.#clock;
+    const audio = this.#audio;
+    if (this.#state !== 'playing' || !clock || !audio) return this.#currentTime;
+    const heard = audio.heardFrame();
+    if (heard === null) return this.#currentTime;
+    // clock：`position` 的 sample 在 context frame `frame` 進入 graph；聽到的 frame 已扣掉輸出延遲。
+    let time = clock.position + (heard - clock.frame) / audio.sampleRate;
+    time = Math.max(time, this.#heardFloor);
+    if (!Number.isNaN(this.#duration)) time = Math.min(time, this.#duration);
+    this.#heardFloor = time;
+    return time;
   }
   get duration(): number {
     return this.#duration;
@@ -251,8 +288,36 @@ class EngineImpl extends EventTarget implements Engine {
   attachCanvas(): void {
     notImplemented('attachCanvas()');
   }
-  getStats(): Promise<EngineStats> {
-    return notImplemented('getStats()');
+  /**
+   * 目前只有 `resources` 與 `audio` 是實際的數字，其餘欄位是 0／空值，由快取與預讀 #39、診斷 #45 接上。
+   */
+  async getStats(): Promise<EngineStats> {
+    const libavInstances = await this.#workerStats();
+    const audio = this.#audio;
+    const sampleRate = audio?.sampleRate ?? 0;
+    return {
+      bufferAhead: 0,
+      audio: {
+        ringMs: sampleRate > 0 ? (this.#ringFrames * 1000) / sampleRate : 0,
+        underruns: this.#underruns,
+        outputLatencyMs: (audio?.outputLatency() ?? 0) * 1000,
+        targetMs: this.#options.audioBuffer.targetMs,
+      },
+      video: null,
+      packetQueue: { audioSeconds: 0, videoSeconds: 0, bytes: 0 },
+      cache: {
+        bytes: 0,
+        limitBytes: this.#options.limits.cacheBytes,
+        aheadBytes: 0,
+        readaheadTarget: 0,
+        fetching: false,
+        hits: 0,
+        misses: 0,
+      },
+      network: { bytesLoaded: 0, inflight: [] },
+      wasmHeapBytes: 0,
+      resources: { workers: this.#worker ? 1 : 0, libavInstances, openVideoFrames: 0 },
+    };
   }
 
   // ───────────────────────────── 指令的執行 ─────────────────────────────
@@ -369,7 +434,7 @@ class EngineImpl extends EventTarget implements Engine {
       this.#announceIntent();
       throw new EngineError('AUDIO_LOCKED', {
         fatal: false,
-        position: this.#currentTime,
+        position: this.currentTime,
         message: '沒有 user gesture，AudioContext 無法開始',
       });
     }
@@ -426,7 +491,7 @@ class EngineImpl extends EventTarget implements Engine {
             const { code, fatal, message: text, detail } = message.error;
             const error = new EngineError(code, {
               fatal,
-              position: this.#currentTime,
+              position: this.currentTime,
               message: text,
               ...(detail && { detail }),
             });
@@ -438,6 +503,10 @@ class EngineImpl extends EventTarget implements Engine {
             this.#fail(
               this.#fatal('INTERNAL', `media Worker 崩潰（${message.reason}）：${message.message}`),
             );
+            break;
+          case 'stats':
+            this.#statsRequests.get(message.id)?.(message.stats.libavInstances);
+            this.#statsRequests.delete(message.id);
             break;
         }
         this.#notify();
@@ -455,7 +524,10 @@ class EngineImpl extends EventTarget implements Engine {
     if (this.#isDestroyed || message.epoch !== this.#epoch) return;
     switch (message.type) {
       case 'clock':
+        this.#clock = message;
         this.#currentTime = message.position;
+        this.#ringFrames = message.buffered;
+        this.#underruns = message.underruns;
         break;
       case 'playing':
       case 'paused':
@@ -544,9 +616,39 @@ class EngineImpl extends EventTarget implements Engine {
     this.#state = state;
     this.#paused = paused;
     this.#announcedPaused = paused;
-    if (state === 'playing') this.#played = true;
+    if (state !== previous) this.#onStateEntered(state);
     this.dispatchEvent(new StateChangeEvent({ state, previous, paused, reason }));
     this.#notify();
+  }
+
+  /** 進入新的 state：播放中依 `timeUpdateInterval` 發出 timeupdate，離開 playing 就停。 */
+  #onStateEntered(state: EngineState): void {
+    if (state !== 'playing') {
+      if (this.#timeUpdateTimer !== null) clearInterval(this.#timeUpdateTimer);
+      this.#timeUpdateTimer = null;
+      return;
+    }
+    this.#played = true;
+    // 內插從開始播放的位置算起；輸出延遲期間聽到的還是開始之前的靜音。
+    this.#heardFloor = this.#currentTime;
+    this.#lastTimeUpdate = this.#currentTime;
+    this.#timeUpdateTimer ??= setInterval(() => {
+      const currentTime = this.currentTime;
+      if (currentTime === this.#lastTimeUpdate) return;
+      this.#lastTimeUpdate = currentTime;
+      this.dispatchEvent(new TimeUpdateEvent({ currentTime }));
+    }, this.#options.timeUpdateInterval);
+  }
+
+  /** Worker 持有的 libav instance 數；沒有 Worker 時為 0。 */
+  #workerStats(): Promise<number> {
+    const worker = this.#worker;
+    if (!worker) return Promise.resolve(0);
+    const id = ++this.#statsSeq;
+    return new Promise<number>((resolve) => {
+      this.#statsRequests.set(id, resolve);
+      worker.post({ type: 'stats', id });
+    });
   }
 
   /** 一次更新媒體的鏡像，值有改變時才發出 durationchange、trackschange。 */
@@ -579,6 +681,7 @@ class EngineImpl extends EventTarget implements Engine {
 
   #flushAudio(position: number): void {
     this.#currentTime = position;
+    this.#clock = null;
     if (this.#loadContext) this.#loadContext.flushedAt = position;
     this.#audio?.post({ type: 'flush', epoch: this.#epoch, position });
   }
@@ -590,12 +693,13 @@ class EngineImpl extends EventTarget implements Engine {
 
   /** 致命錯誤：結束當前媒體，state 進入 `'error'`，未完成的指令都以 `error` reject。不自動 reload。 */
   #fail(error: EngineError): void {
+    const position = this.currentTime;
     this.#terminateWorker();
     this.#loadContext = null;
     this.#error = error;
     // 停掉 ring 內剩下的聲音。
     const epoch = ++this.#epoch;
-    this.#flushAudio(this.#currentTime);
+    this.#flushAudio(position);
     this.#queue.fail(error);
     this.#setState('error', 'error');
     if (this.#epoch === epoch) this.dispatchEvent(new EngineErrorEvent({ error }));
@@ -604,6 +708,8 @@ class EngineImpl extends EventTarget implements Engine {
   #terminateWorker(): void {
     this.#worker?.terminate();
     this.#worker = null;
+    for (const resolve of this.#statsRequests.values()) resolve(0);
+    this.#statsRequests.clear();
   }
 
   #audioOutput(): AudioOutput {
@@ -630,6 +736,9 @@ class EngineImpl extends EventTarget implements Engine {
     try {
       return await audio.connect();
     } catch (cause) {
+      if (cause instanceof AssetLoadError) {
+        throw this.#fatal('ASSET_LOAD_FAILED', 'AudioWorklet 載入失敗', cause);
+      }
       throw this.#fatal('AUDIO_OUTPUT', 'AudioWorklet 無法接上 media Worker', cause);
     }
   }
@@ -690,7 +799,7 @@ class EngineImpl extends EventTarget implements Engine {
   #fatal(code: EngineErrorCode, message: string, cause?: unknown): EngineError {
     return new EngineError(code, {
       fatal: true,
-      position: this.#currentTime,
+      position: this.currentTime,
       message,
       ...(cause !== undefined && { cause }),
     });
@@ -703,7 +812,7 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   #destroyedError(): EngineError {
-    return new EngineError('DESTROYED', { fatal: false, position: this.#currentTime });
+    return new EngineError('DESTROYED', { fatal: false, position: this.currentTime });
   }
 }
 

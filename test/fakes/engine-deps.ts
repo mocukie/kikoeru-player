@@ -22,7 +22,10 @@ export interface FakeEngineDeps {
   audioCreated: number;
 }
 
-export function createFakeDeps(): FakeEngineDeps {
+/** `onAudio`：音訊輸出建立時呼叫，用來在 Engine 使用它之前設定行為（例如 `connectError`）。 */
+export function createFakeDeps(
+  options: { onAudio?: (audio: FakeAudioOutput) => void } = {},
+): FakeEngineDeps {
   const workers = new FakeMediaWorkers();
   let audio: FakeAudioOutput | undefined;
   return {
@@ -32,6 +35,7 @@ export function createFakeDeps(): FakeEngineDeps {
     createAudioOutput(onMessage, config) {
       this.audioCreated++;
       audio = new FakeAudioOutput(onMessage, config);
+      options.onAudio?.(audio);
       return audio;
     },
     workers,
