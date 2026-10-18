@@ -37,7 +37,7 @@
 - **leak 測試**：連續 load 100 次，混入被取代的 load、播放中 destroy、外掛音軌，使用 CI 組的短檔。斷言：
   - 以 CDP 數 Worker target，並在 GC 後量 JS heap。
   - `getStats().resources = { workers, libavInstances, openVideoFrames }`：destroy 後全為 0；換檔後 `workers` 為 1、`libavInstances` 等於來源數。
-  - `network.inflight` 為空。
+  - destroy 後 `network.inflight` 為空；換檔後進行中的請求都屬於目前的媒體（預讀）。
 
 ## 瀏覽器
 
