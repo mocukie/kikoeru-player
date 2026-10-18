@@ -5,7 +5,7 @@
 ## 文件
 
 - 專案簡介、使用方式、文件索引與開發環境見 [README](README.md)；每個主題以索引中的權威文件為準。
-- 名詞以 [`CONTEXT.md`](CONTEXT.md) 為準；決定的理由見 [`docs/adr/`](docs/adr/)。
+- 名詞以 [`GLOSSARY.md`](GLOSSARY.md) 為準；決定的理由見 [`docs/adr/`](docs/adr/)。
 - 修改 `src/` 前必讀[架構規則](docs/architecture.md)與[測試規範](docs/testing.md)；執行緒分工、目錄與依賴規則、訊息協定與不變式以架構規則為準。
 - 本文件只放開發規則。
 
@@ -68,7 +68,7 @@ feat: add http source with range requests
 ### 語言
 
 - 文件、issue 與 code comment 使用中文（繁體）。
-- 專有名詞或領域名詞維持英文，例如 demux、codec、AudioWorklet、epoch。程式命名一律用英文，對應的中文名詞見 `CONTEXT.md`。
+- 專有名詞或領域名詞維持英文，例如 demux、codec、AudioWorklet、epoch。程式命名一律用英文，對應的中文名詞見 `GLOSSARY.md`。
 
 ### 第三方函式庫
 
@@ -100,4 +100,4 @@ Issue 追蹤於 GitHub Issues（`mocukie/kikoeru-player`），透過 `gh` CLI �
 
 ### Domain docs
 
-Single-context：repo 根目錄一份 `CONTEXT.md` 加上 `docs/adr/`。See `docs/agents/domain.md`.
+Single-context：repo 根目錄一份 `GLOSSARY.md` 加上 `docs/adr/`。See `docs/agents/domain.md`.

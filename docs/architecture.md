@@ -1,6 +1,6 @@
 # kikoeru-player 架構規則
 
-本文件是實作時的規則手冊：套件形狀、執行緒分工、目錄與依賴規則、訊息協定與不變式。違反依賴規則的程式碼會被 ESLint 擋下。決定的理由見 [`docs/adr/`](adr/)，名詞見 [`CONTEXT.md`](../CONTEXT.md)，測試見 [`testing.md`](testing.md)。
+本文件是實作時的規則手冊：套件形狀、執行緒分工、目錄與依賴規則、訊息協定與不變式。違反依賴規則的程式碼會被 ESLint 擋下。決定的理由見 [`docs/adr/`](adr/)，名詞見 [`GLOSSARY.md`](../GLOSSARY.md)，測試見 [`testing.md`](testing.md)。
 
 ## 技術選型
 
