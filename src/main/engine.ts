@@ -7,6 +7,7 @@ import type {
   WorkletToMainMessage,
 } from '../protocol/index.js';
 import { abortError, CommandQueue, deferred, type Deferred } from './command-queue.js';
+import { AudioContextLifecycle, type ContextChange, type StartResult } from './audio-context.js';
 import { createWebAudioOutput } from './audio-output.js';
 import {
   AssetLoadError,
@@ -18,6 +19,7 @@ import {
 } from './deps.js';
 import { EngineError } from './errors.js';
 import {
+  BeforeAudioStartEvent,
   DurationChangeEvent,
   EngineErrorEvent,
   SeekedEvent,
@@ -72,6 +74,11 @@ export function createEngineWith(deps: EngineDeps, options?: EngineOptions): Eng
 }
 
 type CommandKind = 'load' | 'play' | 'pause' | 'seek';
+
+/** 暫停超過這麼久（ms）才經佇列 `suspend()` AudioContext 以省電（ADR-0004）。 */
+const IDLE_SUSPEND_MS = 30_000;
+/** Engine 處於 playing 而 worklet 回報的 frame 超過這麼久（ms）沒有前進時，watchdog 介入（ADR-0004）。 */
+const WATCHDOG_MS = 1000;
 
 const noSelection: Readonly<TrackSelection> = { audio: null, video: null, subtitle: null };
 
@@ -131,7 +138,20 @@ class EngineImpl extends EventTarget implements Engine {
   /** 這份媒體是否播放過；seek 結束時決定回到 `'ready'` 或 `'paused'`。 */
   #played = false;
   #worker: MediaWorker | null = null;
-  #audio: AudioOutput | null = null;
+  /** AudioContext 與 worklet；`suspend()`、`resume()`、`close()` 都經它的串行佇列。 */
+  readonly #context: AudioContextLifecycle;
+  /** 最後一次告訴 worklet 的播放意圖；null 表示這個音訊輸出還沒收到過。 */
+  #workletPlay: boolean | null = null;
+  /** 這個 epoch 的 worklet 最後回報的輸出；啟動 context 失敗時依它結束等待中的狀態。flush 時清掉。 */
+  #lastOutput: 'playing' | 'paused' | null = null;
+  /** 最後一次改變播放意圖的原因；worklet 確認之後的 state 轉換沿用它。 */
+  #intentReason: StateChangeReason = 'command';
+  /** 暫停中、context 執行中時，`IDLE_SUSPEND_MS` 後 suspend 的 timer。 */
+  #idleTimer: ReturnType<typeof setTimeout> | null = null;
+  /** watchdog：playing 期間 worklet 回報的最大 frame、逾時的 timer，與目前在第幾步。frame 前進時歸零。 */
+  #watchdogFrame = -Infinity;
+  #watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+  #watchdogStep = 0;
   #wasm: Promise<WasmAssets> | null = null;
   #loadContext: LoadContext | null = null;
   #isDestroyed = false;
@@ -141,6 +161,33 @@ class EngineImpl extends EventTarget implements Engine {
     super();
     this.#deps = deps;
     this.#options = options;
+    const { audioBuffer, assets } = options;
+    this.#context = new AudioContextLifecycle(
+      (handlers, config) => deps.createAudioOutput(handlers, config),
+      {
+        audioBuffer,
+        ...(assets.workletUrl !== undefined && { workletUrl: assets.workletUrl }),
+      },
+      {
+        message: (message) => {
+          this.#onWorkletMessage(message);
+        },
+        beforeStart: (cause) => {
+          this.dispatchEvent(new BeforeAudioStartEvent({ cause }));
+        },
+        changed: (change) => {
+          this.#onContextChange(change);
+        },
+        runningChanged: () => {
+          this.#syncWorklet();
+          this.#updateIdleSuspend();
+        },
+      },
+    );
+  }
+
+  get #audio(): AudioOutput | null {
+    return this.#context.output;
   }
 
   get state(): EngineState {
@@ -184,7 +231,7 @@ class EngineImpl extends EventTarget implements Engine {
     return notImplemented('videoSize');
   }
   get audioUnlocked(): boolean {
-    return notImplemented('audioUnlocked');
+    return this.#context.unlocked;
   }
 
   get volume(): number {
@@ -207,16 +254,23 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   unlockAudio(): void {
-    notImplemented('unlockAudio()');
+    if (this.#isDestroyed) return;
+    void this.#startAudio();
+    // 趁使用者操作時先 compile wasm；失敗時 load 再重試並回報。
+    if (!this.#destroyedDuring()) this.#loadWasm().catch(() => undefined);
   }
 
   // ───────────────────────────── 指令 ─────────────────────────────
 
   load(source: Source, options: LoadOptions = {}): Promise<MediaInfo> {
     if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    // 與 play() 一樣在呼叫內同步解鎖。
+    const starting = options.paused === false ? this.#startAudio() : null;
+    // beforeaudiostart 的 listener 可能已經 destroy()。
+    if (this.#destroyedDuring()) return Promise.reject(this.#destroyedError());
     return this.#queue.enqueue(
       'load',
-      (signal) => this.#runLoad(source, options, signal),
+      (signal) => this.#runLoad(source, options, starting, signal),
       () => true,
     );
   }
@@ -227,12 +281,13 @@ class EngineImpl extends EventTarget implements Engine {
 
   play(): Promise<void> {
     if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
-    // 在呼叫內同步解鎖，user gesture 才算數（完整的生命週期由 #41 加入）。
-    const unlocking = this.#audio?.unlock() ?? Promise.resolve(true);
+    // 在呼叫內同步建立或 resume AudioContext，user gesture 才算數。
+    const starting = this.#startAudio();
+    if (this.#destroyedDuring()) return Promise.reject(this.#destroyedError());
     this.#changeIntent(false);
     const playing = this.#queue.enqueue(
       'play',
-      (signal) => this.#runPlay(unlocking, signal),
+      (signal) => this.#runPlay(starting, signal),
       (k) => k === 'pause',
     );
     this.#announceIntent();
@@ -322,7 +377,12 @@ class EngineImpl extends EventTarget implements Engine {
 
   // ───────────────────────────── 指令的執行 ─────────────────────────────
 
-  async #runLoad(source: Source, options: LoadOptions, signal: AbortSignal): Promise<MediaInfo> {
+  async #runLoad(
+    source: Source,
+    options: LoadOptions,
+    starting: Promise<StartResult> | null,
+    signal: AbortSignal,
+  ): Promise<MediaInfo> {
     this.#terminateWorker();
     const epoch = ++this.#epoch;
     const startTime = Number.isFinite(options.startTime) ? Math.max(0, options.startTime ?? 0) : 0;
@@ -341,16 +401,22 @@ class EngineImpl extends EventTarget implements Engine {
     });
     this.#played = false;
     this.#error = null;
+    this.#watchdogStep = 0;
     this.#currentTime = startTime;
     this.#publishMedia(null, noSelection);
     signal.throwIfAborted();
+    this.#intentReason = 'command';
     this.#setState('loading', 'command', options.paused ?? true);
     signal.throwIfAborted();
+    // load() 內的解鎖失敗：播放意圖回到暫停，以 'ready' 完成。
+    void starting?.then((result) => {
+      if (result !== 'running' && this.#loadContext === load) this.#onStartFailed('command');
+    });
 
     try {
       const audio = this.#audioOutput();
-      audio.post({ type: 'flush', epoch, position: startTime });
-      audio.post({ type: this.#paused ? 'pause' : 'play', epoch });
+      this.#flushAudio(startTime);
+      this.#syncWorklet(true);
       const worker = this.#spawnWorker();
       const [wasm, port] = await abortable(
         Promise.all([this.#loadWasm(), this.#connect(audio)]),
@@ -425,13 +491,19 @@ class EngineImpl extends EventTarget implements Engine {
     return seek.promise;
   }
 
-  async #runPlay(unlocking: Promise<boolean>, signal: AbortSignal): Promise<void> {
+  async #runPlay(starting: Promise<StartResult>, signal: AbortSignal): Promise<void> {
     this.#assertMedia();
-    if (!(await abortable(unlocking, signal))) {
-      signal.throwIfAborted();
-      // 沒有 user gesture：播放意圖回到暫停。
-      this.#changeIntent(true);
-      this.#announceIntent();
+    const result = await abortable(starting, signal);
+    signal.throwIfAborted();
+    // 播放意圖已經在 #onStartFailed() 回到暫停。
+    if (result === 'interrupted') {
+      throw new EngineError('AUDIO_OUTPUT', {
+        fatal: false,
+        position: this.currentTime,
+        message: 'AudioContext 處於系統中斷，無法恢復',
+      });
+    }
+    if (result === 'locked') {
       throw new EngineError('AUDIO_LOCKED', {
         fatal: false,
         position: this.currentTime,
@@ -462,17 +534,14 @@ class EngineImpl extends EventTarget implements Engine {
     this.#loadContext = null;
     this.#terminateWorker();
     // 主執行緒還沒有持有任何 VideoFrame；影片的 issue 在這裡 close() 它們。
-    const audio = this.#audio;
-    this.#audio = null;
-    audio?.disconnect();
+    // 斷開 worklet 並經佇列 close()；佇列的 timeout 保證一定會 settle，失敗也不讓 destroy() 失敗。
+    const closing = this.#context.close();
+    this.#stopWatchdog();
+    this.#updateIdleSuspend();
     this.#error = null;
     this.#publishMedia(null, noSelection);
     this.#setState('idle', 'command', true);
-    try {
-      await audio?.close();
-    } catch {
-      // 關閉失敗也已經釋放了 Engine 這一側的資源；destroy() 不因此失敗。
-    }
+    await closing;
   }
 
   // ───────────────────────────── 訊息 ─────────────────────────────
@@ -524,6 +593,12 @@ class EngineImpl extends EventTarget implements Engine {
     if (this.#isDestroyed || message.epoch !== this.#epoch) return;
     switch (message.type) {
       case 'clock':
+        if (message.frame > this.#watchdogFrame) {
+          // 新的音訊輸出的第一個 clock 只是基準，不算前進。
+          if (this.#watchdogFrame !== -Infinity) this.#watchdogStep = 0;
+          this.#watchdogFrame = message.frame;
+          if (this.#state === 'playing') this.#armWatchdog();
+        }
         this.#clock = message;
         this.#currentTime = message.position;
         this.#ringFrames = message.buffered;
@@ -551,6 +626,10 @@ class EngineImpl extends EventTarget implements Engine {
 
   /** worklet 開始輸出（`playing`）或停止輸出、資料已備妥（`paused`）。 */
   #applyOutput(output: 'playing' | 'paused'): void {
+    this.#lastOutput = output;
+    // 想播放而 context 還在啟動：等啟動的結果（成功時 worklet 會開始輸出，失敗時 #onStartFailed() 再套用）。
+    if (output === 'paused' && !this.#paused && this.#context.starting) return;
+    const reason = this.#intentReason;
     switch (this.#state) {
       case 'loading': {
         const load = this.#loadContext;
@@ -580,13 +659,13 @@ class EngineImpl extends EventTarget implements Engine {
       }
       case 'ready':
       case 'paused':
-        if (output === 'playing') this.#setState('playing', 'command');
+        if (output === 'playing') this.#setState('playing', reason);
         break;
       case 'buffering':
-        this.#setState(output, output === 'playing' ? 'media' : 'command');
+        this.#setState(output, output === 'playing' ? 'media' : reason);
         break;
       case 'playing':
-        if (output === 'paused') this.#setState('paused', 'command');
+        if (output === 'paused') this.#setState('paused', reason);
         break;
       default:
         break;
@@ -599,23 +678,178 @@ class EngineImpl extends EventTarget implements Engine {
    * 改變播放意圖並立即告訴 worklet，但還不發出 statechange：play()／pause() 先把指令入列，
    * 再以 #announceIntent() 發出，listener 內的較新指令才會取代它，而不是反過來。
    */
-  #changeIntent(paused: boolean): void {
+  #changeIntent(paused: boolean, reason: StateChangeReason = 'command'): void {
     if (this.#paused === paused) return;
     this.#paused = paused;
-    this.#audio?.post({ type: paused ? 'pause' : 'play', epoch: this.#epoch });
+    this.#intentReason = reason;
+    this.#syncWorklet();
+    this.#updateIdleSuspend();
   }
 
   /** 發出還沒發出過的播放意圖；期間的 statechange 已經帶上它時不重複發出。 */
-  #announceIntent(): void {
-    this.#setState(this.#state, 'command');
+  #announceIntent(reason: StateChangeReason = 'command'): void {
+    this.#setState(this.#state, reason);
+  }
+
+  /**
+   * 告訴 worklet 播或停：想播放且 context 執行中才播，所以 context 還沒開始（沒有 user gesture）時不會短暫進入 playing。
+   * `force` 時即使沒有改變也送出（新的 load 或新的音訊輸出）。
+   */
+  #syncWorklet(force = false): void {
+    const output = this.#audio;
+    if (!output) return;
+    const play = !this.#paused && this.#context.running;
+    if (!force && play === this.#workletPlay) return;
+    this.#workletPlay = play;
+    output.post({ type: play ? 'play' : 'pause', epoch: this.#epoch });
+  }
+
+  /** 建立或 resume AudioContext（需要時先同步發出 `beforeaudiostart`）。無法開始時播放意圖回到暫停。 */
+  #startAudio(): Promise<StartResult> {
+    let starting: Promise<StartResult>;
+    try {
+      starting = this.#context.start();
+    } catch {
+      // 連 AudioContext 都建立不了：與沒有 gesture 一樣無法開始；load() 會再建立一次並回報 AUDIO_OUTPUT。
+      starting = Promise.resolve('locked');
+    }
+    return starting.then((result) => {
+      if (result !== 'running') this.#onStartFailed('command');
+      return result;
+    });
+  }
+
+  /** context 無法開始：想播放的意圖回到暫停，並結束等待啟動結果的狀態（loading、seeking 等）。 */
+  #onStartFailed(reason: StateChangeReason): void {
+    if (this.#isDestroyed) return;
+    if (!this.#paused) {
+      this.#changeIntent(true, reason);
+      this.#announceIntent(reason);
+    }
+    if (this.#lastOutput === 'paused') this.#applyOutput('paused');
+  }
+
+  /** Engine 以外造成的 context 變化：中斷與外部的 suspend 讓 `paused` 變為 true，外部的 resume 讓它變為 false。 */
+  #onContextChange(change: ContextChange): void {
+    if (this.#isDestroyed) return;
+    const reason = change === 'interrupted' ? 'interrupted' : 'external';
+    const paused = change !== 'resumed';
+    if (this.#paused === paused) return;
+    this.#changeIntent(paused, reason);
+    this.#announceIntent(reason);
+  }
+
+  /** 暫停中且 context 執行中時，`IDLE_SUSPEND_MS` 後經佇列 suspend；其他情況取消。 */
+  #updateIdleSuspend(): void {
+    const idle = !this.#isDestroyed && this.#paused && this.#context.running;
+    if (!idle) {
+      if (this.#idleTimer !== null) clearTimeout(this.#idleTimer);
+      this.#idleTimer = null;
+      return;
+    }
+    this.#idleTimer ??= setTimeout(() => {
+      this.#idleTimer = null;
+      if (this.#paused) this.#context.suspend();
+    }, IDLE_SUSPEND_MS);
+  }
+
+  #armWatchdog(): void {
+    this.#stopWatchdog();
+    this.#watchdogTimer = setTimeout(() => {
+      this.#watchdogTimer = null;
+      this.#onWatchdog();
+    }, WATCHDOG_MS);
+  }
+
+  #stopWatchdog(): void {
+    if (this.#watchdogTimer !== null) clearTimeout(this.#watchdogTimer);
+    this.#watchdogTimer = null;
+  }
+
+  /**
+   * playing 期間 frame 超過 `WATCHDOG_MS` 沒有前進：依序 suspend 加 resume、重建 context，仍然失敗就是 fatal 的
+   * `AUDIO_OUTPUT`（ADR-0004）。frame 前進時回到第一步。
+   */
+  #onWatchdog(): void {
+    if (this.#isDestroyed || this.#state !== 'playing') return;
+    const step = ++this.#watchdogStep;
+    if (step === 1) {
+      const output = this.#audio;
+      void this.#context.bounce().then((result) => {
+        if (this.#isDestroyed || this.#audio !== output || this.#watchdogStep !== 1) return;
+        // resume 失敗就直接重建；成功則再等一個 WATCHDOG_MS。
+        if (result !== 'running') this.#onWatchdog();
+        else if (this.#state === 'playing') this.#armWatchdog();
+      });
+    } else if (step === 2) {
+      this.#rebuildAudio();
+    } else {
+      this.#fail(this.#fatal('AUDIO_OUTPUT', 'AudioContext 停住，重建之後仍然無法恢復'));
+    }
+  }
+
+  /**
+   * watchdog 的第二步：重建 AudioContext（重新 `addModule`），給 Worker 新的 `MessageChannel`，遞增 epoch，
+   * 從目前位置重新供料。新的 context 沒有啟動時，`paused` 變為 true（reason `error`）並送出非致命的 `AUDIO_LOCKED`。
+   */
+  #rebuildAudio(): void {
+    const position = this.currentTime;
+    let output: AudioOutput;
+    try {
+      output = this.#context.rebuild();
+    } catch (cause) {
+      this.#fail(this.#fatal('AUDIO_OUTPUT', 'AudioContext 無法重建', cause));
+      return;
+    }
+    this.#watchdogFrame = -Infinity;
+    this.#workletPlay = null;
+    const epoch = ++this.#epoch;
+    this.#flushAudio(position);
+    output.post({ type: 'duration', epoch, duration: this.#duration });
+    this.#syncWorklet(true);
+    const starting = this.#context.start(false);
+    this.#setState('buffering', 'media');
+    if (this.#epoch !== epoch) return;
+
+    const worker = this.#worker;
+    this.#connect(output).then(
+      (port) => {
+        if (!worker || worker !== this.#worker || output !== this.#audio) {
+          port.close();
+          return;
+        }
+        // 期間可能又 seek 過：以此刻的 epoch 與位置重新供料。
+        worker.post({ type: 'port', port, epoch: this.#epoch, time: this.#currentTime }, [port]);
+      },
+      (error: unknown) => {
+        if (output === this.#audio) this.#fail(this.#toEngineError(error));
+      },
+    );
+    void starting.then((result) => {
+      if (result === 'running' || output !== this.#audio || this.#isDestroyed) return;
+      const wasPlaying = !this.#paused;
+      this.#onStartFailed('error');
+      if (!wasPlaying) return;
+      const error = new EngineError('AUDIO_LOCKED', {
+        fatal: false,
+        position: this.currentTime,
+        message: '重建的 AudioContext 沒有 user gesture，無法開始',
+      });
+      this.dispatchEvent(new EngineErrorEvent({ error }));
+    });
   }
 
   #setState(state: EngineState, reason: StateChangeReason, paused = this.#paused): void {
     const previous = this.#state;
     if (state === previous && paused === this.#announcedPaused) return;
+    const intentChanged = paused !== this.#paused;
     this.#state = state;
     this.#paused = paused;
     this.#announcedPaused = paused;
+    if (intentChanged) {
+      this.#syncWorklet();
+      this.#updateIdleSuspend();
+    }
     if (state !== previous) this.#onStateEntered(state);
     this.dispatchEvent(new StateChangeEvent({ state, previous, paused, reason }));
     this.#notify();
@@ -623,6 +857,8 @@ class EngineImpl extends EventTarget implements Engine {
 
   /** 進入新的 state：播放中依 `timeUpdateInterval` 發出 timeupdate，離開 playing 就停。 */
   #onStateEntered(state: EngineState): void {
+    if (state === 'playing') this.#armWatchdog();
+    else this.#stopWatchdog();
     if (state !== 'playing') {
       if (this.#timeUpdateTimer !== null) clearInterval(this.#timeUpdateTimer);
       this.#timeUpdateTimer = null;
@@ -682,6 +918,7 @@ class EngineImpl extends EventTarget implements Engine {
   #flushAudio(position: number): void {
     this.#currentTime = position;
     this.#clock = null;
+    this.#lastOutput = null;
     if (this.#loadContext) this.#loadContext.flushedAt = position;
     this.#audio?.post({ type: 'flush', epoch: this.#epoch, position });
   }
@@ -713,23 +950,11 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   #audioOutput(): AudioOutput {
-    if (!this.#audio) {
-      try {
-        const { audioBuffer, assets } = this.#options;
-        this.#audio = this.#deps.createAudioOutput(
-          (message) => {
-            this.#onWorkletMessage(message);
-          },
-          {
-            audioBuffer,
-            ...(assets.workletUrl !== undefined && { workletUrl: assets.workletUrl }),
-          },
-        );
-      } catch (cause) {
-        throw this.#fatal('AUDIO_OUTPUT', '音訊輸出無法啟動', cause);
-      }
+    try {
+      return this.#context.ensure();
+    } catch (cause) {
+      throw this.#fatal('AUDIO_OUTPUT', '音訊輸出無法啟動', cause);
     }
-    return this.#audio;
   }
 
   async #connect(audio: AudioOutput): Promise<MessagePort> {
@@ -809,6 +1034,11 @@ class EngineImpl extends EventTarget implements Engine {
     return error instanceof EngineError
       ? error
       : this.#fatal('INTERNAL', error instanceof Error ? error.message : String(error), error);
+  }
+
+  /** 同步 dispatch 的 listener 內可能呼叫了 destroy()；以方法讀取，避開 TypeScript 對欄位的窄化。 */
+  #destroyedDuring(): boolean {
+    return this.#isDestroyed;
   }
 
   #destroyedError(): EngineError {

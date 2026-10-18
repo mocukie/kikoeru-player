@@ -78,6 +78,8 @@
       <button id="load" type="button">load</button>
       <button id="play" type="button">play</button>
       <button id="pause" type="button">pause</button>
+      <button id="unlock" type="button">unlockAudio</button>
+      <label><input id="autoplay" type="checkbox" /> load 後直接播放（paused: false）</label>
     </div>
 
     <h2>狀態</h2>
@@ -86,6 +88,8 @@
       <dd id="state">idle</dd>
       <dt>paused</dt>
       <dd id="paused">true</dd>
+      <dt>audioUnlocked</dt>
+      <dd id="audio-unlocked">false</dd>
       <dt>currentTime</dt>
       <dd id="current-time">0.000</dd>
       <dt>duration</dt>

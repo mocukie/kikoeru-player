@@ -8,6 +8,7 @@ export type MainToWorkerMessage<H extends HostTypes> =
   | WorkerLoadMessage<H>
   | WorkerStartMessage
   | WorkerSeekMessage
+  | WorkerPortMessage<H>
   | WorkerStatsRequestMessage;
 
 /** Worker 建立後的第一個訊息；`workletPort` 以 transfer 傳送。 */
@@ -49,6 +50,17 @@ export interface WorkerStartMessage {
 /** 中止進行中的讀取，從 `time`（秒）重新供料。 */
 export interface WorkerSeekMessage {
   type: 'seek';
+  epoch: number;
+  time: number;
+}
+
+/**
+ * watchdog 重建 AudioContext 之後：改接新的 worklet（`port` 以 transfer 傳送，舊的 port 關閉），並以 `epoch`
+ * 從 `time`（秒）重新供料，等同 `seek`。還沒有 `start` 時只換 port。
+ */
+export interface WorkerPortMessage<H extends HostTypes> {
+  type: 'port';
+  port: H['messagePort'];
   epoch: number;
   time: number;
 }

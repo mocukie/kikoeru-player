@@ -8,10 +8,13 @@ import type {
   WorkletProcessorOptions,
   WorkletToMainMessage,
 } from '../protocol/index.js';
-import { AssetLoadError, type AudioOutput, type AudioOutputConfig, type MainHost } from './deps.js';
-
-/** `unlock()` 與 `close()` 等待 AudioContext 的上限（ms），對齊 ADR-0004 的 2 秒 timeout。 */
-const CONTEXT_TIMEOUT_MS = 2000;
+import {
+  AssetLoadError,
+  type AudioOutput,
+  type AudioOutputConfig,
+  type AudioOutputHandlers,
+  type MainHost,
+} from './deps.js';
 
 /** worklet 的預設位置；`addModule()` 原樣載入，App 的 bundler 依這個寫法把檔案當成資產複製。 */
 function defaultWorkletUrl(): URL {
@@ -20,13 +23,13 @@ function defaultWorkletUrl(): URL {
 
 /**
  * 建立 AudioContext（不指定 `sampleRate`，`latencyHint: 'playback'`）並載入 worklet。
- * 在 user gesture 的同步段內呼叫時，context 會直接開始。
+ * `resume()`、`suspend()`、`close()` 原樣轉給 AudioContext，串行與 timeout 由 Engine 的佇列負責。
  */
 export function createWebAudioOutput(
-  onMessage: (message: WorkletToMainMessage) => void,
+  handlers: AudioOutputHandlers,
   config: AudioOutputConfig,
 ): AudioOutput {
-  return new WebAudioOutput(onMessage, config);
+  return new WebAudioOutput(handlers, config);
 }
 
 class WebAudioOutput implements AudioOutput {
@@ -38,9 +41,12 @@ class WebAudioOutput implements AudioOutput {
   #queued: MainToWorkletMessage[] = [];
   #disconnected = false;
 
-  constructor(onMessage: (message: WorkletToMainMessage) => void, config: AudioOutputConfig) {
+  constructor(handlers: AudioOutputHandlers, config: AudioOutputConfig) {
     const context = new AudioContext({ latencyHint: 'playback' });
     this.#context = context;
+    context.onstatechange = () => {
+      if (!this.#disconnected) handlers.statechange(context.state);
+    };
     this.#ready = (async () => {
       const url = config.workletUrl ?? defaultWorkletUrl();
       try {
@@ -57,7 +63,7 @@ class WebAudioOutput implements AudioOutput {
         processorOptions,
       });
       node.port.onmessage = ({ data }: MessageEvent<WorkletToMainMessage>) => {
-        if (!this.#disconnected) onMessage(data);
+        if (!this.#disconnected) handlers.message(data);
       };
       node.connect(context.destination);
       this.#node = node;
@@ -112,46 +118,26 @@ class WebAudioOutput implements AudioOutput {
     else this.#queued.push(message);
   }
 
-  unlock(): Promise<boolean> {
-    // 必須在呼叫內同步 resume，user gesture 才算數。
-    const resuming = this.#context.resume().then(
-      () => true,
-      () => false,
-    );
-    return withTimeout(resuming, false);
+  resume(): Promise<void> {
+    return this.#context.resume();
+  }
+
+  suspend(): Promise<void> {
+    return this.#context.suspend();
+  }
+
+  close(): Promise<void> {
+    return this.#context.close();
   }
 
   disconnect(): void {
     this.#disconnected = true;
     this.#queued = [];
+    this.#context.onstatechange = null;
     if (this.#node) {
       this.#node.port.onmessage = null;
       this.#node.port.close();
       this.#node.disconnect();
     }
   }
-
-  async close(): Promise<void> {
-    // 完整的串行佇列由「AudioContext 生命週期」#41 加入；這裡至少保證一定會 settle。
-    await withTimeout(
-      this.#context.close().then(
-        () => true,
-        () => false,
-      ),
-      false,
-    );
-  }
-}
-
-/** `promise` 在 `CONTEXT_TIMEOUT_MS` 內沒有 resolve 時以 `fallback` resolve。 */
-function withTimeout<T>(promise: Promise<T>, fallback: T): Promise<T> {
-  return new Promise<T>((resolve) => {
-    const timer = setTimeout(() => {
-      resolve(fallback);
-    }, CONTEXT_TIMEOUT_MS);
-    void promise.then((value) => {
-      clearTimeout(timer);
-      resolve(value);
-    });
-  });
 }

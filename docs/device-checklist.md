@@ -17,6 +17,9 @@ Demo 頁的「CI 組媒體」來自 `pnpm media:gen` 產生的 `test/media/out/`
 
 - [ ] **解鎖**：重新整理頁面後，第一次按 play 就能出聲（`play()` 在 user gesture 內同步解鎖 `AudioContext`）。
 - [ ] **沒有 gesture**：重新整理後不點擊頁面，在 console（手機用遠端偵錯）執行 `await engine.load({ kind: 'http', url: '/media/audio/flac.flac' })`，resolve 且 state 為 `ready`（`AudioContext` 還沒開始時 worklet 仍處理 port 的訊息）；接著 `await engine.play()` 以非致命的 `AUDIO_LOCKED` reject，`paused` 回到 true；之後按 play 能正常播放。
+- [ ] **unlockAudio**：重新整理後按 unlockAudio，事件 log 出現 `beforeaudiostart cause=unlock`，`audioUnlocked` 變為 true；之後在 console 執行 `await engine.load({ kind: 'http', url: '/media/audio/flac.flac' }, { paused: false })` 直接進入 `playing`。
+- [ ] **沒有 gesture 的 load（paused: false）**：重新整理後不點擊頁面，在 console 執行上一項的 load，resolve 時 state 為 `ready`、`paused` 為 true、`audioUnlocked` 為 false，事件 log 沒有出現 `playing`。
+- [ ] **長時間暫停**：播放中按 pause，等 40 秒以上（Engine 在 30 秒時 suspend `AudioContext`），再按 play：事件 log 出現 `beforeaudiostart cause=resume`，能正常恢復播放。另外在 console 以 `setTimeout(() => engine.play(), 0)` 從 gesture 之外恢復，記下是否需要 gesture（ADR-0004 待確認：iOS 上被 suspend 之後 `resume()` 不需要 gesture）。
 - [ ] **CI 組的純音訊檔**：`audio/` 每一個檔案都能 load、play、pause、播到結尾（`ended`），聲音沒有破音、斷續或忽快忽慢。
 - [ ] **取樣率**：`audio/flac-44100.flac`、`flac-96000.flac`、`flac-192000.flac` 的音高與 `audio/flac.flac` 相同（重採樣到 `AudioContext.sampleRate`）。
 - [ ] **多聲道**：`audio/flac-5.1.flac` 以 stereo 播出，各聲道的 beep 都聽得到。
@@ -46,6 +49,9 @@ Safari 不跑 E2E，共同項目都要做。
 - [ ] AudioWorklet 能接收 transfer 過來的 `MessagePort`：load 之後能出聲。
 - [ ] 靜音鍵開啟時的行為（記下有沒有聲音；背景播放模組完成後應該要有聲音）。
 - [ ] 有線耳機、藍牙耳機的拔除與連接：播放不中斷，或依系統行為暫停後能再按 play 恢復。
+- [ ] **系統中斷**：播放中以來電、Siri 或計時器響鈴中斷，事件 log 出現 `paused=true reason=interrupted`；中斷結束後**不會**自動恢復出聲（WebKit 自己 resume `AudioContext` 時 worklet 仍輸出靜音），按 play 出現 `beforeaudiostart cause=resume` 並恢復播放。若中斷尚未結束就按 play，記下是否得到 `AUDIO_OUTPUT`（`play()` 的非致命 reject，`paused` 回到 true）。
+- [ ] **鎖屏控制**：沒有背景播放模組時，鎖屏的 Now Playing 是 `AudioContext`；以鎖屏的暫停、播放鍵操作，事件 log 出現 `reason=external`，`paused` 跟著改變。
+- [ ] **長時間暫停後的 resume**：暫停 40 秒以上（Engine 已 suspend `AudioContext`）後，分別以頁面的 play、鎖屏的播放鍵恢復，記下哪一種需要 gesture、有沒有聲音。
 
 ### Android Chrome
 
