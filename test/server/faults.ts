@@ -86,6 +86,10 @@ export function withFaults(
   serve: (req: IncomingMessage, res: ServerResponse, cacheable: boolean) => void,
 ): Connect.NextHandleFunction {
   return (req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      next();
+      return;
+    }
     const url = new URL(req.url ?? '/', 'http://localhost');
     let faults: Faults | null;
     try {
@@ -97,10 +101,6 @@ export function withFaults(
     }
     if (!faults) {
       serve(req, res, true);
-      return;
-    }
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      next();
       return;
     }
     const key = req.url ?? '/';
