@@ -33,6 +33,7 @@ import {
   TimeUpdateEvent,
   TracksChangeEvent,
 } from './events.js';
+import { errorScope, fromWorkerTime, Logger } from './log.js';
 import { notImplemented } from './not-implemented.js';
 import { resolveEngineOptions, type ResolvedEngineOptions } from './options.js';
 import { createWebMediaWorker } from './media-worker.js';
@@ -129,7 +130,10 @@ interface LoadContext {
 class EngineImpl extends EventTarget implements Engine {
   readonly #deps: EngineDeps;
   readonly #options: ResolvedEngineOptions;
-  readonly #queue = new CommandQueue<CommandKind>();
+  readonly #log: Logger;
+  readonly #queue = new CommandQueue<CommandKind>((kind, by, started) => {
+    this.#log.log('debug', 'command', `${kind} 被 ${by} 取代`, { started });
+  });
   /** 等待狀態改變的指令；每次鏡像更新後重新檢查。 */
   readonly #waiters = new Set<() => void>();
 
@@ -215,6 +219,7 @@ class EngineImpl extends EventTarget implements Engine {
     super();
     this.#deps = deps;
     this.#options = options;
+    this.#log = new Logger(options.log, options.logLevel);
     const { audioBuffer, audioFadeMs, assets } = options;
     this.#context = new AudioContextLifecycle(
       (handlers, config) => {
@@ -227,6 +232,7 @@ class EngineImpl extends EventTarget implements Engine {
         audioBuffer,
         audioFadeMs,
         ...(assets.workletUrl !== undefined && { workletUrl: assets.workletUrl }),
+        logLevel: this.#log.wireLevel,
       },
       {
         message: (message) => {
@@ -241,6 +247,9 @@ class EngineImpl extends EventTarget implements Engine {
         runningChanged: () => {
           this.#syncWorklet();
           this.#updateIdleSuspend();
+        },
+        log: (entry) => {
+          this.#log.forward(entry);
         },
       },
     );
@@ -361,6 +370,12 @@ class EngineImpl extends EventTarget implements Engine {
     if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
     // 外部取消等同被取代：已經 abort 時什麼都不做。
     if (options.signal?.aborted) return Promise.reject(abortError());
+    this.#log.log('debug', 'command', 'load', {
+      source: source.kind,
+      ...(source.kind === 'http' && { url: String(source.url) }),
+      ...(options.startTime !== undefined && { startTime: options.startTime }),
+      ...(options.paused !== undefined && { paused: options.paused }),
+    });
     // 與 play() 一樣在呼叫內同步解鎖。
     const starting = options.paused === false ? this.#startAudio() : null;
     // beforeaudiostart 的 listener 可能已經 destroy()。
@@ -374,6 +389,7 @@ class EngineImpl extends EventTarget implements Engine {
 
   reload(): Promise<MediaInfo> {
     if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    this.#log.log('debug', 'command', 'reload');
     // 保留播放意圖：要接續播放時與 play() 一樣在呼叫內同步解鎖。
     const starting = this.#paused ? null : this.#startAudio();
     if (this.#destroyedDuring()) return Promise.reject(this.#destroyedError());
@@ -386,6 +402,7 @@ class EngineImpl extends EventTarget implements Engine {
 
   play(): Promise<void> {
     if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    this.#log.log('debug', 'command', 'play');
     // 在呼叫內同步建立或 resume AudioContext，user gesture 才算數。
     const starting = this.#startAudio();
     if (this.#destroyedDuring()) return Promise.reject(this.#destroyedError());
@@ -401,6 +418,7 @@ class EngineImpl extends EventTarget implements Engine {
 
   pause(): Promise<void> {
     if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    this.#log.log('debug', 'command', 'pause');
     this.#changeIntent(true);
     const pausing = this.#queue.enqueue(
       'pause',
@@ -416,6 +434,7 @@ class EngineImpl extends EventTarget implements Engine {
     if (!Number.isFinite(time)) {
       return Promise.reject(new TypeError(`seek() 的時間必須是有限數，收到 ${String(time)}`));
     }
+    this.#log.log('debug', 'command', 'seek', { time });
     if (this.#loadContext) return this.#seekWhileLoading(this.#loadContext, time);
     return this.#queue.enqueue(
       'seek',
@@ -438,6 +457,7 @@ class EngineImpl extends EventTarget implements Engine {
   }
   unload(): Promise<void> {
     if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    this.#log.log('debug', 'command', 'unload');
     return this.#queue.enqueue(
       'unload',
       () => {
@@ -449,6 +469,7 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   destroy(): Promise<void> {
+    if (!this.#destroying) this.#log.log('debug', 'command', 'destroy');
     this.#destroying ??= this.#runDestroy();
     return this.#destroying;
   }
@@ -456,7 +477,10 @@ class EngineImpl extends EventTarget implements Engine {
   attachCanvas(): void {
     notImplemented('attachCanvas()');
   }
-  /** `video` 與 `wasmHeapBytes` 還是 null／0，由影片與診斷的 issue 接上。 */
+  /**
+   * 彙整主執行緒（音訊輸出、buffered）與 media Worker（快取、網路、封包佇列、wasm heap、libav instance）的數字。
+   * `video` 由影片的 issue 接上，目前一律為 null。
+   */
   async getStats(): Promise<EngineStats> {
     const worker = await this.#workerStats();
     const audio = this.#audio;
@@ -482,7 +506,7 @@ class EngineImpl extends EventTarget implements Engine {
         misses: worker?.cache.misses ?? 0,
       },
       network: worker?.network ?? { bytesLoaded: 0, inflight: [] },
-      wasmHeapBytes: 0,
+      wasmHeapBytes: worker?.wasmHeapBytes ?? 0,
       resources: {
         workers: this.#worker ? 1 : 0,
         libavInstances: worker?.libavInstances ?? 0,
@@ -614,6 +638,7 @@ class EngineImpl extends EventTarget implements Engine {
           retry: this.#options.retry,
           limits: this.#options.limits,
           rate: this.#rate,
+          logLevel: this.#log.wireLevel,
         },
         [port],
       );
@@ -758,8 +783,14 @@ class EngineImpl extends EventTarget implements Engine {
   // ───────────────────────────── 訊息 ─────────────────────────────
 
   #spawnWorker(): MediaWorker {
+    this.#log.log('debug', 'worker', '建立 media Worker');
     const worker: MediaWorker = this.#deps.createWorker({
       message: (message) => {
+        // 被取代的 Worker 在 terminate 之前送出的 log 也有診斷價值。
+        if (message.type === 'log') {
+          this.#log.forward({ ...message.entry, time: fromWorkerTime(message.entry.time) });
+          return;
+        }
         if (worker !== this.#worker) return;
         switch (message.type) {
           case 'probe':
@@ -775,8 +806,12 @@ class EngineImpl extends EventTarget implements Engine {
               message: text,
               ...(detail && { detail }),
             });
-            if (fatal) this.#fail(error);
-            else this.dispatchEvent(new EngineErrorEvent({ error }));
+            if (fatal) {
+              this.#fail(error);
+            } else {
+              this.#logError('warn', error);
+              this.dispatchEvent(new EngineErrorEvent({ error }));
+            }
             break;
           }
           case 'crash':
@@ -950,7 +985,10 @@ class EngineImpl extends EventTarget implements Engine {
       starting = Promise.resolve('locked');
     }
     return starting.then((result) => {
-      if (result !== 'running') this.#onStartFailed('command');
+      if (result !== 'running') {
+        this.#log.log('warn', 'audio', `AudioContext 無法開始（${result}）`);
+        this.#onStartFailed('command');
+      }
       return result;
     });
   }
@@ -968,6 +1006,11 @@ class EngineImpl extends EventTarget implements Engine {
   /** Engine 以外造成的 context 變化：中斷與外部的 suspend 讓 `paused` 變為 true，外部的 resume 讓它變為 false。 */
   #onContextChange(change: ContextChange): void {
     if (this.#isDestroyed) return;
+    this.#log.log(
+      change === 'interrupted' ? 'warn' : 'info',
+      'audio',
+      `AudioContext ${change}（外部）`,
+    );
     const reason = change === 'interrupted' ? 'interrupted' : 'external';
     const paused = change !== 'resumed';
     if (this.#paused === paused) return;
@@ -985,7 +1028,13 @@ class EngineImpl extends EventTarget implements Engine {
     }
     this.#idleTimer ??= setTimeout(() => {
       this.#idleTimer = null;
-      if (this.#paused) this.#context.suspend();
+      if (!this.#paused) return;
+      this.#log.log(
+        'debug',
+        'audio',
+        `暫停超過 ${String(IDLE_SUSPEND_MS)} ms，suspend AudioContext`,
+      );
+      this.#context.suspend();
     }, IDLE_SUSPEND_MS);
   }
 
@@ -1009,6 +1058,15 @@ class EngineImpl extends EventTarget implements Engine {
   #onWatchdog(): void {
     if (this.#isDestroyed || this.#state !== 'playing') return;
     const step = ++this.#watchdogStep;
+    this.#log.log(
+      'warn',
+      'audio',
+      `watchdog：音訊時鐘 ${String(WATCHDOG_MS)} ms 沒有前進（第 ${String(step)} 步）`,
+      {
+        step,
+        position: this.currentTime,
+      },
+    );
     if (step === 1) {
       const output = this.#audio;
       void this.#context.bounce().then((result) => {
@@ -1064,6 +1122,7 @@ class EngineImpl extends EventTarget implements Engine {
     void starting.then((result) => {
       if (result === 'running' || output !== this.#audio || this.#isDestroyed) return;
       const wasPlaying = !this.#paused;
+      this.#log.log('warn', 'audio', `重建的 AudioContext 無法開始（${result}）`);
       this.#onStartFailed('error');
       if (!wasPlaying) return;
       const error = new EngineError('AUDIO_LOCKED', {
@@ -1079,6 +1138,7 @@ class EngineImpl extends EventTarget implements Engine {
     const previous = this.#state;
     if (state === previous && paused === this.#announcedPaused) return;
     const intentChanged = paused !== this.#paused;
+    this.#log.log('debug', 'command', `state ${previous} → ${state}`, { reason, paused });
     this.#state = state;
     this.#paused = paused;
     this.#announcedPaused = paused;
@@ -1093,6 +1153,10 @@ class EngineImpl extends EventTarget implements Engine {
     this.dispatchEvent(new StateChangeEvent({ state, previous, paused, reason }));
     if (stall && stall.attempts > 0 && state === 'playing' && this.#epoch === epoch) {
       const { since, attempts } = stall;
+      this.#log.log('info', 'io', '卡住後恢復播放', {
+        stalledMs: performance.now() - since,
+        attempts,
+      });
       this.dispatchEvent(
         new StallRecoveredEvent({ stalledMs: performance.now() - since, attempts }),
       );
@@ -1169,6 +1233,9 @@ class EngineImpl extends EventTarget implements Engine {
       this.#starveTimer = null;
       if (this.#isDestroyed || this.#state !== 'playing' || !this.#starved) return;
       this.#holding = true;
+      this.#log.log('warn', 'io', `ring 用完超過 ${String(STARVED_MS)} ms，進入 buffering`, {
+        position: this.#currentTime,
+      });
       const epoch = this.#epoch;
       this.#setState('buffering', 'media');
       // listener 可能已經改變了狀態。
@@ -1194,6 +1261,11 @@ class EngineImpl extends EventTarget implements Engine {
     const buffer = this.#buffer;
     if (buffer?.epoch !== this.#epoch) return;
     if (buffer.eof || !buffer.fetching || buffer.end - this.currentTime >= RESUME_AHEAD_SECONDS) {
+      this.#log.log('info', 'io', '資料足夠，恢復輸出', {
+        end: buffer.end,
+        eof: buffer.eof,
+        fetching: buffer.fetching,
+      });
       this.#holding = false;
       this.#syncWorklet();
     }
@@ -1234,6 +1306,15 @@ class EngineImpl extends EventTarget implements Engine {
       this.#fail(this.#stallError(position), 'stall');
       return;
     }
+    this.#log.log(
+      'warn',
+      'io',
+      `超過 ${String(this.#options.stallTimeout)} ms 沒有資料：卡住，從目前位置重新讀取`,
+      {
+        attempt: stall.attempts,
+        position,
+      },
+    );
     const epoch = this.#epoch;
     this.dispatchEvent(new StallEvent({ since: stall.since, position }));
     if (this.#epoch !== epoch || this.#stall !== stall) return;
@@ -1309,6 +1390,7 @@ class EngineImpl extends EventTarget implements Engine {
   /** 致命錯誤：結束當前媒體，state 進入 `'error'`，未完成的指令都以 `error` reject。不自動 reload。 */
   #fail(error: EngineError, reason: StateChangeReason = 'error'): void {
     const position = this.currentTime;
+    this.#logError('error', error, { reason });
     this.#terminateWorker();
     this.#loadContext = null;
     this.#error = error;
@@ -1320,7 +1402,19 @@ class EngineImpl extends EventTarget implements Engine {
     if (this.#epoch === epoch) this.dispatchEvent(new EngineErrorEvent({ error }));
   }
 
+  #logError(level: 'warn' | 'error', error: EngineError, extra?: Record<string, unknown>): void {
+    if (!this.#log.enabled(level)) return;
+    this.#log.log(level, errorScope(error.code), error.message, {
+      code: error.code,
+      fatal: error.fatal,
+      position: error.position,
+      ...(Object.keys(error.detail).length > 0 && { detail: { ...error.detail } }),
+      ...extra,
+    });
+  }
+
   #terminateWorker(): void {
+    if (this.#worker) this.#log.log('debug', 'worker', 'terminate media Worker');
     this.#worker?.terminate();
     this.#worker = null;
     for (const resolve of this.#statsRequests.values()) resolve(null);

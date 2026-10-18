@@ -108,3 +108,20 @@ export interface WireError {
   message: string;
   detail?: { status?: number; url?: string; codec?: string };
 }
+
+/** log 的等級，由低到高；同公開的 `LogLevel`。 */
+export type WireLogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+/** 產生 log 的子系統；同公開的 `LogEntry.scope`。 */
+export type WireLogScope =
+  'io' | 'demux' | 'audio' | 'video' | 'subtitle' | 'command' | 'worker' | 'background';
+
+/** 跨執行緒傳送的一筆 log；欄位同公開的 `LogEntry`，`time` 的時基由各訊息規定。 */
+export interface WireLogEntry {
+  level: WireLogLevel;
+  scope: WireLogScope;
+  message: string;
+  time: number;
+  /** 只能放 structured clone 得了的值。 */
+  data?: Record<string, unknown>;
+}

@@ -806,6 +806,7 @@ describe('音訊輸出', () => {
       audioBuffer: { targetMs: 200, refillMs: 75, capacityMs: 400 },
       audioFadeMs: 10,
       workletUrl: '/worklet.js',
+      logLevel: null,
     });
   });
 

@@ -47,6 +47,13 @@
       dd {
         margin: 0;
       }
+      #stats-json {
+        max-height: 40vh;
+        overflow: auto;
+        font:
+          0.75rem/1.3 ui-monospace,
+          monospace;
+      }
       #log {
         max-height: 50vh;
         overflow: auto;
@@ -136,6 +143,17 @@
       <output id="rate-value" for="rate">1.00</output>
       <button id="rate-reset" type="button">1.0x</button>
     </div>
+    <div class="row">
+      <label for="log-level">logLevel</label>
+      <select id="log-level">
+        <option value="off">不設定 log hook</option>
+        <option value="debug">debug</option>
+        <option value="info">info</option>
+        <option value="warn" selected>warn</option>
+        <option value="error">error</option>
+      </select>
+      <small>改變時以新的 logLevel 建立新的 Engine；Engine 的 log 記進下方的事件 log</small>
+    </div>
 
     <h2>狀態</h2>
     <dl>
@@ -163,9 +181,15 @@
       <dd id="network-stats">—</dd>
       <dt>resources</dt>
       <dd id="resources">—</dd>
+      <dt>wasm／video</dt>
+      <dd id="wasm-video-stats">—</dd>
       <dt>background</dt>
       <dd id="background-state">—</dd>
     </dl>
+    <details id="stats-panel">
+      <summary>getStats()（每秒更新）</summary>
+      <pre id="stats-json">—</pre>
+    </details>
 
     <h2>事件 log <button id="copy-log" type="button">複製</button></h2>
     <ol id="log"></ol>

@@ -3,6 +3,8 @@
 import type {
   MainToWorkerMessage,
   MainToWorkletMessage,
+  WireLogEntry,
+  WireLogLevel,
   WorkerToMainMessage,
   WorkletToMainMessage,
 } from '../protocol/index.js';
@@ -53,6 +55,8 @@ export interface AudioOutputHandlers {
    * Engine 以外的變化（中斷、外部的 suspend／resume），不以它決定自己的流程。
    */
   statechange(state: AudioContextState): void;
+  /** AudioWorklet 的 log，`time` 已換算成主執行緒的 `performance.now()` 時基。 */
+  log(entry: WireLogEntry): void;
 }
 
 /** 音訊輸出的設定，取自 `EngineOptions`。 */
@@ -63,6 +67,8 @@ export interface AudioOutputConfig {
   audioFadeMs: number;
   /** `EngineOptions.assets.workletUrl`；沒給時用套件內的 worklet。 */
   workletUrl?: string | URL;
+  /** worklet 送出 log 的最低等級；null 表示不送（App 沒有設定 log hook）。 */
+  logLevel: WireLogLevel | null;
 }
 
 /** media Worker 的回呼。 */

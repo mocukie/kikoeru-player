@@ -6,6 +6,7 @@ import type {
   ProbedAudioTrack,
   ProbedMedia,
   RetryPolicy,
+  WireLogLevel,
   WorkerLimits,
   WorkerStats,
   WorkerToMainMessage,
@@ -121,7 +122,7 @@ export class WorkerDriver {
 
   /**
    * `module` 預設為 `wasmAssets()` 的 Module；給別的 Module 可以模擬與 glue 不符的資產。
-   * `retry` 預設不重試；`limits` 預設為桌面的值（`readaheadSeconds` 60）。
+   * `retry` 預設不重試；`limits` 預設為桌面的值（`readaheadSeconds` 60）；`logLevel` 預設 null（不送 log）。
    */
   static async init(
     endpoint: WorkerEndpoint,
@@ -132,6 +133,7 @@ export class WorkerDriver {
       limits?: Partial<WorkerLimits>;
       /** 播放速度，預設 1。 */
       rate?: number;
+      logLevel?: WireLogLevel | null;
     } = {},
   ): Promise<WorkerDriver> {
     const assets = await wasmAssets();
@@ -140,6 +142,7 @@ export class WorkerDriver {
       module = assets.module,
       retry = { attempts: 0, baseDelayMs: 0 },
       rate = 1,
+      logLevel = null,
     } = options;
     const limits: WorkerLimits = { ...desktopLimits, ...options.limits };
     const { glueUrl } = assets;
@@ -154,6 +157,7 @@ export class WorkerDriver {
         retry,
         limits,
         rate,
+        logLevel,
       },
       [channel.port1],
     );

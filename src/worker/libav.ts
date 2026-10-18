@@ -104,6 +104,8 @@ export class LibavMedia {
   readonly #fmt: number;
   readonly #streams: readonly libavjs.Stream[];
   readonly #reads: ReadGate;
+  /** instance 的 linear memory；glue 收下 instance 時找不到時為 null。 */
+  readonly #memory: WebAssembly.Memory | null;
   /** demux 專用的 AVPacket：demux 與解碼同時進行，不能共用 decoder 的 packet。 */
   readonly #demuxPkt: number;
   /** 目前音軌的 decoder；換音軌時釋放，seek 時 flush 後沿用。 */
@@ -117,7 +119,9 @@ export class LibavMedia {
     origin: number,
     reads: ReadGate,
     demuxPkt: number,
+    memory: WebAssembly.Memory | null,
   ) {
+    this.#memory = memory;
     this.#libav = libav;
     this.#demuxPkt = demuxPkt;
     this.#fmt = fmt;
@@ -131,6 +135,11 @@ export class LibavMedia {
    * 中止進行中的來源讀取：等待它的 libav 呼叫（demux、seek）以錯誤結束。之後要先經 `startAudio()` 的 seek
    * 才能繼續讀（中止後直接續讀會讀到錯位的封包）。
    */
+  /** instance 的 wasm heap（linear memory）目前的大小（bytes）。 */
+  get heapBytes(): number {
+    return this.#memory?.buffer.byteLength ?? 0;
+  }
+
   abortReads(): void {
     this.#reads.abort();
   }
@@ -144,7 +153,7 @@ export class LibavMedia {
     source: ByteSource,
     signal: AbortSignal,
   ): Promise<LibavMedia> {
-    const libav = await createInstance(assets);
+    const { libav, memory } = await createInstance(assets);
     signal.throwIfAborted();
     const reads = new ReadGate(signal);
     // 同步的 AVIO 讀取經 Asyncify 接到非同步的來源；同一個 instance 同時只有一個 pending 的讀取。
@@ -199,6 +208,7 @@ export class LibavMedia {
       start === null ? 0 : start / 1e6,
       reads,
       demuxPkt,
+      memory(),
     );
   }
 
@@ -579,7 +589,13 @@ class LibavAudioDecoder implements AudioDecoder<Packet> {
   }
 }
 
-async function createInstance(assets: LibavAssets): Promise<LibAV> {
+/**
+ * 建立 libav instance。`memory()` 回傳 instance 匯出的 linear memory（export 名稱經過壓縮，以型別找出），
+ * 供 `getStats().wasmHeapBytes`。
+ */
+async function createInstance(
+  assets: LibavAssets,
+): Promise<{ libav: LibAV; memory: () => WebAssembly.Memory | null }> {
   glue ??= import(/* @vite-ignore */ assets.glueUrl).then(
     (m: { default: unknown }) => m.default,
     (error: unknown) => {
@@ -589,7 +605,8 @@ async function createInstance(assets: LibavAssets): Promise<LibAV> {
   );
   const factory = (await glue) as (options: object) => Promise<unknown>;
   const instantiate = assets.instantiate ?? ((m, imports) => WebAssembly.instantiate(m, imports));
-  return libavjs.LibAV({
+  let memory: WebAssembly.Memory | null = null;
+  const libav = await libavjs.LibAV({
     noworker: true,
     // 用主執行緒 compile 好的 Module 建立 instance，不再下載與編譯 wasm。glue 的 instantiateWasm 沒有回報失敗的
     // 途徑：instantiate 失敗時它的 Module promise 永遠不會 settle，所以由外層的 promise 直接 reject。
@@ -602,7 +619,13 @@ async function createInstance(assets: LibavAssets): Promise<LibAV> {
             receive: (instance: WebAssembly.Instance) => void,
           ) {
             instantiate(assets.module, imports)
-              .then(receive)
+              .then((instance) => {
+                memory =
+                  Object.values(instance.exports).find(
+                    (value): value is WebAssembly.Memory => value instanceof WebAssembly.Memory,
+                  ) ?? null;
+                receive(instance);
+              })
               .catch((error: unknown) => {
                 reject(instantiateError(error));
               });
@@ -611,6 +634,7 @@ async function createInstance(assets: LibavAssets): Promise<LibAV> {
         }).then(resolve, reject);
       }),
   });
+  return { libav, memory: () => memory };
 }
 
 /**

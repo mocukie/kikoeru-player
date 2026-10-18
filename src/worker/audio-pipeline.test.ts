@@ -9,6 +9,7 @@ import {
   type PacketReader,
 } from './audio-pipeline.js';
 import { WorkerError } from './errors.js';
+import type { Logger } from './log.js';
 import type { PacketQueueLimits } from './packet-queue.js';
 import type { Stereo, Stretcher } from './tempo.js';
 
@@ -143,6 +144,7 @@ function setup(
     epoch?: number;
     queueLimits?: PacketQueueLimits;
     onDemux?: (end: number) => void;
+    log?: Logger;
   } = {},
 ) {
   const stretch = options.stretchers ?? stretchers();
@@ -168,6 +170,7 @@ function setup(
     signal: controller.signal,
     ...(options.queueLimits && { queueLimits: options.queueLimits }),
     ...(options.onDemux && { onDemux: options.onDemux }),
+    ...(options.log && { log: options.log }),
     // 與 MessagePort 一樣 transfer：送出後原本的 buffer 被 detach。
     post: (message, transfer) => posted.push(structuredClone({ message, transfer }, { transfer })),
   });
@@ -470,6 +473,24 @@ describe('錯誤', () => {
     expect(left[1023]).toBe(1023);
     expect(left.subarray(1024, 2048).every((x) => x === 0)).toBe(true);
     expect(left[2048]).toBe(2048);
+  });
+
+  test('壞的封包與 demux 結尾記 log', async () => {
+    const messages: string[] = [];
+    const log: Logger = {
+      enabled: () => true,
+      log: (level, scope, message) => messages.push(`${level}:${scope}:${message}`),
+    };
+    const { demand, epoch } = setup({
+      batches: [[{ frames: 1024 }, { frames: 1024, fail: true }]],
+      log,
+    });
+    demand.need(epoch, 100_000);
+    await settle();
+    expect(messages).toEqual([
+      expect.stringMatching(/^debug:demux:/) as string,
+      expect.stringMatching(/^warn:audio:封包解碼失敗/) as string,
+    ]);
   });
 
   test('沒有時間戳時，壞的封包也補上等長的靜音', async () => {

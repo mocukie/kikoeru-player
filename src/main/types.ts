@@ -91,9 +91,15 @@ export interface EngineOptions {
    * pause、seek、選軌與 underrun 時淡入淡出的長度（ms），範圍 0–100，超出丟 `RangeError`；0 表示硬切。預設 10。
    */
   audioFadeMs?: number;
-  /** 診斷用的 log hook；未設定時 Engine 不輸出任何 log。 */
+  /**
+   * 診斷用的 log hook，在主執行緒同步呼叫；media Worker 與 AudioWorklet 的 log 也轉送到這裡。未設定時 Engine
+   * 不輸出任何 log，其他執行緒也不送。hook 丟出的錯誤不影響 Engine，交給全域的 `reportError()`。
+   */
   log?: LogHook;
-  /** 送進 log hook 的最低等級，預設 `'warn'`。 */
+  /**
+   * 送進 log hook 的最低等級，預設 `'warn'`；不是 `LogLevel` 的值時丟 `RangeError`。過濾在產生 log 的執行緒內就做，
+   * 低於它的 log 不跨執行緒傳送。
+   */
   logLevel?: LogLevel;
 }
 
@@ -349,7 +355,10 @@ export interface Engine extends EventTarget {
 
   // ── 診斷 ──
 
-  /** 取一次統計快照；非同步，因為大部分數字在 media Worker 內。 */
+  /**
+   * 取一次統計快照；非同步，因為大部分數字在 media Worker 內（主執行緒、Worker 與 worklet 的數字彙整在一起）。
+   * 沒有載入媒體時，Worker 的欄位為 0／空值。
+   */
   getStats(): Promise<EngineStats>;
 }
 
@@ -660,7 +669,10 @@ export type EngineErrorCode =
 
 // ───────────────────────────── 診斷 ─────────────────────────────
 
-/** log 的等級，由低到高。 */
+/**
+ * log 的等級，由低到高。`debug`：指令、state 轉換、每個 Range 請求等逐筆的事件；`info`：開檔結果、重試、恢復；
+ * `warn`：不致命的異常（請求失敗、ring 用完、卡住、watchdog、AudioContext 無法開始）；`error`：致命錯誤與 Worker 崩潰。
+ */
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 /** 接收 Engine 診斷 log 的 hook。 */
@@ -672,8 +684,12 @@ export interface LogEntry {
   /** 產生 log 的子系統；`'background'` 是背景播放模組。 */
   scope: 'io' | 'demux' | 'audio' | 'video' | 'subtitle' | 'command' | 'worker' | 'background';
   message: string;
-  /** `performance.now()` 時間（主執行緒的時基）。 */
+  /**
+   * 事件發生的 `performance.now()` 時間（ms，主執行緒的時基）；media Worker 與 AudioWorklet 的 log 已換算過。
+   * worklet 的 log 依 `AudioContext.currentTime` 換算，誤差約為瀏覽器的一個音訊 render 區塊（數 ms 到數十 ms）。
+   */
   time: number;
+  /** 結構化的細節（錯誤碼、位置、URL、範圍等），只含可以 structured clone 的值。 */
   data?: Record<string, unknown>;
 }
 

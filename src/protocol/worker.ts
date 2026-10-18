@@ -1,6 +1,14 @@
 // 主執行緒 ↔ media Worker 的訊息。會影響輸出的訊息都帶 epoch，收方丟棄過期的 epoch。
 
-import type { HostTypes, ProbedMedia, RetryPolicy, WireError, WireSource } from './media.js';
+import type {
+  HostTypes,
+  ProbedMedia,
+  RetryPolicy,
+  WireError,
+  WireLogEntry,
+  WireLogLevel,
+  WireSource,
+} from './media.js';
 
 /** 主執行緒送給 media Worker 的訊息。 */
 export type MainToWorkerMessage<H extends HostTypes> =
@@ -29,6 +37,11 @@ export interface WorkerInitMessage<H extends HostTypes> {
   limits: WorkerLimits;
   /** 目前的播放速度（`Engine.playbackRate`），之後以 `rate` 改變。 */
   rate: number;
+  /**
+   * 送出 `log` 的最低等級（`EngineOptions.logLevel`）；低於它的 log 在 Worker 內就丟掉，不跨執行緒傳送。
+   * null 表示 App 沒有設定 log hook，Worker 不送任何 log。
+   */
+  logLevel: WireLogLevel | null;
 }
 
 /** 補上平台預設值的 `EngineOptions.limits`，加上內部的封包佇列硬上限。 */
@@ -110,7 +123,8 @@ export type WorkerToMainMessage =
   | WorkerCrashMessage
   | WorkerStatsMessage
   | WorkerBufferMessage
-  | WorkerReadErrorMessage;
+  | WorkerReadErrorMessage
+  | WorkerLogMessage;
 
 /**
  * Worker 的 script 執行完畢、開始接收訊息時送出的第一個訊息。在它之前的 `error` 事件是 script 載入失敗
@@ -156,6 +170,16 @@ export interface WorkerReadErrorMessage {
 }
 
 /**
+ * 一筆診斷 log，等級不低於 init 的 `logLevel`。`entry.time` 是 `performance.timeOrigin + performance.now()`
+ *（ms），主執行緒減去自己的 `performance.timeOrigin` 換算成主執行緒的 `performance.now()` 時基。不帶 epoch：
+ * 被取代的操作的 log 也照常轉送。
+ */
+export interface WorkerLogMessage {
+  type: 'log';
+  entry: WireLogEntry;
+}
+
+/**
  * Worker 無法繼續運作：wasm trap，或 wasm 記憶體用完（`MAXIMUM_MEMORY`）。主執行緒回報 `INTERNAL` 並 terminate Worker；
  * 不帶 epoch，因為整個 Worker 都不能再用。
  */
@@ -193,4 +217,6 @@ export interface WorkerStats {
   };
   /** 封包佇列，欄位同 `EngineStats.packetQueue`。 */
   packetQueue: { audioSeconds: number; videoSeconds: number; bytes: number };
+  /** 存在中的 libav instance 的 wasm linear memory 合計（bytes）。 */
+  wasmHeapBytes: number;
 }

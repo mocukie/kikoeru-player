@@ -5,6 +5,8 @@
 import type {
   HostTypes,
   MainToWorkletMessage,
+  WireLogEntry,
+  WireLogLevel,
   WorkerToWorkletMessage,
   WorkletConnectMessage,
   WorkletProcessorName,
@@ -19,6 +21,8 @@ const MAX_CHUNK_FRAMES = 4096;
 const CLOCK_INTERVAL_SECONDS = 0.25;
 /** 包絡換算 frame 數時的浮點誤差容許。 */
 const EPSILON = 1e-6;
+/** log 等級的高低（worklet 不能 import runtime 程式碼，與主執行緒、Worker 各有一份）。 */
+const LOG_RANK: Readonly<Record<WireLogLevel, number>> = { debug: 0, info: 1, warn: 2, error: 3 };
 
 /** ring 的水位（frame）。 */
 export interface Watermarks {
@@ -182,6 +186,13 @@ export interface OutputCoreOptions {
   sampleRate: number;
   audioBuffer: WorkletProcessorOptions['audioBuffer'];
   audioFadeMs: WorkletProcessorOptions['audioFadeMs'];
+  /** 送出 log 的最低等級；null 時不送。 */
+  logLevel: WireLogLevel | null;
+  /**
+   * 此刻的 context frame（AudioWorkletGlobalScope 的 `currentFrame`），標示 render 以外（處理訊息時）發生的 log；
+   * 省略時用下一個 render quantum 開始的 frame。
+   */
+  currentFrame?: () => number;
   /** 送給主執行緒。 */
   report: (message: WorkletToMainMessage) => void;
 }
@@ -203,6 +214,8 @@ export class OutputCore {
   readonly #report: (message: WorkletToMainMessage) => void;
   /** 淡入淡出的 frame 數；0 為硬切。 */
   readonly #fadeFrames: number;
+  readonly #logLevel: WireLogLevel | null;
+  readonly #currentFrame: (() => number) | null;
   #transport: PcmTransport | null = null;
   /** 淡入淡出的包絡（0–1），每個輸出的 sample 乘上它；硬切時不使用。 */
   #gain = 0;
@@ -248,10 +261,13 @@ export class OutputCore {
     );
     this.#report = options.report;
     this.#fadeFrames = Math.round((options.audioFadeMs * options.sampleRate) / 1000);
+    this.#logLevel = options.logLevel;
+    this.#currentFrame = options.currentFrame ?? null;
   }
 
   /** 接上新的 media Worker；之前的 transport 關閉，從它收到、還沒用到的訊息丟掉。 */
   connect(transport: PcmTransport): void {
+    this.#log('debug', '接上新的 media Worker');
     this.#transport?.close();
     this.#transport = transport;
     this.#early = [];
@@ -328,6 +344,10 @@ export class OutputCore {
 
   #flush(epoch: number, position: number): void {
     if (this.#outputting && this.#fadeFrames > 0 && this.#gain > 0) this.#captureTail();
+    this.#log('debug', `flush 到 epoch ${String(epoch)}`, {
+      position,
+      dropped: this.#ring.buffered,
+    });
     this.#epoch = epoch;
     this.#position = position;
     this.#ring.clear();
@@ -439,6 +459,12 @@ export class OutputCore {
         this.#outputting = false;
         this.#starved = true;
         this.#underruns++;
+        this.#log(
+          'warn',
+          'ring 用完（underrun），時鐘停住',
+          { position: this.#position, underruns: this.#underruns },
+          this.#quantumStart + written,
+        );
         this.#announce('starved', this.#quantumStart + written);
         return;
       }
@@ -564,6 +590,20 @@ export class OutputCore {
     this.#report({ type, epoch: this.#epoch });
   }
 
+  /** 送出等級不低於 `logLevel` 的 log；`frame` 是事件發生的 context frame，省略時為此刻。 */
+  #log(level: WireLogLevel, message: string, data?: Record<string, unknown>, frame?: number): void {
+    const threshold = this.#logLevel;
+    if (threshold === null || LOG_RANK[level] < LOG_RANK[threshold]) return;
+    frame ??= this.#currentFrame?.() ?? this.#frame;
+    const entry: Omit<WireLogEntry, 'time'> = {
+      level,
+      scope: 'audio',
+      message,
+      ...(data && { data }),
+    };
+    this.#report({ type: 'log', epoch: this.#epoch, entry, frame });
+  }
+
   #clock(frame = this.#frame): void {
     this.#lastClockFrame = frame;
     this.#clockRate = this.#currentRate();
@@ -600,6 +640,8 @@ if ('registerProcessor' in globalThis) {
           sampleRate,
           audioBuffer: options.processorOptions.audioBuffer,
           audioFadeMs: options.processorOptions.audioFadeMs,
+          logLevel: options.processorOptions.logLevel,
+          currentFrame: () => currentFrame,
           report: (message) => {
             this.port.postMessage(message);
           },
