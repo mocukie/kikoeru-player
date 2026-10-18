@@ -7,8 +7,8 @@ declare global {
   var engine: Engine;
 }
 
-const engine = createEngine();
-globalThis.engine = engine;
+/** 目前的 Engine；destroy 之後以「建立新的 Engine」換一個新的（E2E 的 leak 測試也用它）。 */
+let engine: Engine;
 
 function element<T extends HTMLElement>(id: string, type: new () => T): T {
   const found = document.getElementById(id);
@@ -70,27 +70,35 @@ function command(name: string, run: () => Promise<unknown>): void {
   );
 }
 
-engine.addEventListener('statechange', (e) => {
-  log(`statechange ${e.previous} → ${e.state} paused=${String(e.paused)} reason=${e.reason}`);
-});
-engine.addEventListener('durationchange', (e) => {
-  log(`durationchange ${String(e.duration)}`);
-});
-engine.addEventListener('trackschange', (e) => {
-  log(`trackschange ${String(e.tracks.length)} 軌 selected=${JSON.stringify(e.selected)}`);
-});
-engine.addEventListener('seeked', (e) => {
-  log(`seeked ${e.currentTime.toFixed(3)}`);
-});
-engine.addEventListener('ended', () => {
-  log('ended');
-});
-engine.addEventListener('error', (e) => {
-  log(`error ${describeError(e.error)}`);
-});
-engine.addEventListener('beforeaudiostart', (e) => {
-  log(`beforeaudiostart cause=${e.cause}`);
-});
+/** 建立 Engine 並接上事件 log；`globalThis.engine` 指向新的 Engine。 */
+function setupEngine(): void {
+  const target = createEngine();
+  engine = target;
+  globalThis.engine = target;
+  target.addEventListener('statechange', (e) => {
+    log(`statechange ${e.previous} → ${e.state} paused=${String(e.paused)} reason=${e.reason}`);
+  });
+  target.addEventListener('durationchange', (e) => {
+    log(`durationchange ${String(e.duration)}`);
+  });
+  target.addEventListener('trackschange', (e) => {
+    log(`trackschange ${String(e.tracks.length)} 軌 selected=${JSON.stringify(e.selected)}`);
+  });
+  target.addEventListener('seeked', (e) => {
+    log(`seeked ${e.currentTime.toFixed(3)}`);
+  });
+  target.addEventListener('ended', () => {
+    log('ended');
+  });
+  target.addEventListener('error', (e) => {
+    log(`error ${describeError(e.error)}`);
+  });
+  target.addEventListener('beforeaudiostart', (e) => {
+    log(`beforeaudiostart cause=${e.cause}`);
+  });
+}
+
+setupEngine();
 
 // ───────────────────────────── 操作 ─────────────────────────────
 
@@ -136,6 +144,21 @@ element('unlock', HTMLElement).addEventListener('click', () => {
 });
 element('reload', HTMLElement).addEventListener('click', () => {
   command('reload', () => engine.reload().then((info) => info.format));
+});
+element('unload', HTMLElement).addEventListener('click', () => {
+  command('unload', () => engine.unload());
+});
+element('destroy', HTMLElement).addEventListener('click', () => {
+  command('destroy', () => engine.destroy());
+});
+element('recreate', HTMLElement).addEventListener('click', () => {
+  // 沒有 destroy 的舊 Engine 先 destroy，避免留著它的 Worker 與 AudioContext。
+  const previous = engine;
+  command('destroy（舊的 Engine）', () => previous.destroy());
+  setupEngine();
+  engine.volume = Number(volumeInput.value);
+  engine.muted = mutedInput.checked;
+  log('建立新的 Engine');
 });
 
 // 進度條：拖曳中只更新顯示的時間，放開（change）時才 seek；其餘時候跟著 currentTime。
@@ -185,14 +208,18 @@ const durationText = element('duration', HTMLElement);
 const mediaText = element('media-info', HTMLElement);
 const errorText = element('error', HTMLElement);
 const audioStatsText = element('audio-stats', HTMLElement);
+const resourcesText = element('resources', HTMLElement);
 
-// getStats() 是非同步的：每秒取一次 ring 水位、underrun 與輸出延遲（實機檢查藍牙延遲用）。
+// getStats() 是非同步的：每秒取一次 ring 水位、underrun、輸出延遲（實機檢查藍牙延遲用）與存活的資源數。
 setInterval(() => {
   engine.getStats().then(
-    ({ audio }) => {
+    ({ audio, resources }) => {
       audioStatsText.textContent =
         `ring ${audio.ringMs.toFixed(0)} ms／target ${String(audio.targetMs)} ms，` +
         `underruns ${String(audio.underruns)}，outputLatency ${audio.outputLatencyMs.toFixed(1)} ms`;
+      resourcesText.textContent =
+        `workers ${String(resources.workers)}，libavInstances ${String(resources.libavInstances)}，` +
+        `openVideoFrames ${String(resources.openVideoFrames)}`;
     },
     () => undefined,
   );

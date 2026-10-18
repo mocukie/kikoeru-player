@@ -12,7 +12,7 @@ import {
   type DecodedAudio,
   type PacketReader,
 } from './audio-pipeline.js';
-import { WorkerError } from './errors.js';
+import { crashReason, WorkerError } from './errors.js';
 import type { RawMedia, RawStream } from './probe.js';
 import type { ByteSource } from './source.js';
 
@@ -163,7 +163,7 @@ export class LibavMedia {
       [fmt, streams] = await libav.ff_init_demuxer_file(DEVICE);
     } catch (error) {
       signal.throwIfAborted();
-      if (error instanceof WorkerError || error instanceof WebAssembly.RuntimeError) throw error;
+      if (error instanceof WorkerError || crashReason(error) !== null) throw error;
       throw new WorkerError('FORMAT_UNSUPPORTED', '無法辨識的媒體格式', { cause: error });
     }
     signal.throwIfAborted();
@@ -227,7 +227,11 @@ export class LibavMedia {
         const selected = packets[streamIndex] ?? [];
         if (result === libav.AVERROR_EOF) return { packets: selected, eof: true };
         if (result < 0 && result !== -libav.EAGAIN) {
-          throw new WorkerError('FORMAT_CORRUPT', `demux 失敗：${await libav.ff_error(result)}`);
+          const text = await libav.ff_error(result);
+          // AVERROR(ENOMEM)：wasm 記憶體用完，交給 crash 的路線（crashReason）。
+          const error = new Error(`demux 失敗：${text}`);
+          if (crashReason(error) !== null) throw error;
+          throw new WorkerError('FORMAT_CORRUPT', error.message);
         }
         return { packets: selected, eof: false };
       },

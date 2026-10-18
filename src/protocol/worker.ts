@@ -79,7 +79,19 @@ export interface WorkerStatsRequestMessage {
 
 /** media Worker 送給主執行緒的訊息。 */
 export type WorkerToMainMessage =
-  WorkerProbeMessage | WorkerErrorMessage | WorkerCrashMessage | WorkerStatsMessage;
+  | WorkerReadyMessage
+  | WorkerProbeMessage
+  | WorkerErrorMessage
+  | WorkerCrashMessage
+  | WorkerStatsMessage;
+
+/**
+ * Worker 的 script 執行完畢、開始接收訊息時送出的第一個訊息。在它之前的 `error` 事件是 script 載入失敗
+ *（`ASSET_LOAD_FAILED`），之後的是崩潰（`INTERNAL`）。
+ */
+export interface WorkerReadyMessage {
+  type: 'ready';
+}
 
 /** `load` 的 probe 結果。 */
 export interface WorkerProbeMessage {
@@ -95,7 +107,10 @@ export interface WorkerErrorMessage {
   error: WireError;
 }
 
-/** Worker 無法繼續運作（wasm trap、記憶體用完）；主執行緒回報 `INTERNAL`。 */
+/**
+ * Worker 無法繼續運作：wasm trap，或 wasm 記憶體用完（`MAXIMUM_MEMORY`）。主執行緒回報 `INTERNAL` 並 terminate Worker；
+ * 不帶 epoch，因為整個 Worker 都不能再用。
+ */
 export interface WorkerCrashMessage {
   type: 'crash';
   reason: 'wasm-trap' | 'out-of-memory';

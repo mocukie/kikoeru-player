@@ -2,7 +2,7 @@
 // demux 與解碼經由 PacketReader、AudioDecoder 兩個介面，libav 的實作在 libav.ts。
 
 import type { WorkerToWorkletMessage } from '../protocol/index.js';
-import { WorkerError } from './errors.js';
+import { crashReason, WorkerError } from './errors.js';
 
 /** chunk 的 frame 數下限；`eof` 前的最後一段除外。 */
 export const MIN_CHUNK_FRAMES = 2048;
@@ -299,8 +299,8 @@ export class AudioPipeline<P> {
       decoded = await decoder.decode(packet);
     } catch (error) {
       signal.throwIfAborted();
-      // wasm trap 之後 instance 不能再用，不是壞封包。
-      if (error instanceof WebAssembly.RuntimeError) throw error;
+      // wasm trap 與記憶體用完之後 instance 不能再用，不是壞封包。
+      if (crashReason(error) !== null) throw error;
       // 壞的封包補上等長的靜音；連續失敗累計 1 媒體秒才放棄。
       const duration = decoder.packetDuration(packet);
       const frames =
