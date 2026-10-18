@@ -9,6 +9,7 @@ import type {
   WorkletToMainMessage,
 } from '../protocol/index.js';
 import { heardContextTime } from './latency.js';
+import { fromContextFrame } from './log.js';
 import {
   AssetLoadError,
   type AudioOutput,
@@ -69,6 +70,7 @@ class WebAudioOutput implements AudioOutput {
       const processorOptions: WorkletProcessorOptions = {
         audioBuffer: config.audioBuffer,
         audioFadeMs: config.audioFadeMs,
+        logLevel: config.logLevel,
       };
       const node = new AudioWorkletNode(context, name, {
         numberOfInputs: 0,
@@ -77,7 +79,18 @@ class WebAudioOutput implements AudioOutput {
         processorOptions,
       });
       node.port.onmessage = ({ data }: MessageEvent<WorkletToMainMessage>) => {
-        if (!this.#disconnected) handlers.message(data);
+        if (this.#disconnected) return;
+        if (data.type !== 'log') {
+          handlers.message(data);
+          return;
+        }
+        const time = fromContextFrame({
+          frame: data.frame,
+          sampleRate: context.sampleRate,
+          currentTime: context.currentTime,
+          now: performance.now(),
+        });
+        handlers.log({ ...data.entry, time });
       };
       node.connect(gain);
       gain.connect(context.destination);

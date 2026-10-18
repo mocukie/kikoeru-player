@@ -3,6 +3,8 @@
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { captureDestination, type DestinationCapture } from '../../test/audio-capture.js';
 import type {
+  WireLogEntry,
+  WireLogLevel,
   WorkerToWorkletMessage,
   WorkletToMainMessage,
   WorkletToWorkerMessage,
@@ -15,10 +17,12 @@ const audioBuffer = { targetMs: 150, refillMs: 75, capacityMs: 400 };
 let capture: DestinationCapture;
 let output: AudioOutput | null = null;
 let reports: WorkletToMainMessage[];
+let logs: WireLogEntry[];
 
 beforeEach(() => {
   capture = captureDestination();
   reports = [];
+  logs = [];
 });
 
 afterEach(async () => {
@@ -31,12 +35,13 @@ function handlers(): AudioOutputHandlers {
   return {
     message: (message) => reports.push(message),
     statechange: () => undefined,
+    log: (entry) => logs.push(entry),
   };
 }
 
 /** 預設硬切（`audioFadeMs` 0），讓逐 sample 的比對不受淡入淡出影響。 */
-function open(audioFadeMs = 0): AudioOutput {
-  output = createWebAudioOutput(handlers(), { audioBuffer, audioFadeMs });
+function open(audioFadeMs = 0, logLevel: WireLogLevel | null = null): AudioOutput {
+  output = createWebAudioOutput(handlers(), { audioBuffer, audioFadeMs, logLevel });
   return output;
 }
 
@@ -161,11 +166,52 @@ test('新的 epoch 讓 ring 內的舊資料不被播出；暫停時時鐘不前�
   expect(firstMismatch(left, start, pcm[0])).toBe(-1);
 });
 
+test('worklet 的 log：ring 用完時送出 warn，time 換算成主執行緒的 performance.now()', async () => {
+  const audio = open(0, 'warn');
+  audio.post({ type: 'flush', epoch: 1, position: 0 });
+  audio.post({ type: 'play', epoch: 1 });
+  const port = await audio.connect();
+  // 只送 0.25 秒、不送 eof：播完之後 ring 用完。
+  let sent = false;
+  port.onmessage = ({ data }: MessageEvent<WorkletToWorkerMessage>) => {
+    if (data.type !== 'need' || sent) return;
+    sent = true;
+    const pcm = testPcm(Math.round(audio.sampleRate * 0.25));
+    port.postMessage(
+      { type: 'pcm', epoch: 1, time: 0, channels: pcm },
+      pcm.map((c) => c.buffer),
+    );
+  };
+  const started = performance.now();
+  await audio.resume();
+  await until(reported('starved', 1));
+  await until(() => logs.length > 0);
+  const [entry] = logs;
+  expect(entry).toMatchObject({ level: 'warn', scope: 'audio', data: { underruns: 1 } });
+  // 時間在播放開始 0.25 秒（減去一點誤差）之後、此刻之前。
+  expect(entry?.time).toBeGreaterThan(started + 200);
+  expect(entry?.time).toBeLessThanOrEqual(performance.now());
+  // debug 以下（flush、接上 Worker）沒有送出。
+  expect(logs.every((e) => e.level !== 'debug')).toBe(true);
+});
+
+test('logLevel 為 null 時 worklet 不送 log', async () => {
+  const audio = open(0, null);
+  audio.post({ type: 'flush', epoch: 1, position: 0 });
+  audio.post({ type: 'play', epoch: 1 });
+  feed(await audio.connect(), audio.sampleRate, { 1: testPcm(4096) });
+  await audio.resume();
+  await until(reported('playing', 1));
+  await settle();
+  expect(logs).toEqual([]);
+});
+
 test('worklet 載入失敗時 connect() 以 AssetLoadError reject', async () => {
   output = createWebAudioOutput(handlers(), {
     audioBuffer,
     audioFadeMs: 0,
     workletUrl: new URL('/does-not-exist/worklet.js', location.href),
+    logLevel: null,
   });
   await expect(output.connect()).rejects.toBeInstanceOf(AssetLoadError);
 });

@@ -20,6 +20,7 @@ import { initialByteRate } from './byte-rate.js';
 import { crashReason, toWireError, WorkerError } from './errors.js';
 import type { WorkerHost } from './host.js';
 import { LibavMedia, type Instantiate, type LibavAssets } from './libav.js';
+import { createWorkerLogger, silentLogger, type Logger } from './log.js';
 import { NORMAL_QUEUE_BYTES, NORMAL_QUEUE_SECONDS } from './packet-queue.js';
 import { hasPlayableTrack, toProbedMedia } from './probe.js';
 import { CachedSource, RangeCache } from './range-cache.js';
@@ -93,6 +94,8 @@ export class MediaWorker {
   /** `start` 選用的音軌；之後的 `seek` 沿用。`start` 之前為 undefined。 */
   #audio: number | null | undefined = undefined;
   #libavInstances = 0;
+  /** init 之前什麼都不送。 */
+  #log: Logger = silentLogger;
 
   constructor(deps: MediaWorkerDeps) {
     this.#deps = deps;
@@ -101,6 +104,14 @@ export class MediaWorker {
   handle(message: MainToWorkerMessage<WorkerHost>): void {
     switch (message.type) {
       case 'init':
+        this.#log = createWorkerLogger(message.logLevel, (m) => {
+          this.#deps.postMessage(m);
+        });
+        this.#log.log('debug', 'worker', 'init', {
+          sampleRate: message.sampleRate,
+          limits: { ...message.limits },
+          retry: { ...message.retry },
+        });
         this.#env = {
           assets: {
             module: message.module,
@@ -149,6 +160,10 @@ export class MediaWorker {
       message.port.close();
       return;
     }
+    this.#log.log('info', 'audio', '改接重建的 AudioWorklet，重新供料', {
+      epoch: message.epoch,
+      time: message.time,
+    });
     env.port.onmessage = null;
     env.port.close();
     env.port = message.port;
@@ -179,7 +194,11 @@ export class MediaWorker {
     this.#stopOutput();
     this.#audio = undefined;
     this.#pipeline = null;
-    if (this.#load) this.#dispose(this.#load);
+    this.#log.log('debug', 'worker', 'load', { epoch: message.epoch, source: message.source.kind });
+    if (this.#load) {
+      this.#log.log('debug', 'worker', '前一個 load 被取代', { epoch: this.#load.epoch });
+      this.#dispose(this.#load);
+    }
     const load: Load = {
       epoch: message.epoch,
       controller: new AbortController(),
@@ -204,6 +223,7 @@ export class MediaWorker {
           openSource(wire, signal, {
             retry,
             cache: env.cache,
+            log: this.#log,
             onRequestError: (error) => {
               if (this.#load === load) {
                 this.#deps.postMessage({ type: 'readerror', error: toWireError(error) });
@@ -249,6 +269,12 @@ export class MediaWorker {
           if (this.#load === load) this.#deps.postMessage(message);
         },
       });
+      this.#log.log('info', 'demux', `開檔完成：${probed.format}`, {
+        epoch: load.epoch,
+        duration: probed.duration,
+        size: probed.size,
+        tracks: probed.tracks.map((t) => `${t.kind}:${t.codec}${t.supported ? '' : '（不支援）'}`),
+      });
       this.#deps.postMessage({ type: 'probe', epoch: load.epoch, media: probed });
     } catch (error) {
       // open／probe 被中止或失敗：丟掉這個 instance。被取代的 load 不回報。
@@ -265,6 +291,11 @@ export class MediaWorker {
   #startOutput(message: OutputRequest): void {
     const load = this.#load;
     if (!load) return;
+    this.#log.log('debug', 'demux', message.seek ? 'seek' : '開始輸出', {
+      epoch: message.epoch,
+      time: message.time,
+      superseding: this.#output !== null,
+    });
     this.#stopOutput();
     load.media?.abortReads();
     // seek 時進行中的網路請求（含預讀）一起中止：卡住的請求要換新的才能恢復。開檔後的第一次輸出不 seek，
@@ -315,9 +346,15 @@ export class MediaWorker {
         onDemux: (end, eof) => {
           tracker?.onDemux(message.epoch, end, eof);
         },
+        log: this.#log,
       });
       signal.throwIfAborted();
       this.#pipeline = pipeline as AudioPipeline<unknown>;
+      this.#log.log('debug', 'audio', '開始供料', {
+        epoch: message.epoch,
+        stream: message.audio,
+        codec: load.media.raw.streams[message.audio]?.codec,
+      });
       await pipeline.run();
     } catch (error) {
       // 被取代：中止的讀取或 libav 回傳的任何錯誤都不回報。
@@ -366,6 +403,7 @@ export class MediaWorker {
         videoSeconds: 0,
         bytes: pipeline?.queuedBytes ?? 0,
       },
+      wasmHeapBytes: this.#load?.media?.heapBytes ?? 0,
     };
   }
 
@@ -373,6 +411,9 @@ export class MediaWorker {
     // wasm trap 或記憶體用完：instance 不能再用，主執行緒回報 INTERNAL 並 terminate 這個 Worker。
     const reason = crashReason(error);
     if (reason !== null) {
+      this.#log.log('error', 'worker', `instance 無法繼續運作（${reason}）`, {
+        message: error instanceof Error ? error.message : String(error),
+      });
       this.#deps.postMessage({
         type: 'crash',
         reason,

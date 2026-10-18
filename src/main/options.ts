@@ -1,5 +1,6 @@
 // createEngine() 的選項驗證與預設值。
 
+import { isLogLevel } from './log.js';
 import type { Platform } from './platform.js';
 import type { EngineOptions, LogHook, LogLevel } from './types.js';
 
@@ -92,7 +93,7 @@ export function resolveEngineOptions(
     audioBuffer,
     audioFadeMs: inRange('audioFadeMs', o.audioFadeMs ?? 10, 0, 100),
     log: o.log ?? null,
-    logLevel: o.logLevel ?? 'warn',
+    logLevel: logLevel(o.logLevel ?? 'warn'),
   };
 }
 
@@ -125,6 +126,11 @@ function inRange(name: string, value: number, min: number, max: number): number 
   return value;
 }
 
-function outOfRange(name: string, value: number, expected: string): RangeError {
+function logLevel(value: LogLevel): LogLevel {
+  if (!isLogLevel(value)) throw outOfRange('logLevel', value, "'debug'、'info'、'warn' 或 'error'");
+  return value;
+}
+
+function outOfRange(name: string, value: unknown, expected: string): RangeError {
   return new RangeError(`${name} 必須是 ${expected}，收到 ${String(value)}`);
 }

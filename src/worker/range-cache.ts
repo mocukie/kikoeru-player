@@ -4,6 +4,7 @@
 // 讀到的位置）往後抓到目標就停，掉到一半以下才恢復。
 
 import type { WorkerError } from './errors.js';
+import { silentLogger, type Logger } from './log.js';
 import { retryable, type ByteSource, type RangeClient } from './source.js';
 
 /** 區塊大小：LRU 與對齊的單位。 */
@@ -110,6 +111,7 @@ export class CachedSource implements ByteSource {
   readonly size: number;
   readonly client: RangeClient;
   readonly #cache: RangeCache;
+  readonly #log: Logger;
   readonly #id: number;
   #controller = new AbortController();
   /** 請求中的區塊 → 涵蓋它的請求。 */
@@ -129,8 +131,9 @@ export class CachedSource implements ByteSource {
   /** 區塊進來、預讀的階段改變時呼叫。 */
   onChange: (() => void) | null = null;
 
-  constructor(client: RangeClient, cache: RangeCache) {
+  constructor(client: RangeClient, cache: RangeCache, log: Logger = silentLogger) {
     this.client = client;
+    this.#log = log;
     this.size = client.size;
     this.#cache = cache;
     this.#id = cache.newSource();
@@ -306,6 +309,12 @@ export class CachedSource implements ByteSource {
   #setFetching(fetching: boolean): void {
     if (this.#fetching === fetching) return;
     this.#fetching = fetching;
+    this.#log.log('debug', 'io', fetching ? '預讀開始抓取' : '預讀停止抓取', {
+      url: this.client.url,
+      position: this.#position,
+      aheadBytes: this.aheadBytes,
+      target: this.readaheadTarget,
+    });
     this.onChange?.();
   }
 
@@ -368,9 +377,15 @@ export class CachedSource implements ByteSource {
     }
     if (error !== null && request.readahead) {
       if (!retryable(error)) {
+        this.#log.log('warn', 'io', `預讀遇到不可重試的錯誤，需要網路時回報：${error.message}`, {
+          url: this.client.url,
+        });
         this.#failure = error as WorkerError;
         this.#setFetching(false);
       } else {
+        this.#log.log('warn', 'io', `預讀暫停 ${String(READAHEAD_RETRY_MS)} ms：${error.message}`, {
+          url: this.client.url,
+        });
         this.#retryTimer = setTimeout(() => {
           this.#retryTimer = null;
           this.#pump();

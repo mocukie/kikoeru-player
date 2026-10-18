@@ -44,6 +44,12 @@ export function deferred<T>(): Deferred<T> {
 export class CommandQueue<K extends string> {
   readonly #entries: Entry<K>[] = [];
   #closed: (() => Error) | null = null;
+  readonly #onSuperseded: ((kind: K, by: K, started: boolean) => void) | null;
+
+  /** `onSuperseded`：指令被較新的指令取代時呼叫（診斷 log 用）。 */
+  constructor(onSuperseded?: (kind: K, by: K, started: boolean) => void) {
+    this.#onSuperseded = onSuperseded ?? null;
+  }
 
   enqueue<T>(
     kind: K,
@@ -64,7 +70,10 @@ export class CommandQueue<K extends string> {
     const superseded = this.#entries.filter((e) => supersedes(e.kind));
     if (superseded[0]?.started) this.#entries.unshift(entry);
     else this.#entries.push(entry);
-    for (const e of superseded) this.#remove(e, abortError());
+    for (const e of superseded) {
+      this.#onSuperseded?.(e.kind, kind, e.started);
+      this.#remove(e, abortError());
+    }
     this.#pump();
     return entry.result.promise as Promise<T>;
   }
