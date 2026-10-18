@@ -42,6 +42,7 @@
 ## 瀏覽器
 
 - **Chromium 與 Firefox**：在同一個 Linux 的 Playwright 官方 image 內跑 browser mode 與 E2E，兩者都是 PR 必須通過的檢查。
+  - Playwright 套件與官方 image 統一為 `1.64.1`；`test/docker/Dockerfile` 的 `v1.64.1-noble` 同時釘選多架構 manifest index digest，`test/docker/run.sh` 保留套件與 image tag 的版本一致性檢查。
   - 只給 Firefox 起 PulseAudio null sink；Chromium 不接 PulseAudio，否則時鐘會亂。
   - Chromium 用 `--autoplay-policy=no-user-gesture-required`，Firefox 用 `media.autoplay.default=0`，或在出聲前 `userEvent.click()`。不依賴 Playwright `evaluate` 自帶的 gesture。
   - Firefox 的 H.264／AAC 需要系統的 libavcodec（官方 image 已有）；HEVC 在 Firefox 與 Chromium 都只測不支援路徑。
