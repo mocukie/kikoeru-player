@@ -20,6 +20,7 @@ const mediaSelect = element('media', HTMLSelectElement);
 const urlInput = element('url', HTMLInputElement);
 const fileInput = element('file', HTMLInputElement);
 const logList = element('log', HTMLOListElement);
+const autoplayInput = element('autoplay', HTMLInputElement);
 
 // ───────────────────────────── 事件 log ─────────────────────────────
 
@@ -84,6 +85,9 @@ engine.addEventListener('ended', () => {
 engine.addEventListener('error', (e) => {
   log(`error ${describeError(e.error)}`);
 });
+engine.addEventListener('beforeaudiostart', (e) => {
+  log(`beforeaudiostart cause=${e.cause}`);
+});
 
 // ───────────────────────────── 操作 ─────────────────────────────
 
@@ -97,13 +101,20 @@ function selectedSource(): { name: string; source: Source } {
 
 element('load', HTMLElement).addEventListener('click', () => {
   const { name, source } = selectedSource();
-  command(`load ${name}`, () => engine.load(source).then((info) => info.format));
+  const paused = !autoplayInput.checked;
+  command(`load ${name}${paused ? '' : '（paused: false）'}`, () =>
+    engine.load(source, { paused }).then((info) => info.format),
+  );
 });
 element('play', HTMLElement).addEventListener('click', () => {
   command('play', () => engine.play());
 });
 element('pause', HTMLElement).addEventListener('click', () => {
   command('pause', () => engine.pause());
+});
+element('unlock', HTMLElement).addEventListener('click', () => {
+  log('→ unlockAudio');
+  engine.unlockAudio();
 });
 element('reload', HTMLElement).addEventListener('click', () => {
   command('reload', () => engine.reload().then((info) => info.format));
@@ -134,6 +145,7 @@ urlInput.addEventListener('input', () => {
 
 const stateText = element('state', HTMLElement);
 const pausedText = element('paused', HTMLElement);
+const unlockedText = element('audio-unlocked', HTMLElement);
 const currentTimeText = element('current-time', HTMLElement);
 const durationText = element('duration', HTMLElement);
 const mediaText = element('media-info', HTMLElement);
@@ -141,6 +153,7 @@ const mediaText = element('media-info', HTMLElement);
 function render(): void {
   stateText.textContent = engine.state;
   pausedText.textContent = String(engine.paused);
+  unlockedText.textContent = String(engine.audioUnlocked);
   currentTimeText.textContent = engine.currentTime.toFixed(3);
   durationText.textContent = String(engine.duration);
   const duration = engine.duration;

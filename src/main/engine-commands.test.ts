@@ -409,6 +409,8 @@ describe('播放意圖', () => {
     expect(changes).toMatchObject([
       { state: 'ready', previous: 'ready', paused: false, reason: 'command' },
     ]);
+    // AudioContext 開始之後才叫 worklet 播放。
+    await flush();
     expect(deps.audio.received.at(-1)).toEqual({ type: 'play', epoch: deps.audio.epoch });
 
     deps.audio.reply({ type: 'playing' });
@@ -435,7 +437,9 @@ describe('播放意圖', () => {
     await expect(rejection(playing)).resolves.toEqual(abortError);
     await pausing;
     expect(engine.state).toBe('ready');
-    expect(deps.audio.received.slice(-2).map((m) => m.type)).toEqual(['play', 'pause']);
+    // AudioContext 開始時播放意圖已經是暫停：worklet 不曾被叫去播放。
+    expect(deps.audio.received.map((m) => m.type)).not.toContain('play');
+    expect(deps.audio.intent).toBe('pause');
 
     const playingAgain = engine.play();
     const pausingAgain = engine.pause();
@@ -667,7 +671,8 @@ describe('同步事件 listener 內的重入', () => {
     await expect(rejection(outer)).resolves.toEqual(abortError);
     await expect(inner).resolves.toBeUndefined();
     expect(engine.paused).toBe(true);
-    expect(deps.audio.received.slice(-2).map((m) => m.type)).toEqual(['play', 'pause']);
+    expect(deps.audio.received.map((m) => m.type)).not.toContain('play');
+    expect(deps.audio.intent).toBe('pause');
   });
 
   it('pause() 的 statechange listener 內 play()：較新的 play 取代 pause', async () => {
@@ -761,25 +766,5 @@ describe('音訊輸出', () => {
       { type: 'flush', epoch: start.epoch, position: 10 },
       { type: 'duration', epoch: start.epoch, duration: 10 },
     ]);
-  });
-
-  it('play() 在呼叫內同步解鎖 AudioContext', async () => {
-    const { engine, deps } = await loaded();
-    void engine.play();
-    expect(deps.audio.calls.at(-1)).toBe('unlock');
-  });
-
-  it('沒有 user gesture 而無法解鎖時，play() 以非致命的 AUDIO_LOCKED reject，paused 回到 true', async () => {
-    const { engine, deps } = await loaded();
-    deps.audio.unlockResult = false;
-    const changes: StateChangeEvent[] = [];
-    engine.addEventListener('statechange', (event) => changes.push(event));
-
-    const error = await rejection(engine.play());
-    expect(error).toMatchObject({ name: 'EngineError', code: 'AUDIO_LOCKED', fatal: false });
-    expect(engine.paused).toBe(true);
-    expect(engine.state).toBe('ready');
-    expect(changes.map((c) => c.paused)).toEqual([false, true]);
-    expect(deps.audio.received.at(-1)).toEqual({ type: 'pause', epoch: deps.audio.epoch });
   });
 });

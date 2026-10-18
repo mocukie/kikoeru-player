@@ -37,11 +37,22 @@ export interface EngineDeps {
   loadWasm(): Promise<WasmAssets>;
   /** 建立一個新的 media Worker（每次 load 一個）。 */
   createWorker(handlers: MediaWorkerHandlers): MediaWorker;
-  /** 建立音訊輸出（整個 Engine 一個）；`onMessage` 接收 AudioWorklet 的訊息。 */
-  createAudioOutput(
-    onMessage: (message: WorkletToMainMessage) => void,
-    config: AudioOutputConfig,
-  ): AudioOutput;
+  /**
+   * 建立音訊輸出：一個新的 `AudioContext` 與 AudioWorklet。平常整個 Engine 一個；watchdog 重建 context 時再建立一個，
+   * 舊的由 Engine 斷開並關閉。
+   */
+  createAudioOutput(handlers: AudioOutputHandlers, config: AudioOutputConfig): AudioOutput;
+}
+
+/** 音訊輸出的回呼。 */
+export interface AudioOutputHandlers {
+  /** AudioWorklet 的訊息。 */
+  message(message: WorkletToMainMessage): void;
+  /**
+   * `AudioContext` 的 `statechange`，帶事件當下的 `state`（WebKit 有 `'interrupted'`）。Engine 只用它偵測
+   * Engine 以外的變化（中斷、外部的 suspend／resume），不以它決定自己的流程。
+   */
+  statechange(state: AudioContextState): void;
 }
 
 /** 音訊輸出的設定，取自 `EngineOptions`。 */
@@ -84,15 +95,14 @@ export interface AudioOutput {
   /** 送給 worklet；worklet 還沒載入完成時先排隊，載入後依序送出。 */
   post(message: MainToWorkletMessage): void;
   /**
-   * 在呼叫內同步 resume `AudioContext`：在 user gesture 的同步段內呼叫才能解鎖。context 開始時 resolve true；
-   * 被拒絕或逾時（沒有 gesture）時 resolve false。完整的串行佇列由「AudioContext 生命週期」#41 加入。
+   * 原樣呼叫 `AudioContext.resume()`，在呼叫內同步呼叫（在 user gesture 的同步段內才能解鎖）。不排隊、不 timeout：
+   * `resume()`、`suspend()`、`close()` 一律由 Engine 的串行佇列呼叫（硬性約束第 4 條、ADR-0004）。
    */
-  unlock(): Promise<boolean>;
-  /** 斷開 worklet。 */
-  disconnect(): void;
-  /**
-   * 關閉 `AudioContext`。實作經 Engine 自己的 `AudioContext` 串行佇列並帶 timeout（硬性約束第 4 條、ADR-0004，
-   * 由「AudioContext 生命週期」#41 加入），所以這個 Promise 一定會 settle。
-   */
+  resume(): Promise<void>;
+  /** 原樣呼叫 `AudioContext.suspend()`；由 Engine 的串行佇列呼叫。 */
+  suspend(): Promise<void>;
+  /** 原樣呼叫 `AudioContext.close()`；由 Engine 的串行佇列呼叫。 */
   close(): Promise<void>;
+  /** 斷開 worklet，之後不再呼叫 handlers。 */
+  disconnect(): void;
 }

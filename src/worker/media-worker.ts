@@ -1,10 +1,12 @@
-// media Worker 的訊息處理：init、load（開檔與 probe）、start 與 seek（音訊供料）、stats。
+// media Worker 的訊息處理：init、load（開檔與 probe）、start 與 seek（音訊供料）、port（改接重建後的 worklet）
+// 與 stats。
 // 主執行緒每次 load 都 terminate 舊的 Worker（ADR-0002），但 Worker 也處理同一個 Worker 內的 load 取代：
 // 前一個 load 的讀取被中止、instance 被丟棄。
 
 import type {
   MainToWorkerMessage,
   WorkerLoadMessage,
+  WorkerPortMessage,
   WorkerToMainMessage,
   WorkerToWorkletMessage,
   WorkletToWorkerMessage,
@@ -87,9 +89,10 @@ export class MediaWorker {
           port: message.workletPort,
           sampleRate: message.sampleRate,
         };
-        message.workletPort.onmessage = ({ data }: MessageEvent<WorkletToWorkerMessage>) => {
-          this.#onWorkletMessage(data);
-        };
+        this.#listen(message.workletPort);
+        break;
+      case 'port':
+        this.#replacePort(message);
         break;
       case 'load':
         this.#startLoad(message);
@@ -110,6 +113,34 @@ export class MediaWorker {
           stats: { libavInstances: this.#libavInstances },
         });
         break;
+    }
+  }
+
+  #listen(port: MessagePort): void {
+    port.onmessage = ({ data }: MessageEvent<WorkletToWorkerMessage>) => {
+      if (port === this.#env?.port) this.#onWorkletMessage(data);
+    };
+  }
+
+  /** 改接重建後的 worklet，從 `time` 以新的 epoch 重新供料。 */
+  #replacePort(message: WorkerPortMessage<WorkerHost>): void {
+    const env = this.#env;
+    if (!env) {
+      message.port.close();
+      return;
+    }
+    env.port.onmessage = null;
+    env.port.close();
+    env.port = message.port;
+    this.#listen(message.port);
+    // 舊的 worklet 的要求已經沒有意義；新的 worklet 會以新的 epoch 要資料。重新供料走 seek 的流程。
+    if (this.#audio !== undefined) {
+      this.#startOutput({
+        epoch: message.epoch,
+        time: message.time,
+        audio: this.#audio,
+        seek: true,
+      });
     }
   }
 

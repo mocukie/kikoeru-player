@@ -13,7 +13,7 @@ import {
   WorkerDriver,
   type WorkerEndpoint,
 } from '../../test/media-worker-harness.js';
-import type { WorkerToMainMessage } from '../protocol/index.js';
+import type { WorkerToMainMessage, WorkerToWorkletMessage } from '../protocol/index.js';
 import { MediaWorker, type MediaWorkerDeps } from './media-worker.js';
 import type { ByteSource } from './source.js';
 
@@ -40,6 +40,14 @@ async function decodeFile(path: string, sampleRate = 48_000) {
 }
 
 const SECONDS = 10;
+
+/** 收到的某個 epoch 的 PCM frame 數。 */
+function frames(messages: readonly WorkerToWorkletMessage[], epoch: number): number {
+  return messages.reduce(
+    (sum, m) => sum + (m.type === 'pcm' && m.epoch === epoch ? (m.channels[0]?.length ?? 0) : 0),
+    0,
+  );
+}
 const beeps = Array.from({ length: SECONDS }, (_, i) => i);
 
 /**
@@ -249,6 +257,34 @@ describe('供料', () => {
     const pcm = await driver.decode(null);
     expect(pcm.chunks).toEqual([]);
     expect(driver.worklet).toEqual([{ type: 'eof', epoch: 1 }]);
+  });
+
+  test('port：改接重建後的 worklet，以新的 epoch 從指定時間重新供料，舊的 port 不再收到資料', async () => {
+    const driver = await WorkerDriver.init(inPage());
+    await driver.load({ kind: 'bytes', data: await mediaBytes('audio/flac.flac') });
+    await driver.decode(0, { frames: 10_000 });
+    const before = driver.worklet.length;
+
+    const channel = new MessageChannel();
+    const received: WorkerToWorkletMessage[] = [];
+    channel.port2.onmessage = ({ data }: MessageEvent<WorkerToWorkletMessage>) => {
+      received.push(data);
+    };
+    driver.post({ type: 'port', port: channel.port1, epoch: 2, time: 3 }, [channel.port1]);
+    channel.port2.postMessage({ type: 'need', epoch: 2, frames: 8192 });
+    const deadline = performance.now() + 5000;
+    while (frames(received, 2) < 8192 && performance.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    // 舊的 worklet 再要資料也沒有回應。
+    driver.need(1, 8192);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(frames(received, 2)).toBeGreaterThanOrEqual(8192);
+    const first = received.find((m) => m.type === 'pcm');
+    expect(first?.type === 'pcm' && first.time).toBeGreaterThanOrEqual(3);
+    expect(driver.worklet.slice(before).filter((m) => m.type === 'pcm')).toEqual([]);
+    channel.port2.close();
   });
 
   test('blob 來源', async () => {

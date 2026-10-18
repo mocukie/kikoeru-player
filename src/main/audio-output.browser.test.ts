@@ -8,7 +8,7 @@ import type {
   WorkletToWorkerMessage,
 } from '../protocol/index.js';
 import { createWebAudioOutput } from './audio-output.js';
-import { AssetLoadError, type AudioOutput } from './deps.js';
+import { AssetLoadError, type AudioOutput, type AudioOutputHandlers } from './deps.js';
 
 const audioBuffer = { targetMs: 150, refillMs: 75, capacityMs: 400 };
 
@@ -27,8 +27,15 @@ afterEach(async () => {
   capture.restore();
 });
 
+function handlers(): AudioOutputHandlers {
+  return {
+    message: (message) => reports.push(message),
+    statechange: () => undefined,
+  };
+}
+
 function open(): AudioOutput {
-  output = createWebAudioOutput((message) => reports.push(message), { audioBuffer });
+  output = createWebAudioOutput(handlers(), { audioBuffer });
   return output;
 }
 
@@ -112,7 +119,7 @@ test('經 MessagePort 送入的 PCM 在 destination 逐 sample 一致，播完�
   audio.post({ type: 'duration', epoch: 1, duration });
   audio.post({ type: 'play', epoch: 1 });
   feed(await audio.connect(), audio.sampleRate, { 1: pcm });
-  expect(await audio.unlock()).toBe(true);
+  await audio.resume();
 
   await until(reported('ended', 1));
   await settle();
@@ -134,7 +141,7 @@ test('新的 epoch 讓 ring 內的舊資料不被播出；暫停時時鐘不前�
   audio.post({ type: 'flush', epoch: 1, position: 0 });
   audio.post({ type: 'duration', epoch: 1, duration: 1 });
   feed(await audio.connect(), audio.sampleRate, { 1: stale, 2: pcm });
-  expect(await audio.unlock()).toBe(true);
+  await audio.resume();
 
   // epoch 1 補滿、暫停中：ring 內是舊資料。
   await until(reported('paused', 1));
@@ -154,7 +161,7 @@ test('新的 epoch 讓 ring 內的舊資料不被播出；暫停時時鐘不前�
 });
 
 test('worklet 載入失敗時 connect() 以 AssetLoadError reject', async () => {
-  output = createWebAudioOutput((message) => reports.push(message), {
+  output = createWebAudioOutput(handlers(), {
     audioBuffer,
     workletUrl: new URL('/does-not-exist/worklet.js', location.href),
   });
