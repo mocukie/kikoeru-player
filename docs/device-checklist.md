@@ -26,6 +26,7 @@ Demo 頁的「CI 組媒體」來自 `pnpm media:gen` 產生的 `test/media/out/`
 - [ ] **ring buffer 的預設水位**：播放時事件 log 沒有出現 `buffering`（`audioBuffer` 的平台預設值不會 starved）；有的話記下媒體與頻率。
 - [ ] **currentTime 與聽到的聲音**：beep 響起時，畫面上的 `currentTime` 剛好跨過整秒；明顯提早或延後時記下差距與輸出裝置（喇叭、有線耳機、藍牙）。這同時驗證該瀏覽器的 `getOutputTimestamp().contextTime` 是否已扣掉裝置延遲（[ADR-0004](adr/0004-audio-output.md)）。
 - [ ] **連續換檔**：播放中選另一個檔案按 load，舊的聲音立即停止，新的檔案停在 `ready`。
+- [ ] **讀取錯誤與 reload**：選 `audio/pcm-s16.wav` 與故障注入「401@4」，load 後播放：約 2–3 秒時事件 log 出現 `error SOURCE_UNAUTHORIZED（fatal） position=…`；按 reload 從該位置接續播放。故障注入改選「drop@500KB」：斷線的位置可能短暫 `buffering`（重試的退避），之後繼續播放、不出現 error。
 
 ## 桌面
 

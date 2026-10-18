@@ -5,6 +5,7 @@ import type {
   MainToWorkerMessage,
   ProbedAudioTrack,
   ProbedMedia,
+  RetryPolicy,
   WorkerToMainMessage,
   WorkerToWorkletMessage,
   WorkletPcmMessage,
@@ -44,9 +45,23 @@ export function importOnlyWasm(module: string, field: string): WebAssembly.Modul
   );
 }
 
-/** CI 組測試媒體的 URL（`test/media/out/` 之下的路徑）。 */
+/**
+ * CI 組測試媒體的 URL（`test/media/out/` 之下的路徑），由 test/server 的 `/media/*` 提供。Vitest 自己的靜態檔案
+ * 不正確處理 Range（`bytes=0-0` 回應整個檔案），不用它。
+ */
 export function mediaUrl(path: string): string {
-  return new URL(`/test/media/out/${path}`, location.href).href;
+  return new URL(`/media/${path}`, location.href).href;
+}
+
+let faultSeq = 0;
+
+/**
+ * test/server 的 `/media/*` 加上故障參數（例如 `fault=503@2`，見 test/server/faults.ts）。每次呼叫帶一個不重複的
+ * `id`，故障的請求計數不受其他測試影響。
+ */
+export function faultyMediaUrl(path: string, faults: string): string {
+  const id = `${String(Date.now())}-${String(++faultSeq)}`;
+  return new URL(`/media/${path}?id=${id}&${faults}`, location.href).href;
 }
 
 export async function mediaBytes(path: string): Promise<ArrayBuffer> {
@@ -95,18 +110,26 @@ export class WorkerDriver {
     };
   }
 
-  /** `module` 預設為 `wasmAssets()` 的 Module；給別的 Module 可以模擬與 glue 不符的資產。 */
+  /**
+   * `module` 預設為 `wasmAssets()` 的 Module；給別的 Module 可以模擬與 glue 不符的資產。
+   * `retry` 預設不重試。
+   */
   static async init(
     endpoint: WorkerEndpoint,
-    options: { sampleRate?: number; module?: WebAssembly.Module } = {},
+    options: { sampleRate?: number; module?: WebAssembly.Module; retry?: RetryPolicy } = {},
   ): Promise<WorkerDriver> {
     const assets = await wasmAssets();
-    const { sampleRate = 48_000, module = assets.module } = options;
+    const {
+      sampleRate = 48_000,
+      module = assets.module,
+      retry = { attempts: 0, baseDelayMs: 0 },
+    } = options;
     const { glueUrl } = assets;
     const channel = new MessageChannel();
-    endpoint.post({ type: 'init', module, glueUrl, workletPort: channel.port1, sampleRate }, [
-      channel.port1,
-    ]);
+    endpoint.post(
+      { type: 'init', module, glueUrl, workletPort: channel.port1, sampleRate, retry },
+      [channel.port1],
+    );
     return new WorkerDriver(endpoint, channel.port2, sampleRate);
   }
 

@@ -5,13 +5,15 @@
 // - `/src/wasm/*`：`wasm/dist/` 的檔案原樣提供（`.wasm` 為 `application/wasm`）。套件把 wasm 複製到 `dist/wasm/`，
 //   `src/main/wasm.ts` 以 `../wasm/` 參照；這個對應讓 dev 與測試用同一個寫法找到 wasm 與 glue。
 //
-// 故障注入（`?fault=…`）由 HTTP 錯誤分類的 issue 加入。
+// `/media/*` 的故障注入（`?fault=…`、`?delay=…`）見 faults.ts。
 
 import { readdir } from 'node:fs/promises';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import send from 'send';
 import type { Connect, Plugin } from 'vite';
+import { withFaults } from './faults.ts';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const mediaRoot = join(repoRoot, 'test/media/out');
@@ -26,10 +28,17 @@ export function testServer(): Plugin {
     configureServer(server) {
       // 直接 use：排在 Vite 自己的 middleware 之前，檔案不經過 Vite 的轉換。
       server.middlewares.use('/media/index.json', mediaIndex);
-      server.middlewares.use('/media', serveDirectory(mediaRoot));
+      server.middlewares.use('/media', serveMedia(mediaRoot));
       server.middlewares.use('/src/wasm', serveDirectory(wasmRoot));
     },
   };
+}
+
+/** `/media/*`：`root` 之下的檔案，套上 query 參數指定的故障。 */
+export function serveMedia(root: string): Connect.NextHandleFunction {
+  return withFaults((req, res, cacheable) => {
+    sendFile(root, req, res, cacheable);
+  });
 }
 
 /** `root` 之下的靜態檔案；找不到時回應對應的狀態碼（404 等），不交給下一個 middleware。 */
@@ -39,14 +48,29 @@ function serveDirectory(root: string): Connect.NextHandleFunction {
       next();
       return;
     }
-    const { pathname } = new URL(req.url ?? '/', 'http://localhost');
-    send(req, pathname, { root, index: false, dotfiles: 'deny' })
-      .on('error', (error: { status?: number }) => {
-        res.statusCode = error.status ?? 500;
-        res.end();
-      })
-      .pipe(res);
+    sendFile(root, req, res, true);
   };
+}
+
+/** `cacheable` 為 false 時不帶 ETag、Last-Modified 與 Cache-Control（由呼叫端設定 no-store）。 */
+function sendFile(
+  root: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  cacheable: boolean,
+): void {
+  const { pathname } = new URL(req.url ?? '/', 'http://localhost');
+  send(req, pathname, {
+    root,
+    index: false,
+    dotfiles: 'deny',
+    ...(!cacheable && { etag: false, lastModified: false, cacheControl: false }),
+  })
+    .on('error', (error: { status?: number }) => {
+      res.statusCode = error.status ?? 500;
+      res.end();
+    })
+    .pipe(res);
 }
 
 const mediaIndex: Connect.NextHandleFunction = (_req, res) => {
