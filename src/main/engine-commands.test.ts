@@ -751,6 +751,7 @@ describe('音訊輸出', () => {
     await deps.workers.last.next('load');
     expect(deps.audio.config).toEqual({
       audioBuffer: { targetMs: 200, refillMs: 75, capacityMs: 400 },
+      audioFadeMs: 10,
       workletUrl: '/worklet.js',
     });
   });

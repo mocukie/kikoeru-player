@@ -133,6 +133,8 @@ class EngineImpl extends EventTarget implements Engine {
   #tracks: readonly Track[] = [];
   #selected: Readonly<TrackSelection> = noSelection;
   #error: EngineError | null = null;
+  #volume = 1;
+  #muted = false;
 
   /**
    * 會改變輸出的指令（load、seek）、致命錯誤與 destroy 遞增；Worker 與 worklet 的訊息 epoch 不符即丟棄。
@@ -169,11 +171,16 @@ class EngineImpl extends EventTarget implements Engine {
     super();
     this.#deps = deps;
     this.#options = options;
-    const { audioBuffer, assets } = options;
+    const { audioBuffer, audioFadeMs, assets } = options;
     this.#context = new AudioContextLifecycle(
-      (handlers, config) => deps.createAudioOutput(handlers, config),
+      (handlers, config) => {
+        const output = deps.createAudioOutput(handlers, config);
+        output.setGain(this.#gain, false);
+        return output;
+      },
       {
         audioBuffer,
+        audioFadeMs,
         ...(assets.workletUrl !== undefined && { workletUrl: assets.workletUrl }),
       },
       {
@@ -207,11 +214,15 @@ class EngineImpl extends EventTarget implements Engine {
   get currentTime(): number {
     const clock = this.#clock;
     const audio = this.#audio;
-    if (this.#state !== 'playing' || !clock || !audio) return this.#currentTime;
+    const state = this.#state;
+    const stopped = state === 'paused' || state === 'buffering';
+    if ((state !== 'playing' && !stopped) || !clock || !audio) return this.#currentTime;
     const heard = audio.heardFrame();
     if (heard === null) return this.#currentTime;
     // clock：`position` 的 sample 在 context frame `frame` 進入 graph；聽到的 frame 已扣掉輸出延遲。
     let time = clock.position + (heard - clock.frame) / audio.sampleRate;
+    // 時鐘停住（pause 的淡出結束、ring 用完）之後，輸出延遲內聽到的還是停住之前的 sample。
+    if (stopped) time = Math.min(time, clock.position);
     time = Math.max(time, this.#heardFloor);
     if (!Number.isNaN(this.#duration)) time = Math.min(time, this.#duration);
     this.#heardFloor = time;
@@ -243,16 +254,26 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   get volume(): number {
-    return notImplemented('volume');
+    return this.#volume;
   }
-  set volume(_value: number) {
-    notImplemented('volume');
+  set volume(value: number) {
+    if (!(value >= 0 && value <= 1)) {
+      throw new RangeError(`volume 必須在 0–1 之間，收到 ${String(value)}`);
+    }
+    this.#volume = value;
+    this.#audio?.setGain(this.#gain, true);
   }
   get muted(): boolean {
-    return notImplemented('muted');
+    return this.#muted;
   }
-  set muted(_value: boolean) {
-    notImplemented('muted');
+  set muted(value: boolean) {
+    this.#muted = value;
+    this.#audio?.setGain(this.#gain, true);
+  }
+
+  /** worklet 後面的 GainNode 的值；靜音只在這裡，不影響音訊時鐘。 */
+  get #gain(): number {
+    return this.#muted ? 0 : this.#volume;
   }
   get playbackRate(): number {
     return notImplemented('playbackRate');
@@ -746,15 +767,22 @@ class EngineImpl extends EventTarget implements Engine {
 
   /**
    * 告訴 worklet 播或停：想播放且 context 執行中才播，所以 context 還沒開始（沒有 user gesture）時不會短暫進入 playing。
+   * context 沒有在跑時 worklet 不會 render，淡出永遠不會結束，所以要求立即停止。
    * `force` 時即使沒有改變也送出（新的 load 或新的音訊輸出）。
    */
   #syncWorklet(force = false): void {
     const output = this.#audio;
     if (!output) return;
-    const play = !this.#paused && this.#context.running;
+    const running = this.#context.running;
+    const play = !this.#paused && running;
     if (!force && play === this.#workletPlay) return;
     this.#workletPlay = play;
-    output.post({ type: play ? 'play' : 'pause', epoch: this.#epoch });
+    const epoch = this.#epoch;
+    output.post(
+      play
+        ? { type: 'play', epoch }
+        : { type: 'pause', epoch, ...(!running && { immediate: true }) },
+    );
   }
 
   /** 建立或 resume AudioContext（需要時先同步發出 `beforeaudiostart`）。無法開始時播放意圖回到暫停。 */
@@ -970,6 +998,7 @@ class EngineImpl extends EventTarget implements Engine {
 
   #flushAudio(position: number): void {
     this.#currentTime = position;
+    this.#heardFloor = position;
     this.#clock = null;
     this.#lastOutput = null;
     if (this.#loadContext) this.#loadContext.flushedAt = position;

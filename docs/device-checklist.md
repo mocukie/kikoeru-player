@@ -26,6 +26,9 @@ Demo 頁的「CI 組媒體」來自 `pnpm media:gen` 產生的 `test/media/out/`
 - [ ] **ring buffer 的預設水位**：播放時事件 log 沒有出現 `buffering`（`audioBuffer` 的平台預設值不會 starved）；有的話記下媒體與頻率。
 - [ ] **currentTime 與聽到的聲音**：beep 響起時，畫面上的 `currentTime` 剛好跨過整秒；明顯提早或延後時記下差距與輸出裝置（喇叭、有線耳機、藍牙）。這同時驗證該瀏覽器的 `getOutputTimestamp().contextTime` 是否已扣掉裝置延遲（[ADR-0004](adr/0004-audio-output.md)）。
 - [ ] **連續換檔**：播放中選另一個檔案按 load，舊的聲音立即停止，新的檔案停在 `ready`。
+- [ ] **淡入淡出（`audioFadeMs`）的聽感**：以喇叭與耳機各聽一次，播放中按 pause、play、拖曳 seek，切換點沒有爆音（click／pop），也不會聽得出拖泥帶水。再於 console 以 `createEngine({ audioFadeMs: 0 })` 比較硬切（應該聽得到 click），以及 `audioFadeMs: 30`、`100` 的差別，記下覺得合適的值。
+- [ ] **音量與靜音**：拖曳 Demo 頁的 volume 時音量平滑變化、沒有拉鍊聲；勾選 muted 時立即無聲，`currentTime` 照常前進，取消後回到原本的音量。
+- [ ] **藍牙延遲**：接上藍牙耳機播放，記下 Demo 頁「audio」一列的 `outputLatency`；beep 響起時 `currentTime` 是否仍剛好跨過整秒（藍牙的延遲常有 100–300 ms）。暫停時 `currentTime` 停在最後聽到的位置附近，不比聽到的超前。
 
 ## 桌面
 

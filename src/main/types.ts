@@ -145,7 +145,12 @@ export interface Engine extends EventTarget {
    * （`state` 沒變時 `state === previous`），供背景播放模組與 Media Session 跟上。
    */
   readonly paused: boolean;
-  /** 目前聽到的位置（秒）。播放中依音訊時鐘內插，已扣除輸出延遲。 */
+  /**
+   * 目前聽到的位置（秒）。播放中依音訊時鐘內插，已扣除輸出延遲：以 `AudioContext.getOutputTimestamp()` 換算為主，
+   * 取不到（不支援或回傳 0）時依序用 `outputLatency`、`baseLatency`。
+   * pause 的淡出結束、buffering 時，停在時鐘停住的位置；剛停住的一個輸出延遲內聽到的還是之前的 sample，
+   * 所以會再前進一小段才停住，不會超前聽到的聲音。
+   */
   readonly currentTime: number;
   /** 總長度（秒）；未知時為 NaN。 */
   readonly duration: number;
@@ -167,9 +172,12 @@ export interface Engine extends EventTarget {
 
   // ── 同步設定（即時生效、最後一次勝出，不經過指令佇列） ──
 
-  /** 音量 0–1，套用時有 gain ramp。 */
+  /**
+   * 音量 0–1（線性），預設 1。改變時以 time constant 約 10 ms 平滑趨近，不會有爆音。
+   * 不是 0–1 之間的數（包括 NaN）時丟 `RangeError`，值不變。
+   */
   volume: number;
-  /** 靜音；不影響音訊時鐘。 */
+  /** 靜音，預設 false；不影響音訊時鐘（`currentTime` 照常前進），也不改變 `volume`。 */
   muted: boolean;
   /** 不變調的播放速度，0.5–2；超出範圍丟 `RangeError`。 */
   playbackRate: number;
@@ -232,8 +240,9 @@ export interface Engine extends EventTarget {
   play(): Promise<void>;
 
   /**
-   * 設定 `paused = true`，resolve 於淡出結束、時鐘停止。暫停期間 AudioContext 繼續執行（worklet 輸出靜音），
-   * 超過 30 秒才 suspend 以省電；之後的 `play()` 會 resume 它。
+   * 設定 `paused = true`，resolve 於淡出（`EngineOptions.audioFadeMs`）結束、時鐘停止；`audioFadeMs` 為 0 時於下一個
+   * render quantum。`currentTime` 停在淡出結束的位置（見 `currentTime`）。淡出途中的 `play()` 從目前的音量淡入回來。
+   * 暫停期間 AudioContext 繼續執行（worklet 輸出靜音），超過 30 秒才 suspend 以省電；之後的 `play()` 會 resume 它。
    */
   pause(): Promise<void>;
 
@@ -647,7 +656,8 @@ export interface EngineStats {
   bufferAhead: number;
   /**
    * 音訊輸出。`ringMs`：ring buffer 目前的水位；`underruns`：ring 用完的次數；
-   * `outputLatencyMs`：輸出延遲；`targetMs`：實際生效的 `audioBuffer.targetMs`。
+   * `outputLatencyMs`：輸出延遲（sample 進入 audio graph 到被聽到，換算方式同 `Engine.currentTime`）；
+   * `targetMs`：實際生效的 `audioBuffer.targetMs`。
    */
   audio: { ringMs: number; underruns: number; outputLatencyMs: number; targetMs: number };
   /** 影片解碼；沒有選用影片軌時為 null。 */

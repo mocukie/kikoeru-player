@@ -9,6 +9,8 @@ export type WorkletProcessorName = 'kikoeru-player-output';
 export interface WorkletProcessorOptions {
   /** ring buffer 的水位（ms），即 `EngineOptions.audioBuffer` 補上預設值之後。 */
   audioBuffer: { targetMs: number; refillMs: number; capacityMs: number };
+  /** 淡入淡出的長度（ms），即 `EngineOptions.audioFadeMs`；0 為硬切。 */
+  audioFadeMs: number;
 }
 
 /** 主執行緒送給 AudioWorklet 的訊息（經 `AudioWorkletNode.port`）。 */
@@ -18,6 +20,7 @@ export type MainToWorkletMessage =
 /**
  * 換成新的 epoch：丟掉 ring 內與之後收到的舊 epoch 資料，時鐘停在 `position`（秒），等新 epoch 的資料
  * 補到目標水位（或收到 `eof`）。補滿後依播放意圖回報 `playing` 或 `paused`。播放意圖與 `duration` 不受 flush 影響。
+ * 正在出聲時，ring 內接下來 `audioFadeMs` 的舊資料淡出後播完（不推進時鐘），新 epoch 的輸出從 0 淡入。
  */
 export interface WorkletFlushMessage {
   type: 'flush';
@@ -26,8 +29,8 @@ export interface WorkletFlushMessage {
 }
 
 /**
- * 播放意圖改為播放：資料足夠時開始輸出並回報 `playing`。flush 之後還沒補滿時，等補滿才回報；
- * starved 時等 ring 補回目標水位才回報。
+ * 播放意圖改為播放：資料足夠時開始輸出（淡入）並回報 `playing`。flush 之後還沒補滿時，等補滿才回報；
+ * starved 時等 ring 補回目標水位才回報。pause 的淡出途中收到時從目前的音量淡入回來，不回報。
  */
 export interface WorkletPlayMessage {
   type: 'play';
@@ -35,12 +38,15 @@ export interface WorkletPlayMessage {
 }
 
 /**
- * 播放意圖改為暫停：停止輸出、時鐘停住後回報 `paused`。flush 之後還沒補滿時，等補滿才回報；
+ * 播放意圖改為暫停：正在出聲時淡出 `audioFadeMs`（淡出的 sample 照常推進時鐘），淡出結束才停止輸出、
+ * 時鐘停在那裡並回報 `paused`；沒有出聲（或 `audioFadeMs` 為 0）時立即回報。flush 之後還沒補滿時，等補滿才回報；
  * 已經 `ended` 時不回報。
  */
 export interface WorkletPauseMessage {
   type: 'pause';
   epoch: number;
+  /** 不淡出、立即停止並回報：AudioContext 沒有在 render（被 suspend、中斷、還沒開始）時，淡出永遠不會結束。 */
+  immediate?: boolean;
 }
 
 /**

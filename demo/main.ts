@@ -133,6 +133,22 @@ seekBar.addEventListener('change', () => {
   const time = Number(seekBar.value);
   command(`seek ${time.toFixed(3)}`, () => engine.seek(time));
 });
+// 音量：拖曳中即時套用（Engine 以 setTargetAtTime 平滑），放開時記進 log。
+const volumeInput = element('volume', HTMLInputElement);
+const volumeValue = element('volume-value', HTMLOutputElement);
+const mutedInput = element('muted', HTMLInputElement);
+volumeInput.addEventListener('input', () => {
+  engine.volume = Number(volumeInput.value);
+  volumeValue.value = engine.volume.toFixed(2);
+});
+volumeInput.addEventListener('change', () => {
+  log(`volume = ${engine.volume.toFixed(2)}`);
+});
+mutedInput.addEventListener('change', () => {
+  engine.muted = mutedInput.checked;
+  log(`muted = ${String(engine.muted)}`);
+});
+
 // 選了本機檔案或填了 URL 之後，清掉另一個，避免不知道用的是哪一個。
 fileInput.addEventListener('change', () => {
   urlInput.value = '';
@@ -149,6 +165,19 @@ const unlockedText = element('audio-unlocked', HTMLElement);
 const currentTimeText = element('current-time', HTMLElement);
 const durationText = element('duration', HTMLElement);
 const mediaText = element('media-info', HTMLElement);
+const audioStatsText = element('audio-stats', HTMLElement);
+
+// getStats() 是非同步的：每秒取一次 ring 水位、underrun 與輸出延遲（實機檢查藍牙延遲用）。
+setInterval(() => {
+  engine.getStats().then(
+    ({ audio }) => {
+      audioStatsText.textContent =
+        `ring ${audio.ringMs.toFixed(0)} ms／target ${String(audio.targetMs)} ms，` +
+        `underruns ${String(audio.underruns)}，outputLatency ${audio.outputLatencyMs.toFixed(1)} ms`;
+    },
+    () => undefined,
+  );
+}, 1000);
 
 function render(): void {
   stateText.textContent = engine.state;

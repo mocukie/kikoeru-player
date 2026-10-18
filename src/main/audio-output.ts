@@ -8,6 +8,7 @@ import type {
   WorkletProcessorOptions,
   WorkletToMainMessage,
 } from '../protocol/index.js';
+import { heardContextTime } from './latency.js';
 import {
   AssetLoadError,
   type AudioOutput,
@@ -16,13 +17,17 @@ import {
   type MainHost,
 } from './deps.js';
 
+/** 音量變化的 `setTargetAtTime` time constant（秒）。 */
+const GAIN_TIME_CONSTANT = 0.01;
+
 /** worklet 的預設位置；`addModule()` 原樣載入，App 的 bundler 依這個寫法把檔案當成資產複製。 */
 function defaultWorkletUrl(): URL {
   return new URL('../worklet/index.js', import.meta.url);
 }
 
 /**
- * 建立 AudioContext（不指定 `sampleRate`，`latencyHint: 'playback'`）並載入 worklet。
+ * 建立 AudioContext（不指定 `sampleRate`，`latencyHint: 'playback'`）並載入 worklet；worklet 經 `GainNode`
+ * （音量與靜音）接到 destination。
  * `resume()`、`suspend()`、`close()` 原樣轉給 AudioContext，串行與 timeout 由 Engine 的佇列負責。
  */
 export function createWebAudioOutput(
@@ -34,6 +39,7 @@ export function createWebAudioOutput(
 
 class WebAudioOutput implements AudioOutput {
   readonly #context: AudioContext;
+  readonly #gain: GainNode;
   /** worklet 載入、node 接上 destination 之後 resolve。 */
   readonly #ready: Promise<AudioWorkletNode>;
   #node: AudioWorkletNode | null = null;
@@ -44,6 +50,8 @@ class WebAudioOutput implements AudioOutput {
   constructor(handlers: AudioOutputHandlers, config: AudioOutputConfig) {
     const context = new AudioContext({ latencyHint: 'playback' });
     this.#context = context;
+    const gain = new GainNode(context);
+    this.#gain = gain;
     context.onstatechange = () => {
       if (!this.#disconnected) handlers.statechange(context.state);
     };
@@ -55,7 +63,10 @@ class WebAudioOutput implements AudioOutput {
         throw new AssetLoadError(`無法載入 AudioWorklet（${String(url)}）`, { cause });
       }
       const name: WorkletProcessorName = 'kikoeru-player-output';
-      const processorOptions: WorkletProcessorOptions = { audioBuffer: config.audioBuffer };
+      const processorOptions: WorkletProcessorOptions = {
+        audioBuffer: config.audioBuffer,
+        audioFadeMs: config.audioFadeMs,
+      };
       const node = new AudioWorkletNode(context, name, {
         numberOfInputs: 0,
         numberOfOutputs: 1,
@@ -65,7 +76,8 @@ class WebAudioOutput implements AudioOutput {
       node.port.onmessage = ({ data }: MessageEvent<WorkletToMainMessage>) => {
         if (!this.#disconnected) handlers.message(data);
       };
-      node.connect(context.destination);
+      node.connect(gain);
+      gain.connect(context.destination);
       this.#node = node;
       for (const message of this.#queued.splice(0)) node.port.postMessage(message);
       return node;
@@ -96,21 +108,25 @@ class WebAudioOutput implements AudioOutput {
     return heard === null ? 0 : Math.max(0, this.#context.currentTime - heard);
   }
 
-  /**
-   * 此刻聽到的 context 時間（秒）：`getOutputTimestamp()` 的 `contextTime` 加上它之後經過的時間，
-   * 不超過 `currentTime`（context 停住時不往前推）。取不到 timestamp 時退回 `currentTime`；
-   * 完整的 fallback（`outputLatency`、`baseLatency`）由 #42 加入。
-   */
+  /** 此刻聽到的 context 時間（秒）；context 還沒開始時為 null。 */
   #heardTime(): number | null {
     const context = this.#context;
-    const rendered = context.currentTime;
-    if (rendered <= 0) return null;
-    const { contextTime, performanceTime } = context.getOutputTimestamp();
-    if (contextTime === undefined || performanceTime === undefined || contextTime <= 0) {
-      return rendered;
-    }
-    const elapsed = Math.max(0, performance.now() - performanceTime) / 1000;
-    return Math.min(contextTime + elapsed, rendered);
+    return heardContextTime({
+      currentTime: context.currentTime,
+      now: performance.now(),
+      // Safari 以外都有；舊版 Safari 沒有 outputLatency。
+      timestamp: 'getOutputTimestamp' in context ? context.getOutputTimestamp() : undefined,
+      outputLatency: 'outputLatency' in context ? context.outputLatency : undefined,
+      baseLatency: context.baseLatency,
+    });
+  }
+
+  setGain(gain: number, smooth: boolean): void {
+    const param = this.#gain.gain;
+    const now = this.#context.currentTime;
+    param.cancelScheduledValues(now);
+    if (smooth) param.setTargetAtTime(gain, now, GAIN_TIME_CONSTANT);
+    else param.value = gain;
   }
 
   post(message: MainToWorkletMessage): void {
@@ -139,5 +155,6 @@ class WebAudioOutput implements AudioOutput {
       this.#node.port.close();
       this.#node.disconnect();
     }
+    this.#gain.disconnect();
   }
 }
