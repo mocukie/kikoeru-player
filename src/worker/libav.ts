@@ -12,7 +12,7 @@ import {
   type DecodedAudio,
   type PacketReader,
 } from './audio-pipeline.js';
-import { WorkerError } from './errors.js';
+import { crashReason, WorkerError } from './errors.js';
 import type { RawMedia, RawStream } from './probe.js';
 import type { ByteSource } from './source.js';
 
@@ -36,7 +36,7 @@ export interface LibavAssets {
 
 /** block reader device 在 wasm 內的檔名。 */
 const DEVICE = 'input';
-/** 每次 cache miss 至少讀這麼多 bytes，減少 http 請求數；快取與預讀由 Range 快取的 issue 加入。 */
+/** block reader device 每次至少要這麼多 bytes（一個 Range 快取的區塊），減少 wasm 與 JS 之間的往返。 */
 const READ_BLOCK = 256 * 1024;
 /** 每次 demux 讀出的封包量（bytes）。 */
 const READ_LIMIT = 32 * 1024;
@@ -103,6 +103,8 @@ export class LibavMedia {
   readonly #fmt: number;
   readonly #streams: readonly libavjs.Stream[];
   readonly #reads: ReadGate;
+  /** demux 專用的 AVPacket：demux 與解碼同時進行，不能共用 decoder 的 packet。 */
+  readonly #demuxPkt: number;
   /** 目前音軌的 decoder；換音軌時釋放，seek 時 flush 後沿用。 */
   #decoder: LibavAudioDecoder | null = null;
 
@@ -113,8 +115,10 @@ export class LibavMedia {
     raw: RawMedia,
     origin: number,
     reads: ReadGate,
+    demuxPkt: number,
   ) {
     this.#libav = libav;
+    this.#demuxPkt = demuxPkt;
     this.#fmt = fmt;
     this.#streams = streams;
     this.raw = raw;
@@ -163,7 +167,7 @@ export class LibavMedia {
       [fmt, streams] = await libav.ff_init_demuxer_file(DEVICE);
     } catch (error) {
       signal.throwIfAborted();
-      if (error instanceof WorkerError || error instanceof WebAssembly.RuntimeError) throw error;
+      if (error instanceof WorkerError || crashReason(error) !== null) throw error;
       throw new WorkerError('FORMAT_UNSUPPORTED', '無法辨識的媒體格式', { cause: error });
     }
     signal.throwIfAborted();
@@ -185,7 +189,16 @@ export class LibavMedia {
       size: source.size,
       streams: await Promise.all(streams.map((s) => rawStream(libav, s))),
     };
-    return new LibavMedia(libav, fmt, streams, raw, start === null ? 0 : start / 1e6, reads);
+    const demuxPkt = await libav.av_packet_alloc();
+    return new LibavMedia(
+      libav,
+      fmt,
+      streams,
+      raw,
+      start === null ? 0 : start / 1e6,
+      reads,
+      demuxPkt,
+    );
   }
 
   /**
@@ -199,7 +212,7 @@ export class LibavMedia {
   async startAudio(
     streamIndex: number,
     options: Omit<AudioPipelineOptions<Packet>, 'reader' | 'decoder'> & { seek: boolean },
-  ): Promise<{ run(): Promise<void> }> {
+  ): Promise<AudioPipeline<Packet>> {
     const libav = this.#libav;
     const stream = this.#streams[streamIndex];
     if (!stream) throw new WorkerError('INTERNAL', `沒有 stream ${String(streamIndex)}`);
@@ -221,18 +234,36 @@ export class LibavMedia {
     }
     const reader: PacketReader<Packet> = {
       read: async () => {
-        const [result, packets] = await libav.ff_read_frame_multi(this.#fmt, decoder.pkt, {
+        const [result, packets] = await libav.ff_read_frame_multi(this.#fmt, this.#demuxPkt, {
           limit: READ_LIMIT,
         });
         const selected = packets[streamIndex] ?? [];
         if (result === libav.AVERROR_EOF) return { packets: selected, eof: true };
         if (result < 0 && result !== -libav.EAGAIN) {
-          throw new WorkerError('FORMAT_CORRUPT', `demux 失敗：${await libav.ff_error(result)}`);
+          const text = await libav.ff_error(result);
+          // AVERROR(ENOMEM)：wasm 記憶體用完，交給 crash 的路線（crashReason）。
+          const error = new Error(`demux 失敗：${text}`);
+          if (crashReason(error) !== null) throw error;
+          throw new WorkerError('FORMAT_CORRUPT', error.message);
         }
         return { packets: selected, eof: false };
       },
+      measure: (packet) => ({
+        bytes: packet.data.byteLength,
+        time: this.#packetTime(packet),
+        duration: decoder.packetDuration(packet),
+      }),
     };
     return new AudioPipeline({ ...options, reader, decoder });
+  }
+
+  /** 封包的 pts 換算到媒體時間軸（秒）；沒有時間戳時為 null。 */
+  #packetTime(packet: Packet): number | null {
+    const num = packet.time_base_num ?? 0;
+    const den = packet.time_base_den ?? 0;
+    if (packet.pts === undefined || !(num > 0 && den > 0)) return null;
+    const pts = int64(this.#libav, packet.pts, packet.ptshi ?? 0);
+    return pts === null ? null : (pts * num) / den - this.origin;
   }
 
   /**
@@ -532,6 +563,7 @@ async function rawStream(libav: LibAV, s: libavjs.Stream): Promise<RawStream> {
     metadata: s.metadata ?? {},
     disposition: await libav.AVStream_disposition(s.ptr),
     extradata,
+    bitRate: await libav.AVCodecParameters_bit_rate(cp),
   };
 }
 

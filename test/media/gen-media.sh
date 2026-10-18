@@ -121,6 +121,11 @@ ff -f lavfi -i "$video_src" -f lavfi -i "$audio_src" -c:v libx265 -preset ultraf
 ff -f lavfi -i "$video_src" -f lavfi -i "$audio_src" "${h264[@]}" -bf 0 -c:a libmp3lame -b:a 128k video/h264-mp3.avi
 # 只改 display matrix，不動畫面內容。
 ff -display_rotation 90 -i video/h264-aac.mp4 -c copy -movflags +faststart video/rotated-90.mp4
+# 交錯不良：fragmented MP4，每 5 秒一個 fragment，fragment 內各軌的 sample 連續存放（影片在前、音訊在後），
+# 播放 0 秒的音訊之前要先讀過 5 秒的影片。影片以 2 Mbps CBR 撐大，5 秒的影片約 1.2 MB。
+ff -f lavfi -i "$video_src" -f lavfi -i "$audio_src" -c:v libx264 -preset veryfast -g 30 \
+  -b:v 2M -minrate 2M -maxrate 2M -bufsize 2M -x264-params nal-hrd=cbr -c:a aac -b:a 128k \
+  -movflags +empty_moov+default_base_moof -frag_duration 5000000 video/bad-interleave.mp4
 
 # 多音軌與多字幕軌：20 秒；字幕來源由 gen-subs.py 產生在 .work/。
 ff -f lavfi -i "$(video 20 320 180)" -f lavfi -i "$(stereo 20 880)" -f lavfi -i "$(stereo 20 440)" \

@@ -528,9 +528,10 @@ describe('播放意圖', () => {
     await expect(engine.pause()).resolves.toBeUndefined();
   });
 
-  it('worklet starved 時進入 buffering，補回後回到 playing', async () => {
+  it('worklet starved 超過 250 ms 時進入 buffering，補回後回到 playing', async () => {
     const { engine, deps } = await loaded({ paused: false });
     deps.audio.reply({ type: 'starved' });
+    await new Promise((resolve) => setTimeout(resolve, 260));
     expect(engine.state).toBe('buffering');
     deps.audio.reply({ type: 'playing' });
     expect(engine.state).toBe('playing');

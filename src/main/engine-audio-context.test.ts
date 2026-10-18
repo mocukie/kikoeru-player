@@ -329,6 +329,7 @@ describe('長時間暫停', () => {
   it('buffering 不 suspend', async () => {
     const { engine, deps } = await playing();
     deps.audio.reply({ type: 'starved' });
+    await vi.advanceTimersByTimeAsync(250);
     expect(engine.state).toBe('buffering');
     await vi.advanceTimersByTimeAsync(60_000);
     expect(deps.audio.calls).not.toContain('suspend');

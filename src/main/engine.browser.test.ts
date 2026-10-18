@@ -4,11 +4,11 @@
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { captureDestination, type DestinationCapture } from '../../test/audio-capture.js';
-import { beepWav, mediaUrl } from '../../test/media-worker-harness.js';
+import { beepWav, faultyMediaUrl, mediaUrl } from '../../test/media-worker-harness.js';
 import { createWebAudioOutput } from './audio-output.js';
 import type { EngineDeps } from './deps.js';
 import { createEngine, createEngineWith } from './engine.js';
-import type { StateChangeEvent } from './events.js';
+import type { StallEvent, StallRecoveredEvent, StateChangeEvent } from './events.js';
 import { createWebMediaWorker } from './media-worker.js';
 import { detectPlatform } from './platform.js';
 import type { Engine } from './types.js';
@@ -168,4 +168,29 @@ test('muted：輸出變為靜音，currentTime 照常前進；取消後恢復出
   await until(() => capture.frames > unmuted + context().sampleRate * 1.2);
   const [after] = capture.channels();
   expect(peak(after.subarray(unmuted))).toBeGreaterThan(0.2);
+});
+
+test('stall@1MB：讀取停住 → buffering → stall，中止讀取、重新 seek 之後恢復播放並發出 stallrecovered', async () => {
+  // 10 秒的 WAV（約 1.8 MiB）：預讀的請求在 1 MiB（約 5.5 秒）處停住，連線保持開著。
+  engine = createEngine({ stallTimeout: 1000 });
+  const changes = recordChanges(engine);
+  const stalls: StallEvent[] = [];
+  const recovered: StallRecoveredEvent[] = [];
+  engine.addEventListener('stall', (event) => stalls.push(event));
+  engine.addEventListener('stallrecovered', (event) => recovered.push(event));
+  const url = faultyMediaUrl('audio/pcm-s16.wav', 'fault=stall@1MB');
+  await engine.load({ kind: 'http', url }, { paused: false });
+
+  await until(() => recovered.length > 0, 20_000);
+  expect(engine.state).toBe('playing');
+  expect(changes.map((c) => `${c.state}:${c.reason}`)).toContain('buffering:media');
+  expect(stalls).toHaveLength(1);
+  const [stall] = stalls;
+  expect(stall?.position).toBeGreaterThan(4);
+  expect(stall?.position).toBeLessThan(6);
+  expect(recovered[0]?.attempts).toBe(1);
+  expect(recovered[0]?.stalledMs).toBeGreaterThanOrEqual(1000);
+  const position = stall?.position ?? NaN;
+  await until(() => (engine?.currentTime ?? 0) > position + 1);
+  expect(engine.error).toBeNull();
 });

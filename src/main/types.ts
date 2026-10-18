@@ -65,11 +65,14 @@ export interface EngineOptions {
    */
   retry?: { attempts?: number; baseDelayMs?: number };
   /**
-   * 卡住偵測（ms），必須大於 0：buffering 超過這個時間就中止讀取、從目前位置重新 seek，並發出 `stall`。
-   * 預設 8000。
+   * 卡住偵測（ms），必須大於 0：buffering 超過這個時間就中止讀取、從目前位置重新 seek，並發出 `stall`；
+   * 之後每再過這麼久仍在 buffering 就再試一次。預設 8000。
    */
   stallTimeout?: number;
-  /** 卡住後自動恢復的次數上限，0 以上的整數；用完仍卡住就以最後一次的讀取錯誤進入 `'error'`。預設 2。 */
+  /**
+   * 卡住後自動恢復的次數上限，0 以上的整數；用完仍卡住就以最後一次的讀取錯誤（致命）進入 `'error'`，
+   * `statechange` 的 reason 為 `'stall'`。請求只是停住、沒有失敗過時，錯誤為 `SOURCE_NETWORK`。預設 2。
+   */
   stallAttempts?: number;
   /** 預設的偏好語言（BCP 47），`load()` 的 `preferredLanguages` 會覆蓋。預設沒有偏好。 */
   preferredLanguages?: { audio?: string[]; subtitle?: string[] };
@@ -291,7 +294,11 @@ export interface Engine extends EventTarget {
    */
   setAudioOffset(trackId: string, offset: number): Promise<void>;
 
-  /** 卸載當前媒體、回到 `'idle'`，並 terminate media Worker；保留 AudioContext，供之後的 `load()` 使用。 */
+  /**
+   * 卸載當前媒體、回到 `'idle'`（`paused` 為 true），並 terminate media Worker：中止讀取，`media`、`tracks`、`duration`、
+   * `error` 回到初始值，之後的 `reload()` 以 `InvalidStateError` reject。保留 AudioContext 與 worklet，供之後的
+   * `load()` 使用（暫停超過 30 秒一樣會 suspend）。`'idle'` 時什麼都不做。
+   */
   unload(): Promise<void>;
 
   /**
@@ -356,7 +363,12 @@ export interface LoadOptions {
   tracks?: Partial<TrackSelection>;
   /** 偏好語言（BCP 47），覆蓋 `EngineOptions.preferredLanguages`。 */
   preferredLanguages?: { audio?: string[]; subtitle?: string[] };
-  /** 外部取消；效果等同被下一個 `load()` 取代。 */
+  /**
+   * 外部取消；效果等同被下一個 `load()` 取代：中止這次 load 的讀取並 terminate media Worker，`load()` 與 loading 期間的
+   * `seek()` 以 `DOMException`（name `'AbortError'`）reject，不論 `signal.reason`。沒有下一個 load 接手，所以 state
+   * 回到 `'idle'`（同 `unload()`）。呼叫時已經 abort 則直接 reject、狀態不變；load 完成之後 abort 沒有作用，`reload()`
+   * 也不沿用它。
+   */
   signal?: AbortSignal;
 }
 

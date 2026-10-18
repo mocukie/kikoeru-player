@@ -1,8 +1,15 @@
-// 音訊的供料：依 worklet 的要求 demux、解碼，把 PCM 切成 chunk 經 MessagePort 送出（ADR-0004）。
-// demux 與解碼經由 PacketReader、AudioDecoder 兩個介面，libav 的實作在 libav.ts。
+// 音訊的供料：demux 先把封包放進封包佇列（約 2 秒，ADR-0007），依 worklet 的要求解碼，把 PCM 切成 chunk 經
+// MessagePort 送出（ADR-0004）。demux 與解碼經由 PacketReader、AudioDecoder 兩個介面，libav 的實作在 libav.ts。
+// demux 與解碼同時進行：libav.js 的 demux 讀取掛起時，同一個 instance 仍可以解碼（#17 的實測）。
 
 import type { WorkerToWorkletMessage } from '../protocol/index.js';
-import { WorkerError } from './errors.js';
+import { crashReason, WorkerError } from './errors.js';
+import {
+  NORMAL_QUEUE_BYTES,
+  NORMAL_QUEUE_SECONDS,
+  PacketQueue,
+  type PacketQueueLimits,
+} from './packet-queue.js';
 
 /** chunk 的 frame 數下限；`eof` 前的最後一段除外。 */
 export const MIN_CHUNK_FRAMES = 2048;
@@ -21,7 +28,15 @@ const MAX_POOLED_BUFFERS = 64;
 export interface PacketReader<P> {
   /** 讀一批選用音軌的封包；`eof` 表示這是最後一批。demux 失敗時丟 `WorkerError`。 */
   read(): Promise<{ packets: P[]; eof: boolean }>;
+  /**
+   * 封包的大小（bytes）、媒體時間（秒，沒有時間戳時為 null）與時長（秒），供封包佇列的上限與 demux 的進度；
+   * 省略時大小為 0、沒有時間戳，時長取 decoder 的 `packetDuration`。
+   */
+  measure?(packet: P): { bytes: number; time: number | null; duration: number };
 }
+
+/** 選用音軌在封包佇列中的 lane。 */
+const LANE = 0;
 
 /** 解碼加上 filter graph：輸出已重採樣到 `sampleRate` 的 float planar。 */
 export interface AudioDecoder<P> {
@@ -235,12 +250,28 @@ export interface AudioPipelineOptions<P> {
   pool: BufferPool;
   signal: AbortSignal;
   post: (message: WorkerToWorkletMessage, transfer: Transferable[]) => void;
+  /** 封包佇列的上限；省略時為平常的 2 秒／8 MiB 與 64 MiB 的硬上限。 */
+  queueLimits?: PacketQueueLimits;
+  /** demux 進度：已 demux 的封包到媒體時間 `end`（秒）；`eof` 表示 demux 到了結尾。 */
+  onDemux?: (end: number, eof: boolean) => void;
 }
+
+/** 省略 `queueLimits` 時的上限（桌面的硬上限）。 */
+const DEFAULT_QUEUE_LIMITS: PacketQueueLimits = {
+  seconds: NORMAL_QUEUE_SECONDS,
+  bytes: NORMAL_QUEUE_BYTES,
+  hardBytes: 64 * 1024 * 1024,
+};
 
 /** 一個 epoch 的音訊輸出。 */
 export class AudioPipeline<P> {
   readonly #options: AudioPipelineOptions<P>;
   readonly #queue: PcmQueue;
+  readonly #packets: PacketQueue<P>;
+  /** 已 demux 的封包的結尾（媒體時間）。 */
+  #demuxEnd: number;
+  /** 供料內部的中止：外部的 `signal` 或 demux 失敗。 */
+  readonly #inner = new AbortController();
   #ended = false;
   /** 連續解碼失敗所補的靜音 frame 數。 */
   #failedFrames = 0;
@@ -250,6 +281,23 @@ export class AudioPipeline<P> {
   constructor(options: AudioPipelineOptions<P>) {
     this.#options = options;
     this.#queue = new PcmQueue(options.sampleRate, options.startTime);
+    this.#demuxEnd = options.startTime;
+    this.#packets = new PacketQueue<P>(
+      [LANE],
+      options.queueLimits ?? DEFAULT_QUEUE_LIMITS,
+      (p) => this.#measure(p).bytes,
+      (p) => this.#measure(p),
+    );
+  }
+
+  /** 封包佇列中的秒數。 */
+  get queuedSeconds(): number {
+    return this.#packets.seconds(LANE);
+  }
+
+  /** 封包佇列中的 bytes。 */
+  get queuedBytes(): number {
+    return this.#packets.bytes;
   }
 
   /**
@@ -257,7 +305,70 @@ export class AudioPipeline<P> {
    * 致命錯誤以 `WorkerError` reject。
    */
   async run(): Promise<void> {
-    const { demand, epoch, signal, pool, post } = this.#options;
+    const outer = this.#options.signal;
+    const stop = new AbortController();
+    const onAbort = () => {
+      this.#inner.abort(outer.reason);
+    };
+    if (outer.aborted) onAbort();
+    else outer.addEventListener('abort', onAbort, { once: true });
+    const demuxing = this.#demux(stop.signal);
+    let failed = false;
+    try {
+      await this.#feed();
+    } catch (error) {
+      failed = !outer.aborted;
+      throw error;
+    } finally {
+      outer.removeEventListener('abort', onAbort);
+      stop.abort();
+      // 正常結束與中止時等 demux 停下（中止時它的讀取已被中止）；失敗時不等：它可能卡在讀取，
+      // 之後由 seek 中止讀取或 Worker 被 terminate。
+      if (!failed) await demuxing;
+    }
+  }
+
+  /** demux 到封包佇列，滿了就等；結尾時結束佇列，失敗時讓佇列以同一個錯誤失敗。 */
+  async #demux(stop: AbortSignal): Promise<void> {
+    try {
+      for (;;) {
+        await this.#packets.space(stop);
+        const { packets, eof } = await this.#options.reader.read();
+        if (stop.aborted) return;
+        for (const packet of packets) {
+          const { time, duration } = this.#measure(packet);
+          this.#demuxEnd =
+            time === null ? this.#demuxEnd + duration : Math.max(this.#demuxEnd, time + duration);
+        }
+        this.#packets.push(LANE, packets);
+        this.#options.onDemux?.(this.#demuxEnd, eof);
+        if (eof) {
+          this.#packets.end();
+          return;
+        }
+      }
+    } catch (error) {
+      if (stop.aborted) return;
+      // demux 失敗：佇列中的封包照常解完、播完才回報（錯誤的位置接近實際播放到的地方）；
+      // 封包佇列超過硬上限則立即結束供料。
+      this.#packets.fail(error);
+      if (error instanceof WorkerError && error.code === 'MEMORY_LIMIT') this.#inner.abort(error);
+    }
+  }
+
+  #measure(packet: P): { bytes: number; time: number | null; duration: number } {
+    return (
+      this.#options.reader.measure?.(packet) ?? {
+        bytes: 0,
+        time: null,
+        duration: this.#options.decoder.packetDuration(packet),
+      }
+    );
+  }
+
+  async #feed(): Promise<void> {
+    const { demand, epoch, pool, post } = this.#options;
+    const signal = this.#inner.signal;
     for (;;) {
       // 資料送完就立即送出 EOF，不等 worklet 的下一個要求。
       if (this.#ended && this.#queue.frames === 0) {
@@ -280,27 +391,27 @@ export class AudioPipeline<P> {
   }
 
   async #decodeMore(): Promise<void> {
-    const { packets, eof } = await this.#options.reader.read();
-    for (const packet of packets) {
-      this.#options.signal.throwIfAborted();
+    const packet = await this.#packets.next(LANE, this.#inner.signal);
+    if (packet !== undefined) {
       await this.#decode(packet);
+      // 最後一個封包解完就排出 decoder，不等下一個要求。
+      if (!this.#packets.drained) return;
     }
-    if (eof) {
-      this.#push(await this.#options.decoder.flush());
-      this.#queue.finish();
-      this.#ended = true;
-    }
+    this.#push(await this.#options.decoder.flush());
+    this.#queue.finish();
+    this.#ended = true;
   }
 
   async #decode(packet: P): Promise<void> {
-    const { decoder, sampleRate, signal } = this.#options;
+    const { decoder, sampleRate } = this.#options;
+    const signal = this.#inner.signal;
     let decoded: DecodedAudio[];
     try {
       decoded = await decoder.decode(packet);
     } catch (error) {
       signal.throwIfAborted();
-      // wasm trap 之後 instance 不能再用，不是壞封包。
-      if (error instanceof WebAssembly.RuntimeError) throw error;
+      // wasm trap 與記憶體用完之後 instance 不能再用，不是壞封包。
+      if (crashReason(error) !== null) throw error;
       // 壞的封包補上等長的靜音；連續失敗累計 1 媒體秒才放棄。
       const duration = decoder.packetDuration(packet);
       const frames =

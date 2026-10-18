@@ -9,6 +9,7 @@ import {
   type PacketReader,
 } from './audio-pipeline.js';
 import { WorkerError } from './errors.js';
+import type { PacketQueueLimits } from './packet-queue.js';
 
 const RATE = 48_000;
 
@@ -29,13 +30,19 @@ class FakeReader implements PacketReader<FakePacket> {
   constructor(batches: FakePacket[][]) {
     this.#batches = [...batches];
   }
+  /** read() 被呼叫的次數。 */
+  reads = 0;
   failNextReadWith(error: Error) {
     this.#error = error;
   }
   read() {
+    this.reads++;
     if (this.#error) return Promise.reject(this.#error);
     const packets = this.#batches.shift() ?? [];
     return Promise.resolve({ packets, eof: this.#batches.length === 0 });
+  }
+  measure(packet: FakePacket) {
+    return { bytes: packet.frames * 4, time: packet.time ?? null, duration: packet.frames / RATE };
   }
 }
 
@@ -81,6 +88,8 @@ function setup(
     decoder?: FakeDecoder;
     startTime?: number;
     epoch?: number;
+    queueLimits?: PacketQueueLimits;
+    onDemux?: (end: number) => void;
   } = {},
 ) {
   const posted: { message: WorkerToWorkletMessage; transfer: Transferable[] }[] = [];
@@ -101,6 +110,8 @@ function setup(
     demand,
     pool,
     signal: controller.signal,
+    ...(options.queueLimits && { queueLimits: options.queueLimits }),
+    ...(options.onDemux && { onDemux: options.onDemux }),
     // 與 MessagePort 一樣 transfer：送出後原本的 buffer 被 detach。
     post: (message, transfer) => posted.push(structuredClone({ message, transfer }, { transfer })),
   });
@@ -383,10 +394,54 @@ describe('錯誤', () => {
     await expect(running).rejects.toBeInstanceOf(WebAssembly.RuntimeError);
   });
 
+  test('wasm 記憶體用完（FFmpeg 的 ENOMEM）不當成壞封包，原樣丟出', async () => {
+    const decoder = new FakeDecoder();
+    const oom = new Error('Error submitting the packet to the decoder: Out of memory');
+    decoder.decode = () => Promise.reject(oom);
+    const { demand, running, epoch } = setup({ decoder });
+    demand.need(epoch, 4096);
+    await expect(running).rejects.toBe(oom);
+  });
+
   test('demux 的錯誤原樣丟出', async () => {
     const { demand, reader, running, epoch } = setup();
     reader.failNextReadWith(new WorkerError('FORMAT_CORRUPT', 'demux 失敗'));
     demand.need(epoch, 4096);
     await expect(running).rejects.toMatchObject({ code: 'FORMAT_CORRUPT' });
+  });
+});
+
+describe('封包佇列', () => {
+  /** `count` 批、每批一個 1024 frame（約 21 ms）的封包。 */
+  const many = (count: number) => Array.from({ length: count }, () => [{ frames: 1024 }]);
+
+  test('worklet 要求之前就 demux 到約 2 秒的封包，之後停下', async () => {
+    const ends: number[] = [];
+    const { reader, pipeline } = setup({ batches: many(500), onDemux: (end) => ends.push(end) });
+    await settle();
+    const reads = reader.reads;
+    expect(reads).toBeGreaterThan(90);
+    expect(reads).toBeLessThan(100);
+    expect(pipeline.queuedSeconds).toBeGreaterThanOrEqual(2);
+    expect(ends.at(-1)).toBeCloseTo((reads * 1024) / RATE, 6);
+    await settle();
+    expect(reader.reads).toBe(reads);
+  });
+
+  test('解碼取出封包後繼續 demux', async () => {
+    const { reader, demand, epoch } = setup({ batches: many(500) });
+    await settle();
+    const reads = reader.reads;
+    demand.need(epoch, 48_000);
+    await settle();
+    expect(reader.reads).toBeGreaterThan(reads + 40);
+  });
+
+  test('超過硬上限時以 MEMORY_LIMIT 結束', async () => {
+    const { running } = setup({
+      batches: [[{ frames: 4096 }, { frames: 4096 }]],
+      queueLimits: { seconds: 2, bytes: 8 * 1024 * 1024, hardBytes: 20_000 },
+    });
+    await expect(running).rejects.toMatchObject({ code: 'MEMORY_LIMIT' });
   });
 });
