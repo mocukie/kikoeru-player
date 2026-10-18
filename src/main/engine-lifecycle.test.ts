@@ -182,6 +182,35 @@ describe('unload', () => {
   });
 });
 
+describe('destroy 事件', () => {
+  it('destroy() 呼叫內同步發出一次，此時 state 已是 idle、之後的指令 reject DESTROYED', async () => {
+    const { engine } = await loaded({ paused: false });
+    const seen: { state: string; paused: boolean; play: Promise<void> }[] = [];
+    engine.addEventListener('destroy', () => {
+      seen.push({ state: engine.state, paused: engine.paused, play: engine.play() });
+    });
+
+    const destroying = engine.destroy();
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ state: 'idle', paused: true });
+    await expect(rejection(seen[0]?.play ?? Promise.resolve())).resolves.toMatchObject({
+      code: 'DESTROYED',
+    });
+
+    await engine.destroy();
+    await destroying;
+    expect(seen).toHaveLength(1);
+  });
+
+  it('沒有載入過媒體（state 不變、沒有 statechange）也會發出', async () => {
+    const { engine } = setup();
+    let destroyed = 0;
+    engine.addEventListener('destroy', () => destroyed++);
+    await engine.destroy();
+    expect(destroyed).toBe(1);
+  });
+});
+
 describe('destroy 的競態', () => {
   it('reload 執行中 destroy：reload 以 AbortError reject，新的 Worker 被 terminate，資源全為 0', async () => {
     const { engine, deps } = await loaded();

@@ -1,12 +1,14 @@
 // Demo 頁：以公開 API 操作 Engine，顯示狀態並記錄事件（docs/testing.md「實機清單」、「E2E」）。
 // E2E 與實機除錯可以從 console 以 `engine` 直接使用同一個 Engine。
 
+import { attachBackgroundPlayback, type BackgroundPlayback } from '../src/background/index.js';
 import {
   createEngine,
   EngineError,
   isAbortError,
   type Engine,
   type EngineOptions,
+  type LogEntry,
   type Source,
 } from '../src/index.js';
 
@@ -55,6 +57,10 @@ const urlInput = element('url', HTMLInputElement);
 const fileInput = element('file', HTMLInputElement);
 const logList = element('log', HTMLOListElement);
 const autoplayInput = element('autoplay', HTMLInputElement);
+const backgroundInput = element('background', HTMLInputElement);
+// 背景播放模組預設不 attach（其他 E2E 只測 Engine 本身）；query `background=1` 時一開始就 attach，實機清單用。
+backgroundInput.checked = new URLSearchParams(location.search).get('background') === '1';
+const nextOnEndedInput = element('next-on-ended', HTMLInputElement);
 element('engine-options', HTMLElement).textContent =
   `EngineOptions（由頁面 query 覆蓋）：${JSON.stringify(options)}`;
 
@@ -144,6 +150,55 @@ function setupEngine(): void {
   target.addEventListener('beforeaudiostart', (e) => {
     log(`beforeaudiostart cause=${e.cause}`);
   });
+  target.addEventListener('destroy', () => {
+    log('destroy');
+    // 背景播放模組已經自己 detach。
+    if (engine === target) background = null;
+  });
+  target.addEventListener('ended', () => {
+    if (nextOnEndedInput.checked) playNext();
+  });
+  if (backgroundInput.checked) attachBackground();
+}
+
+// ───────────────────────────── 背景播放模組 ─────────────────────────────
+
+/** 目前 Engine 上的背景播放模組；沒有 attach 時為 null。 */
+let background: BackgroundPlayback | null = null;
+
+function logBackground(entry: LogEntry): void {
+  const data = entry.data ? ` ${JSON.stringify(entry.data)}` : '';
+  log(`[${entry.scope}] ${entry.level} ${entry.message}${data}`);
+}
+
+function attachBackground(): void {
+  background = attachBackgroundPlayback(engine, { log: logBackground });
+  log('背景播放模組 attach');
+}
+
+backgroundInput.addEventListener('change', () => {
+  if (backgroundInput.checked) {
+    if (!background) attachBackground();
+  } else if (background) {
+    background.detach();
+    background = null;
+    log('背景播放模組 detach');
+  }
+});
+
+/**
+ * 播完後接 CI 組媒體清單的下一個（實機清單的「背景接下一首」）：`ended` 時 `paused` 仍為 false，
+ * 以 `load(…, { paused: false })` 接續，anchor 不中斷、不需要 gesture。
+ */
+function playNext(): void {
+  const choices = [...mediaSelect.options];
+  const next = choices[(mediaSelect.selectedIndex + 1) % choices.length];
+  if (!next) return;
+  mediaSelect.value = next.value;
+  const url = mediaUrl();
+  command(`load ${url}（下一首，paused: false）`, () =>
+    engine.load({ kind: 'http', url }, { paused: false }).then((info) => info.format),
+  );
 }
 
 setupEngine();
@@ -260,6 +315,7 @@ const bufferedText = element('buffered', HTMLElement);
 const cacheStatsText = element('cache-stats', HTMLElement);
 const networkStatsText = element('network-stats', HTMLElement);
 const resourcesText = element('resources', HTMLElement);
+const backgroundText = element('background-state', HTMLElement);
 
 const MiB = 1024 * 1024;
 
@@ -305,6 +361,7 @@ function render(): void {
     seekTime.value = engine.currentTime.toFixed(3);
   }
   errorText.textContent = engine.error ? describeError(engine.error) : '—';
+  backgroundText.textContent = background ? 'attached' : 'detached';
   const media = engine.media;
   mediaText.textContent = media
     ? `${media.format}，${String(media.size)} bytes，${media.tracks

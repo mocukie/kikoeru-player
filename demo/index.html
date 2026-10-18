@@ -114,6 +114,12 @@
       <label><input id="autoplay" type="checkbox" /> load 後直接播放（paused: false）</label>
     </div>
     <div class="row">
+      <label
+        ><input id="background" type="checkbox" /> 背景播放模組（audioSession 與靜音 anchor）</label
+      >
+      <label><input id="next-on-ended" type="checkbox" /> 播完接下一首</label>
+    </div>
+    <div class="row">
       <label for="seek">seek</label>
       <input id="seek" type="range" min="0" max="0" step="0.001" value="0" disabled />
       <output id="seek-time" for="seek">0.000</output>
@@ -151,6 +157,8 @@
       <dd id="network-stats">—</dd>
       <dt>resources</dt>
       <dd id="resources">—</dd>
+      <dt>background</dt>
+      <dd id="background-state">—</dd>
     </dl>
 
     <h2>事件 log <button id="copy-log" type="button">複製</button></h2>
