@@ -146,6 +146,15 @@ async function settledTime(page: Page): Promise<number> {
   return last;
 }
 
+/**
+ * 拿來比的第一個 beep 的秒數：`time` 之後至少 50 ms 的第一個整數秒，緊接在接續點之後的 beep 可能被淡入削掉起點。
+ * 比對時以 `next - 0.5` 篩選聽到的 beep，與這裡的選擇一致：`time` 到 `next` 之間（包括那 50 ms 內）的 beep 不比。
+ * 只篩 `b.time > time` 不夠：`time` 落在整數秒前 50 ms 內時，那一秒的 beep 會被留下，卻不在預期之內。
+ */
+function firstBeepAfter(time: number): number {
+  return Math.ceil(time + 0.05);
+}
+
 function now(page: Page): Promise<number> {
   return page.evaluate(() => performance.now());
 }
@@ -212,10 +221,10 @@ test('pause 後 resume：beep 起點對 currentTime 仍 ≤ 20 ms', async ({ pag
   const before = await now(page);
   await page.locator('#play').click();
   await expect(page.locator('#state')).toHaveText('playing');
-  const next = Math.ceil(paused + 0.05);
+  const next = firstBeepAfter(paused);
   await expect.poll(() => currentTime(page), { timeout: 5000 }).toBeGreaterThan(next + 1.3);
   expectBeepsOnTime(
-    (await heardBeeps(page, before)).filter((b) => b.time > paused),
+    (await heardBeeps(page, before)).filter((b) => b.time > next - 0.5),
     [next, next + 1],
   );
 });
@@ -234,11 +243,11 @@ test('播放中 reload：從原本的位置接續播放，舊的 Worker 被 term
   const resumed = await currentTime(page);
   expect(resumed).toBeGreaterThanOrEqual(position);
   expect(resumed).toBeLessThan(position + 1);
-  const next = Math.ceil(resumed + 0.05);
+  const next = firstBeepAfter(resumed);
   await expect.poll(() => currentTime(page), { timeout: 5000 }).toBeGreaterThan(next + 1.3);
 
   expectBeepsOnTime(
-    (await heardBeeps(page, before)).filter((b) => b.time > resumed),
+    (await heardBeeps(page, before)).filter((b) => b.time > next - 0.5),
     [next, next + 1],
   );
   const stats = await page.evaluate(() => (window as unknown as E2EWindow).engine.getStats());
