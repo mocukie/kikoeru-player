@@ -157,6 +157,8 @@ test('muted：輸出變為靜音，currentTime 照常前進；取消後恢復出
   const from = capture.frames;
   await until(() => (engine?.currentTime ?? 0) > at + 0.5);
   expect(engine.state).toBe('playing');
+  // 確實錄到這個 Engine 的輸出，否則下面的靜音判斷沒有意義。
+  expect(capture.frames - from).toBeGreaterThan(context().sampleRate * 0.3);
   const [left] = capture.channels();
   expect(peak(left.subarray(from))).toBeLessThan(1e-3);
 
