@@ -158,6 +158,18 @@ describe('buffered 與 bufferedchange', () => {
     expect(engine.buffered).toEqual([{ start: 0, end: 60 }]);
   });
 
+  it('unload() 之後為空，並發出 bufferedchange', async () => {
+    const { engine, buffer } = await playing();
+    buffer(12.5);
+    const changes: BufferedChangeEvent[] = [];
+    engine.addEventListener('bufferedchange', (event: BufferedChangeEvent) => changes.push(event));
+    await vi.advanceTimersByTimeAsync(250);
+    await engine.unload();
+    await vi.advanceTimersByTimeAsync(250);
+    expect(engine.buffered).toEqual([]);
+    expect(changes.at(-1)?.buffered).toEqual([]);
+  });
+
   it('idle 時為空', () => {
     const engine = createEngineWith(createFakeDeps());
     expect(engine.buffered).toEqual([]);
