@@ -4,6 +4,7 @@
 
 import type {
   MainToWorkerMessage,
+  RetryPolicy,
   WorkerLoadMessage,
   WorkerPortMessage,
   WorkerStartMessage,
@@ -24,6 +25,7 @@ export interface MediaWorkerDeps {
   openSource?: (
     wire: WorkerLoadMessage<WorkerHost>['source'],
     signal: AbortSignal,
+    retry: RetryPolicy,
   ) => Promise<ByteSource>;
   /** 建立 libav instance；預設為 `WebAssembly.instantiate`，測試可以模擬配置失敗。 */
   instantiate?: Instantiate;
@@ -34,6 +36,7 @@ interface Environment {
   assets: LibavAssets;
   port: MessagePort;
   sampleRate: number;
+  retry: RetryPolicy;
 }
 
 /** 一次 load：一個來源與它的 libav instance。 */
@@ -78,6 +81,7 @@ export class MediaWorker {
           },
           port: message.workletPort,
           sampleRate: message.sampleRate,
+          retry: message.retry,
         };
         this.#listen(message.workletPort);
         break;
@@ -158,8 +162,9 @@ export class MediaWorker {
     const { signal } = load.controller;
     try {
       const env = this.#requireEnv();
-      const open = this.#deps.openSource ?? openSource;
-      const source = await open(wire, signal);
+      const open =
+        this.#deps.openSource ?? ((wire, signal, retry) => openSource(wire, signal, { retry }));
+      const source = await open(wire, signal, env.retry);
       signal.throwIfAborted();
       load.hasInstance = true;
       this.#libavInstances++;

@@ -1,6 +1,6 @@
 // 主執行緒 ↔ media Worker 的訊息。會影響輸出的訊息都帶 epoch，收方丟棄過期的 epoch。
 
-import type { HostTypes, ProbedMedia, WireError, WireSource } from './media.js';
+import type { HostTypes, ProbedMedia, RetryPolicy, WireError, WireSource } from './media.js';
 
 /** 主執行緒送給 media Worker 的訊息。 */
 export type MainToWorkerMessage<H extends HostTypes> =
@@ -22,6 +22,8 @@ export interface WorkerInitMessage<H extends HostTypes> {
   workletPort: H['messagePort'];
   /** `AudioContext.sampleRate`；filter graph 重採樣到這個取樣率。 */
   sampleRate: number;
+  /** http 讀取的自動重試（`EngineOptions.retry`）。 */
+  retry: RetryPolicy;
 }
 
 /**

@@ -44,6 +44,7 @@ describe('load', () => {
     const init = await worker.next('init');
     expect(init.sampleRate).toBe(48_000);
     expect(init.module).toBeInstanceOf(WebAssembly.Module);
+    expect(init.retry).toEqual({ attempts: 3, baseDelayMs: 500 });
     expect((await worker.next('load')).source).toEqual({ kind: 'http', url: source.url });
 
     await worker.probe(audioMedia());
@@ -75,6 +76,27 @@ describe('load', () => {
       'trackschange',
       'statechange:ready',
     ]);
+  });
+
+  it('init 帶著補上預設值的 retry，http 來源的 credentials、headers、size 原樣送到 Worker', async () => {
+    const deps = createFakeDeps();
+    const engine = createEngineWith(deps, { retry: { attempts: 1 } });
+    void engine.load({
+      kind: 'http',
+      url: new URL('https://example.test/a.m4a'),
+      credentials: 'include',
+      headers: { Authorization: 'Bearer t' },
+      size: 1234,
+    });
+    const worker = deps.workers.last;
+    expect((await worker.next('init')).retry).toEqual({ attempts: 1, baseDelayMs: 500 });
+    expect((await worker.next('load')).source).toEqual({
+      kind: 'http',
+      url: 'https://example.test/a.m4a',
+      credentials: 'include',
+      headers: { Authorization: 'Bearer t' },
+      size: 1234,
+    });
   });
 });
 
@@ -335,6 +357,36 @@ describe('destroy', () => {
     }
     expect(engine.paused).toBe(true);
     expect(events).toEqual([]);
+  });
+});
+
+describe('播放中的讀取錯誤', () => {
+  it('fatal：state 進入 error，error 帶 code、detail 與發生時的 position', async () => {
+    const { engine, deps, worker } = await loaded({ paused: false });
+    deps.audio.reply({ type: 'clock', position: 3.25, frame: 0, buffered: 0, underruns: 0 });
+    const errors: unknown[] = [];
+    engine.addEventListener('error', (event) => errors.push(event.error));
+
+    worker.reply({
+      type: 'error',
+      epoch: deps.audio.epoch,
+      error: {
+        code: 'SOURCE_UNAUTHORIZED',
+        fatal: true,
+        message: 'HTTP 401',
+        detail: { status: 401, url: 'https://example.test/a.m4a' },
+      },
+    });
+
+    expect(engine.state).toBe('error');
+    expect(engine.error).toMatchObject({
+      name: 'EngineError',
+      code: 'SOURCE_UNAUTHORIZED',
+      fatal: true,
+      position: 3.25,
+      detail: { status: 401, url: 'https://example.test/a.m4a' },
+    });
+    expect(errors).toEqual([engine.error]);
   });
 });
 
