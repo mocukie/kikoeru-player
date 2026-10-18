@@ -16,6 +16,24 @@ export function toContainerTracks(probed: readonly ProbedTrack[], nextId: () => 
 }
 
 /**
+ * `reload()` 重新 probe 的結果與先前的容器內軌道是否同一個結構：軌道數、各軌的 kind、stream index 與 codec 相同。
+ * 外掛音軌不在比較之列。
+ */
+export function sameTrackStructure(
+  tracks: readonly Track[],
+  probed: readonly ProbedTrack[],
+): boolean {
+  const container = tracks.filter((t) => t.origin === 'container');
+  return (
+    container.length === probed.length &&
+    container.every((t, i) => {
+      const p = probed[i];
+      return p?.kind === t.kind && p.streamIndex === t.streamIndex && p.codec === t.codec;
+    })
+  );
+}
+
+/**
  * load 時的軌道選擇（`LoadOptions.tracks` 的 TSDoc）。`requested` 指定的 kind 優先，但只接受存在且 supported 的軌；
  * 其餘只從 supported 的軌中選：音軌依偏好語言 → default 旗標 → 第一條；影片軌依 default 旗標 → 第一條；
  * 字幕只在命中偏好語言或 forced 時開啟。

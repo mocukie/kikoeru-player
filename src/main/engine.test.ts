@@ -40,6 +40,5 @@ describe('createEngine', () => {
     const engine = createEngine();
 
     expect(() => engine.volume).toThrow(/volume/);
-    expect(() => engine.reload()).toThrow(/reload/);
   });
 });

@@ -26,6 +26,7 @@
         align-items: center;
       }
       input[type='url'],
+      input[type='range'],
       select {
         flex: 1 1 16rem;
         min-width: 0;
@@ -78,8 +79,14 @@
       <button id="load" type="button">load</button>
       <button id="play" type="button">play</button>
       <button id="pause" type="button">pause</button>
+      <button id="reload" type="button">reload</button>
       <button id="unlock" type="button">unlockAudio</button>
       <label><input id="autoplay" type="checkbox" /> load 後直接播放（paused: false）</label>
+    </div>
+    <div class="row">
+      <label for="seek">seek</label>
+      <input id="seek" type="range" min="0" max="0" step="0.001" value="0" disabled />
+      <output id="seek-time" for="seek">0.000</output>
     </div>
 
     <h2>狀態</h2>
