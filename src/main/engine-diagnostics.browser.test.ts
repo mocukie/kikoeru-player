@@ -15,6 +15,9 @@ import { loadWasmAssets } from './wasm.js';
 const source = { kind: 'http', url: mediaUrl('audio/flac.flac') } as const;
 const scopes = ['io', 'demux', 'audio', 'video', 'subtitle', 'command', 'worker', 'background'];
 
+/** worklet 的 log 時間的容差（ms）：主執行緒的 `AudioContext.currentTime` 以 render 區塊為單位更新。 */
+const WORKLET_TIME_SLACK_MS = 50;
+
 let engine: Engine | null = null;
 
 afterEach(async () => {
@@ -64,8 +67,10 @@ test('真實 Worker 的 log：帶正確的 scope，time 是主執行緒的 perfo
   for (const entry of entries) {
     expect(scopes).toContain(entry.scope);
     expect(entry.message.length).toBeGreaterThan(0);
-    expect(entry.time).toBeGreaterThanOrEqual(started - 1);
-    expect(entry.time).toBeLessThanOrEqual(ended + 1);
+    // worklet 的 log 以 AudioContext 的時間換算，誤差約為 audio 的一個 render 區塊。
+    const slack = entry.scope === 'audio' ? WORKLET_TIME_SLACK_MS : 1;
+    expect(entry.time).toBeGreaterThanOrEqual(started - slack);
+    expect(entry.time).toBeLessThanOrEqual(ended + slack);
   }
   // Worker 送來的：Range 請求、開檔完成、開始供料。
   const request = entries.find((e) => e.scope === 'io' && e.message === 'Range 請求');

@@ -679,8 +679,8 @@ export interface LogEntry {
   scope: 'io' | 'demux' | 'audio' | 'video' | 'subtitle' | 'command' | 'worker' | 'background';
   message: string;
   /**
-   * 事件發生的 `performance.now()` 時間（ms，主執行緒的時基）；media Worker 與 AudioWorklet 的 log 已換算過，
-   * worklet 的精度約為一個 render quantum。
+   * 事件發生的 `performance.now()` 時間（ms，主執行緒的時基）；media Worker 與 AudioWorklet 的 log 已換算過。
+   * worklet 的 log 依 `AudioContext.currentTime` 換算，誤差約為瀏覽器的一個音訊 render 區塊（數 ms 到數十 ms）。
    */
   time: number;
   /** 結構化的細節（錯誤碼、位置、URL、範圍等），只含可以 structured clone 的值。 */
