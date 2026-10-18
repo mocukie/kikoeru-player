@@ -93,6 +93,8 @@
 
 PR 必須 `check` 與 `browser` 都通過。
 
+本機 E2E 的 dev server 預設在 port 5273，非 CI 時會沿用已在跑的 server。多個 worktree 同時跑 `pnpm verify` 時，以環境變數 `E2E_PORT` 給每個 worktree 不同的 port。
+
 ## 每張實作 issue 的最低要求
 
 1. 新增或修改的純邏輯：Node 測試涵蓋 issue 中列出的邊界情況。新增的指令要有競態測試：被取代、執行中 destroy、Worker 崩潰。
