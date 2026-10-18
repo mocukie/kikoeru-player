@@ -8,6 +8,7 @@ type WithOptionalEpoch<T> = T extends unknown ? Omit<T, 'epoch'> & { epoch?: num
 /** Engine 建立音訊輸出時給的設定（同 `AudioOutputConfig`）。 */
 export interface FakeAudioOutputConfig {
   audioBuffer: { targetMs: number; refillMs: number; capacityMs: number };
+  audioFadeMs: number;
   workletUrl?: string | URL;
 }
 
@@ -46,6 +47,8 @@ export class FakeAudioOutput {
   frameNow: number | null = null;
   /** `outputLatency()` 的回傳值（秒）。 */
   latency = 0;
+  /** `setGain()` 的呼叫，依順序。 */
+  readonly gains: { gain: number; smooth: boolean }[] = [];
   /** 設定時 `connect()` 以它 reject，模擬 worklet 載入或建立失敗。 */
   connectError: Error | null = null;
   readonly config: FakeAudioOutputConfig;
@@ -83,6 +86,10 @@ export class FakeAudioOutput {
 
   outputLatency(): number {
     return this.latency;
+  }
+
+  setGain(gain: number, smooth: boolean): void {
+    this.gains.push({ gain, smooth });
   }
 
   post(message: MainToWorkletMessage): void {

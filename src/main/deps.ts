@@ -59,6 +59,8 @@ export interface AudioOutputHandlers {
 export interface AudioOutputConfig {
   /** ring buffer 的水位（ms），補上預設值之後。 */
   audioBuffer: { targetMs: number; refillMs: number; capacityMs: number };
+  /** 淡入淡出的長度（ms），即 `EngineOptions.audioFadeMs`；0 為硬切。 */
+  audioFadeMs: number;
   /** `EngineOptions.assets.workletUrl`；沒給時用套件內的 worklet。 */
   workletUrl?: string | URL;
 }
@@ -86,12 +88,17 @@ export interface AudioOutput {
    */
   connect(): Promise<MessagePort>;
   /**
-   * 此刻聽到的 sample 的 context frame（與 worklet 的 `currentFrame` 同一條軸），以 `getOutputTimestamp()` 換算；
-   * context 還沒開始時為 null。完整的延遲 fallback 由「音量、淡入淡出與輸出延遲」#42 加入。
+   * 此刻聽到的 sample 的 context frame（與 worklet 的 `currentFrame` 同一條軸）：以 `getOutputTimestamp()` 換算為主，
+   * 取不到時依序用 `outputLatency`、`baseLatency`（見 `heardContextTime()`）。context 還沒開始時為 null。
    */
   heardFrame(): number | null;
   /** 輸出延遲（秒）：sample 進入 audio graph 到被聽到的時間；`getStats().audio.outputLatencyMs` 的來源。 */
   outputLatency(): number;
+  /**
+   * worklet 後面的 `GainNode` 的值（音量與靜音）。`smooth` 時以 `setTargetAtTime`（time constant 約 10 ms）趨近，
+   * 否則立即套用（剛建立、還沒出聲時）。不用 `linearRampToValueAtTime`（Firefox bug 2011524）。
+   */
+  setGain(gain: number, smooth: boolean): void;
   /** 送給 worklet；worklet 還沒載入完成時先排隊，載入後依序送出。 */
   post(message: MainToWorkletMessage): void;
   /**

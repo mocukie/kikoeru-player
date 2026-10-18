@@ -1,6 +1,6 @@
 // AudioWorklet 的單一檔案：ring buffer、水位與音訊時鐘（ADR-0004）。只能 import type（硬性約束第 7 條）。
 // 邏輯集中在不依賴 AudioWorkletGlobalScope 的 OutputCore，Node 測試直接驅動它；檔案最後的 processor 只是外殼，
-// 只在 AudioWorkletGlobalScope 內註冊。淡入淡出由「音量、淡入淡出與輸出延遲」#42 加入，目前一律硬切。
+// 只在 AudioWorkletGlobalScope 內註冊。
 
 import type {
   HostTypes,
@@ -17,6 +17,8 @@ import type {
 const MAX_CHUNK_FRAMES = 4096;
 /** 時鐘前進時，`clock` 回報的間隔（秒）。 */
 const CLOCK_INTERVAL_SECONDS = 0.25;
+/** 包絡換算 frame 數時的浮點誤差容許。 */
+const EPSILON = 1e-6;
 
 /** ring 的水位（frame）。 */
 export interface Watermarks {
@@ -164,6 +166,7 @@ export interface OutputCoreOptions {
   /** `AudioContext.sampleRate`。 */
   sampleRate: number;
   audioBuffer: WorkletProcessorOptions['audioBuffer'];
+  audioFadeMs: WorkletProcessorOptions['audioFadeMs'];
   /** 送給主執行緒。 */
   report: (message: WorkletToMainMessage) => void;
 }
@@ -172,6 +175,10 @@ export interface OutputCoreOptions {
  * worklet 的本體：依主執行緒的指令（flush、play、pause、duration）與 Worker 的 PCM 決定每個 render quantum 的輸出，
  * 並推進音訊時鐘。時鐘只在播出 media sample（或 `eof` 之後補到 `duration` 的靜音）時前進。
  *
+ * 淡入淡出（`audioFadeMs`，0 為硬切）逐 sample 線性：開始輸出時淡入；pause 時淡出，淡出的 sample 照常推進時鐘，
+ * 淡出結束才停住並回報 `paused`；ring 快用完（還沒 `eof`）時提前淡出，讓最後一個 sample 落在 0；flush 時把 ring 內
+ * 接下來的一段舊資料另外淡出（不推進時鐘），與新 epoch 的淡入相加。
+ *
  * 狀態的轉換在收到訊息時就判斷，不等 `render()`：context 還沒開始跑時，load 也能在補滿後完成。
  */
 export class OutputCore {
@@ -179,7 +186,13 @@ export class OutputCore {
   readonly #marks: Watermarks;
   readonly #ring: PcmRing;
   readonly #report: (message: WorkletToMainMessage) => void;
+  /** 淡入淡出的 frame 數；0 為硬切。 */
+  readonly #fadeFrames: number;
   #transport: PcmTransport | null = null;
+  /** 淡入淡出的包絡（0–1），每個輸出的 sample 乘上它；硬切時不使用。 */
+  #gain = 0;
+  /** flush 時從 ring 取出、已套上淡出的舊資料，在之後的 quantum 加進輸出。 */
+  #tail: { channels: [Float32Array, Float32Array]; offset: number } | null = null;
 
   /** 第一個 flush 之前不輸出、不要求資料。 */
   #epoch = -Infinity;
@@ -203,6 +216,8 @@ export class OutputCore {
   #underruns = 0;
   /** 下一個 render quantum 開始的 context frame。 */
   #frame = 0;
+  /** 正在 render 的 quantum 開始的 context frame。 */
+  #quantumStart = 0;
   #lastClockFrame = 0;
 
   constructor(options: OutputCoreOptions) {
@@ -213,6 +228,7 @@ export class OutputCore {
       options.sampleRate,
     );
     this.#report = options.report;
+    this.#fadeFrames = Math.round((options.audioFadeMs * options.sampleRate) / 1000);
   }
 
   /** 接上新的 media Worker；之前的 transport 關閉，從它收到、還沒用到的訊息丟掉。 */
@@ -236,14 +252,19 @@ export class OutputCore {
         break;
       case 'play':
         this.#playIntent = true;
+        // 淡出途中（還在輸出）：包絡自己轉回淡入。
         if (this.#filled && !this.#starved && !this.#ended && !this.#outputting) {
-          this.#outputting = true;
+          this.#startOutput();
           this.#announce('playing');
         }
         break;
       case 'pause':
         this.#playIntent = false;
         if (this.#filled && !this.#ended) {
+          // 正在出聲：render() 淡出結束才停住並回報。
+          if (this.#outputting && this.#fadeFrames > 0 && this.#gain > 0 && !message.immediate) {
+            break;
+          }
           this.#outputting = false;
           this.#announce('paused');
         }
@@ -261,8 +282,10 @@ export class OutputCore {
   render(output: readonly Float32Array[], frame: number): void {
     for (const channel of output) channel.fill(0);
     const frames = output[0]?.length ?? 0;
+    this.#quantumStart = frame;
     this.#frame = frame + frames;
     if (this.#outputting) this.#play(output, frames);
+    this.#mixTail(output, frames);
     if (
       this.#outputting &&
       this.#frame - this.#lastClockFrame >= CLOCK_INTERVAL_SECONDS * this.#sampleRate
@@ -273,6 +296,7 @@ export class OutputCore {
   }
 
   #flush(epoch: number, position: number): void {
+    if (this.#outputting && this.#fadeFrames > 0 && this.#gain > 0) this.#captureTail();
     this.#epoch = epoch;
     this.#position = position;
     this.#ring.clear();
@@ -316,40 +340,56 @@ export class OutputCore {
     if (this.#ended || (this.#ring.buffered < this.#marks.target && !this.#eof)) return;
     if (!this.#filled) {
       this.#filled = true;
-      this.#outputting = this.#playIntent;
+      if (this.#playIntent) this.#startOutput();
       this.#announce(this.#playIntent ? 'playing' : 'paused');
     } else if (this.#starved) {
       this.#starved = false;
       if (this.#playIntent) {
-        this.#outputting = true;
+        this.#startOutput();
         this.#announce('playing');
       }
     }
   }
 
-  /** 從 ring 播出最多 `frames` 個 frame；ring 用完時 starved，到 `duration` 時 ended。 */
+  /** 開始輸出：從 0 淡入。 */
+  #startOutput(): void {
+    this.#outputting = true;
+    this.#gain = 0;
+  }
+
+  /**
+   * 從 ring 播出最多 `frames` 個 frame；ring 用完時 starved，到 `duration` 時 ended，pause 的淡出結束時停住。
+   * 停住、starved、ended 回報的 clock 帶停住那個 sample 的 context frame。
+   */
   #play(output: readonly Float32Array[], frames: number): void {
     let written = 0;
     while (written < frames) {
+      if (this.#fadedOut()) {
+        this.#stop(written);
+        return;
+      }
       const ringTime = this.#ring.buffered > 0 ? this.#ring.time : null;
       const remaining = this.#framesUntilEnd(ringTime ?? this.#position);
       if (remaining <= 0) {
-        this.#end();
+        this.#end(written);
         return;
       }
       if (ringTime !== null) {
-        const count = Math.min(frames - written, this.#ring.buffered, remaining);
+        const available = this.#ring.buffered;
+        const count = Math.min(frames - written, available, remaining, this.#framesUntilSilent());
         this.#ring.read(output, written, count);
+        this.#envelope(output, written, count, available);
         written += count;
         this.#position = this.#ring.time ?? this.#position;
       } else if (this.#eof) {
         if (!Number.isFinite(remaining)) {
           // duration 未知：音訊播完就結束。
-          this.#end();
+          this.#end(written);
           return;
         }
         // 沒有音訊（或音訊比媒體短）：以靜音推進到 duration。以 frame 數換算，避免逐次累加的誤差。
-        const count = Math.min(frames - written, remaining);
+        const count = Math.min(frames - written, remaining, this.#framesUntilSilent());
+        this.#envelope(output, written, count, Infinity);
         written += count;
         this.#silence ??= { from: this.#position, frames: 0 };
         this.#silence.frames += count;
@@ -358,12 +398,92 @@ export class OutputCore {
         this.#outputting = false;
         this.#starved = true;
         this.#underruns++;
-        this.#announce('starved');
+        this.#announce('starved', this.#quantumStart + written);
         return;
       }
     }
-    // 剛好播到 duration 時立即結束，不等下一個 quantum。
-    if (this.#framesUntilEnd(this.#position) <= 0) this.#end();
+    // 剛好播到 duration 或淡出結束時立即處理，不等下一個 quantum。
+    if (this.#framesUntilEnd(this.#position) <= 0) this.#end(frames);
+    else if (this.#fadedOut()) this.#stop(frames);
+  }
+
+  /** pause 的淡出已經結束。 */
+  #fadedOut(): boolean {
+    return !this.#playIntent && (this.#fadeFrames === 0 || this.#gain <= 0);
+  }
+
+  /** pause 的淡出結束：停住時鐘並回報 `paused`。 */
+  #stop(written: number): void {
+    this.#outputting = false;
+    this.#announce('paused', this.#quantumStart + written);
+  }
+
+  /** pause 淡出時還要播出幾個 sample 才降到 0；不是在淡出時為 Infinity。 */
+  #framesUntilSilent(): number {
+    if (this.#playIntent || this.#fadeFrames === 0) return Infinity;
+    return Math.max(1, Math.ceil(this.#gain * this.#fadeFrames - EPSILON));
+  }
+
+  /**
+   * 對 `output` 的 `[offset, offset + count)` 套上包絡。`available` 是第一個 sample 之前 ring 內的 frame 數：
+   * 還沒 `eof` 而剩下的 frame 不夠淡出時往下淡出，讓 ring 的最後一個 sample 落在 0。
+   */
+  #envelope(
+    output: readonly Float32Array[],
+    offset: number,
+    count: number,
+    available: number,
+  ): void {
+    const fade = this.#fadeFrames;
+    if (fade === 0) return;
+    const step = 1 / fade;
+    let gain = this.#gain;
+    for (let i = 0; i < count; i++) {
+      const left = available - i;
+      const down = !this.#playIntent || (!this.#eof && left <= gain * fade + EPSILON);
+      gain = down ? gain - step : gain + step;
+      // 逐次加減的浮點誤差不讓包絡停在 0 或 1 的附近。
+      gain = gain < EPSILON ? 0 : gain > 1 - EPSILON ? 1 : gain;
+      if (gain < 1) {
+        for (const channel of output) channel[offset + i] = (channel[offset + i] ?? 0) * gain;
+      }
+    }
+    this.#gain = gain;
+  }
+
+  /** flush 時取出 ring 內接下來的一段舊資料，從目前的包絡線性淡出到 0（ring 不夠時以較短的長度淡完）。 */
+  #captureTail(): void {
+    const frames = Math.min(
+      Math.ceil(this.#gain * this.#fadeFrames - EPSILON),
+      this.#ring.buffered,
+      this.#framesUntilEnd(this.#position),
+    );
+    if (frames <= 0) return;
+    const channels: [Float32Array, Float32Array] = [
+      new Float32Array(frames),
+      new Float32Array(frames),
+    ];
+    this.#ring.read(channels, 0, frames);
+    for (let i = 0; i < frames; i++) {
+      const gain = this.#gain * (1 - (i + 1) / frames);
+      for (const channel of channels) channel[i] = (channel[i] ?? 0) * gain;
+    }
+    this.#tail = { channels, offset: 0 };
+  }
+
+  /** 把 flush 留下的淡出加進這個 quantum。 */
+  #mixTail(output: readonly Float32Array[], frames: number): void {
+    const tail = this.#tail;
+    if (!tail) return;
+    const count = Math.min(frames, tail.channels[0].length - tail.offset);
+    for (const [index, channel] of output.entries()) {
+      const source = tail.channels[index === 0 ? 0 : 1];
+      for (let i = 0; i < count; i++) {
+        channel[i] = (channel[i] ?? 0) + (source[tail.offset + i] ?? 0);
+      }
+    }
+    tail.offset += count;
+    if (tail.offset >= tail.channels[0].length) this.#tail = null;
   }
 
   /** 從媒體時間 `time` 到 `duration` 還有幾個 frame；duration 未知時為 Infinity。 */
@@ -372,13 +492,13 @@ export class OutputCore {
     return Math.round((this.#duration - time) * this.#sampleRate);
   }
 
-  #end(): void {
+  #end(written: number): void {
     // 超出 duration 的音訊截掉。
     this.#ring.clear();
     if (!Number.isNaN(this.#duration)) this.#position = this.#duration;
     this.#outputting = false;
     this.#ended = true;
-    this.#announce('ended');
+    this.#announce('ended', this.#quantumStart + written);
   }
 
   #request(): void {
@@ -390,19 +510,19 @@ export class OutputCore {
     this.#transport.post({ type: 'need', epoch: this.#epoch, frames }, []);
   }
 
-  /** 先送出時鐘，再送出狀態。 */
-  #announce(type: 'playing' | 'paused' | 'starved' | 'ended'): void {
-    this.#clock();
+  /** 先送出時鐘，再送出狀態。`frame` 是 `position` 的 sample 進入 graph 的 context frame。 */
+  #announce(type: 'playing' | 'paused' | 'starved' | 'ended', frame = this.#frame): void {
+    this.#clock(frame);
     this.#report({ type, epoch: this.#epoch });
   }
 
-  #clock(): void {
-    this.#lastClockFrame = this.#frame;
+  #clock(frame = this.#frame): void {
+    this.#lastClockFrame = frame;
     this.#report({
       type: 'clock',
       epoch: this.#epoch,
       position: this.#position,
-      frame: this.#frame,
+      frame,
       buffered: this.#ring.buffered,
       underruns: this.#underruns,
     });
@@ -429,6 +549,7 @@ if ('registerProcessor' in globalThis) {
         this.#core = new OutputCore({
           sampleRate,
           audioBuffer: options.processorOptions.audioBuffer,
+          audioFadeMs: options.processorOptions.audioFadeMs,
           report: (message) => {
             this.port.postMessage(message);
           },
