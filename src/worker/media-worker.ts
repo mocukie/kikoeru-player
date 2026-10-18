@@ -1,10 +1,11 @@
-// media Worker 的訊息處理：init、load（開檔與 probe）、start（音訊供料）與 stats。
+// media Worker 的訊息處理：init、load（開檔與 probe）、start（音訊供料）、port（改接重建後的 worklet）與 stats。
 // 主執行緒每次 load 都 terminate 舊的 Worker（ADR-0002），但 Worker 也處理同一個 Worker 內的 load 取代：
 // 前一個 load 的讀取被中止、instance 被丟棄。
 
 import type {
   MainToWorkerMessage,
   WorkerLoadMessage,
+  WorkerPortMessage,
   WorkerStartMessage,
   WorkerToMainMessage,
   WorkerToWorkletMessage,
@@ -58,6 +59,8 @@ export class MediaWorker {
   #output: AbortController | null = null;
   /** 前一個 start 的供料，結束（含被中止）時 resolve；同一個 demuxer 上的下一個 start 等它停下。 */
   #outputDone: Promise<void> = Promise.resolve();
+  /** 這個 load 最後一個 start（`port` 重新供料時沿用它的音軌）；新的 load 清掉。 */
+  #started: WorkerStartMessage | null = null;
   #libavInstances = 0;
 
   constructor(deps: MediaWorkerDeps) {
@@ -76,9 +79,10 @@ export class MediaWorker {
           port: message.workletPort,
           sampleRate: message.sampleRate,
         };
-        message.workletPort.onmessage = ({ data }: MessageEvent<WorkletToWorkerMessage>) => {
-          this.#onWorkletMessage(data);
-        };
+        this.#listen(message.workletPort);
+        break;
+      case 'port':
+        this.#replacePort(message);
         break;
       case 'load':
         this.#startLoad(message);
@@ -99,6 +103,30 @@ export class MediaWorker {
     }
   }
 
+  #listen(port: MessagePort): void {
+    port.onmessage = ({ data }: MessageEvent<WorkletToWorkerMessage>) => {
+      if (port === this.#env?.port) this.#onWorkletMessage(data);
+    };
+  }
+
+  /** 改接重建後的 worklet，從 `time` 以新的 epoch 重新供料。 */
+  #replacePort(message: WorkerPortMessage<WorkerHost>): void {
+    const env = this.#env;
+    if (!env) {
+      message.port.close();
+      return;
+    }
+    env.port.onmessage = null;
+    env.port.close();
+    env.port = message.port;
+    this.#listen(message.port);
+    // 舊的 worklet 的要求已經沒有意義；新的 worklet 會以新的 epoch 要資料。
+    // 重新供料沿用 start 的流程（從 demuxer 目前的位置解碼，丟掉 `time` 之前的 sample）；
+    // 精準 seek（#37）完成後改走 seek 的流程。
+    const start = this.#started;
+    if (start) this.#start({ ...start, epoch: message.epoch, time: message.time });
+  }
+
   #onWorkletMessage(message: WorkletToWorkerMessage): void {
     switch (message.type) {
       case 'need':
@@ -112,6 +140,7 @@ export class MediaWorker {
 
   #startLoad(message: WorkerLoadMessage<WorkerHost>): void {
     this.#stopOutput();
+    this.#started = null;
     if (this.#load) this.#dispose(this.#load);
     const load: Load = {
       epoch: message.epoch,
@@ -153,6 +182,7 @@ export class MediaWorker {
   #start(message: WorkerStartMessage): void {
     const load = this.#load;
     if (!load) return;
+    this.#started = message;
     this.#stopOutput();
     const output = new AbortController();
     this.#output = output;

@@ -177,18 +177,26 @@ export interface Engine extends EventTarget {
   // ── 音訊解鎖 ──
 
   /**
-   * 在 user gesture 的同步段內呼叫，建立或 resume AudioContext。`play()` 在 user gesture 內被呼叫時也會自動解鎖，
-   * 所以多數 App 不需要直接呼叫。之後沒有 gesture 就 `play()` 時以 `AUDIO_LOCKED` 拒絕。
-   * 建立或 resume AudioContext 之前會同步發出 `beforeaudiostart`。
+   * 在 user gesture 的同步段內呼叫，建立或 resume AudioContext。`play()` 與 `load(source, { paused: false })`
+   * 在 user gesture 內被呼叫時也會自動解鎖，所以多數 App 不需要直接呼叫。沒有 gesture 而無法解鎖時，之後的 `play()`
+   * 以 `AUDIO_LOCKED` 拒絕。AudioContext 已經在執行時什麼都不做。
+   * 建立或 resume AudioContext 之前會同步發出 `beforeaudiostart`。也會趁這時先 compile wasm，縮短第一次 `load()`。
    */
   unlockAudio(): void;
-  /** AudioContext 是否已經解鎖。 */
+  /**
+   * AudioContext 是否已經解鎖（開始過）。解鎖是非同步的：在 gesture 內呼叫 `unlockAudio()` 或 `play()` 之後，
+   * 等 AudioContext 真的開始才變為 true。之後長時間暫停而被 suspend 時仍為 true；AudioContext 停住而被重建時
+   * 回到 false，直到新的 AudioContext 開始。
+   */
   readonly audioUnlocked: boolean;
 
   // ── 指令 ──
 
   /**
    * 載入新媒體，並中止舊媒體的讀取。resolve 時 state 為 `'ready'`（`options.paused === false` 時為 `'playing'`）。
+   *
+   * `options.paused === false` 時與 `play()` 一樣在呼叫內同步解鎖 AudioContext。沒有 gesture 而 AudioContext
+   * 無法開始時，`paused` 回到 true，仍以 state `'ready'` resolve；App 可以由 `audioUnlocked` 得知，請使用者點擊後 `play()`。
    *
    * 只要還有一條可播的音軌或影片軌就成功；不支援的軌照樣列在 `tracks`（`supported: false`），
    * 影片軌不支援或 configure 失敗時 `selectedTracks.video` 為 null、只播音訊。
@@ -210,12 +218,17 @@ export interface Engine extends EventTarget {
    * 執行時沒有媒體（state 為 `'idle'` 或 `'error'`）則以 `DOMException`（name `'InvalidStateError'`）reject，
    * `paused` 仍然改為 false。
    *
-   * 在呼叫內同步 resume AudioContext，所以在 user gesture 內呼叫時會自動解鎖。沒有 gesture 而 AudioContext
-   * 無法開始時，以非致命的 `EngineError('AUDIO_LOCKED')` reject，`paused` 回到 true。
+   * AudioContext 還沒開始、長時間暫停後被 suspend，或被系統中斷過時，在呼叫內同步發出 `beforeaudiostart`
+   * 並 resume AudioContext，所以在 user gesture 內呼叫時會自動解鎖；AudioContext 開始之前不會進入 `'playing'`。
+   * resume 被拒絕或 2 秒內沒有完成時，以非致命的 `EngineError('AUDIO_LOCKED')` reject，`paused` 回到 true；
+   * 逾時而 AudioContext 仍處於系統中斷（iOS 的 `'interrupted'`）時改為非致命的 `EngineError('AUDIO_OUTPUT')`。
    */
   play(): Promise<void>;
 
-  /** 設定 `paused = true`，resolve 於淡出結束、時鐘停止。 */
+  /**
+   * 設定 `paused = true`，resolve 於淡出結束、時鐘停止。暫停期間 AudioContext 繼續執行（worklet 輸出靜音），
+   * 超過 30 秒才 suspend 以省電；之後的 `play()` 會 resume 它。
+   */
   pause(): Promise<void>;
 
   /**
@@ -510,8 +523,9 @@ export interface EngineEventMap {
   /** 播到結尾。 */
   ended: Event;
   /**
-   * fatal 時 state 同時變為 `'error'`。非致命的只在播放中自動降級時發出（例如影片解碼失敗、退回只播音訊），
-   * state 不變；指令自己的失敗只出現在該指令的 reject，不另外發事件。
+   * fatal 時 state 同時變為 `'error'`。非致命的只在播放中自動降級時發出（例如影片解碼失敗、退回只播音訊；
+   * 停住的 AudioContext 被重建後無法開始，`AUDIO_LOCKED` 並暫停），其餘 state 不變；指令自己的失敗只出現在該指令的
+   * reject，不另外發事件。
    */
   error: EngineErrorEvent;
   /** 軌道清單或選擇改變（load 完成、加入外掛音軌、selectTracks 完成、offset 改變、影片解碼失敗退回只播音訊）。 */
@@ -539,7 +553,7 @@ export interface EngineEventMap {
  * - `'command'`：App 的指令（load、play、pause、seek、selectTracks…）。
  * - `'media'`：播放本身的進展（載入完成、緩衝用完或補上、seek 完成、播到結尾）。
  * - `'stall'`：卡住偵測與自動恢復。
- * - `'error'`：致命錯誤。
+ * - `'error'`：致命錯誤；或 AudioContext 停住而被重建後，新的 AudioContext 無法開始（`paused` 變為 true）。
  * - `'interrupted'`：系統中斷音訊（iOS 來電、其他 App 搶走 audio session）；`paused` 變為 true，結束後不自動恢復。
  * - `'external'`：AudioContext 被 Engine 以外的人 suspend／resume（例如 iOS 鎖屏控制直接操作 AudioContext）；
  *   `paused` 跟著變。
@@ -568,8 +582,10 @@ export type StateChangeReason =
  * - `DECODE_FAILED`：播放中解碼錯誤。音訊連續失敗超過 1 媒體秒為致命；影片重新設定後仍失敗為非致命，退回只播音訊。
  *
  * 輸出與環境：
- * - `AUDIO_LOCKED`：沒有 user gesture 就要求播放，或 AudioContext 無法在沒有 gesture 時恢復。
- * - `AUDIO_OUTPUT`：AudioContext／AudioWorklet 無法啟動或恢復。
+ * - `AUDIO_LOCKED`：沒有 user gesture 就要求播放，或 AudioContext 無法在沒有 gesture 時恢復（包括停住而被重建的
+ *   AudioContext，此時以非致命的 `error` 事件送出）。
+ * - `AUDIO_OUTPUT`：AudioContext／AudioWorklet 無法啟動或恢復：系統中斷中 resume 逾時（`play()` 的非致命 reject）、
+ *   AudioContext 停住且重建後仍然停住（致命）。
  * - `ASSET_LOAD_FAILED`：wasm、glue、Worker 或 worklet 載入失敗。
  * - `DESTROYED`：`destroy()` 之後呼叫指令。
  * - `MEMORY_LIMIT`：wasm heap 到達上限，或交錯不良的媒體讓封包佇列超過硬上限（致命），重新載入也無法解決；
