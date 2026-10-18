@@ -19,7 +19,7 @@
 
 ### browser mode
 
-- seek 的起點精準度在這層比對解碼後的 PCM（preroll 依 [ADR-0003](adr/0003-decode-paths.md)）：0 sample；經重採樣的路線 ≤ 1 sample。
+- seek 的起點精準度在這層比對解碼後的 PCM（preroll 依 [ADR-0003](adr/0003-decode-paths.md)）：0 sample；經重採樣的路線 ≤ 1 sample。Matroska／WebM 的時間戳以 ms 為單位，容器本身就有 ±0.5 ms 的捨入，容許 1 ms。
 
 ### E2E
 
