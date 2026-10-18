@@ -39,6 +39,7 @@ Demo 頁的「CI 組媒體」來自 `pnpm media:gen` 產生的 `test/media/out/`
 ### Firefox
 
 - [ ] 真實喇叭與藍牙耳機之間切換輸出裝置時，播放繼續、`currentTime` 不跳。
+- [ ] **背景播放模組與 AudioContext 同時輸出**：勾選「背景播放模組」，反覆 play、pause、seek：beep 仍對準 `currentTime`、沒有斷續（靜音 anchor 與 `AudioContext` 同時播放）。
 - [ ] 連續播放 30 分鐘以上（手動組 `pnpm media:gen:manual` 的長檔）不中斷、不漂移。
 
 ### Safari
@@ -54,10 +55,10 @@ Safari 不跑 E2E，共同項目都要做。
 ### iOS Safari
 
 - [ ] AudioWorklet 能接收 transfer 過來的 `MessagePort`：load 之後能出聲。
-- [ ] 靜音鍵開啟時的行為：關掉 Demo 頁的「背景播放模組」記下有沒有聲音；打開時應該要有聲音（`audioSession.type = "playback"`）。
+- [ ] 靜音鍵開啟時的行為：不勾選 Demo 頁的「背景播放模組」時記下有沒有聲音；勾選時應該要有聲音（`audioSession.type = "playback"`）。
 - [ ] 有線耳機、藍牙耳機的拔除與連接：播放不中斷，或依系統行為暫停後能再按 play 恢復。
 - [ ] **系統中斷**：播放中以來電、Siri 或計時器響鈴中斷，事件 log 出現 `paused=true reason=interrupted`；中斷結束後**不會**自動恢復出聲（WebKit 自己 resume `AudioContext` 時 worklet 仍輸出靜音），按 play 出現 `beforeaudiostart cause=resume` 並恢復播放。若中斷尚未結束就按 play，記下是否得到 `AUDIO_OUTPUT`（`play()` 的非致命 reject，`paused` 回到 true）。
-- [ ] **鎖屏控制**：關掉 Demo 頁的「背景播放模組」（沒有 anchor）時，鎖屏的 Now Playing 是 `AudioContext`；以鎖屏的暫停、播放鍵操作，事件 log 出現 `reason=external`，`paused` 跟著改變。
+- [ ] **鎖屏控制**：不勾選 Demo 頁的「背景播放模組」（沒有 anchor）時，鎖屏的 Now Playing 是 `AudioContext`；以鎖屏的暫停、播放鍵操作，事件 log 出現 `reason=external`，`paused` 跟著改變。
 - [ ] **長時間暫停後的 resume**：暫停 40 秒以上（Engine 已 suspend `AudioContext`）後，分別以頁面的 play、鎖屏的播放鍵恢復，記下哪一種需要 gesture、有沒有聲音。
 - [ ] **記憶體壓力**：以手動組的 `long-40min-s24.wav`（約 660 MB）與 `long-30min-720p.mkv` 播放、往前往後 seek，Demo 頁「cache」一列不超過 64 MiB，分頁不被系統重新載入（`cacheBytes`／`readaheadSeconds` 預設值的實機驗證，「記憶體上限的數值」#23）。
 
@@ -68,7 +69,7 @@ Safari 不跑 E2E，共同項目都要做。
 
 ## 背景與鎖屏
 
-使用背景播放模組（`kikoeru-player/background`，Demo 頁預設打開「背景播放模組」）。底稿來自 kikoeru 的行動瀏覽器背景播放 research；Android 只在使用靜音 anchor 時才有背景播放（[ADR-0006](adr/0006-background-playback-module.md)）。Demo 頁沒有設定 Media Session 的 handler 與 metadata（App 負責），以下項目記下的是沒有 handler 時的行為；Media Session 的上一首、下一首、seek、metadata、artwork 與進度條在 kikoeru 驗證。模組的 log 以 `[background]` 開頭出現在事件 log。
+使用背景播放模組（`kikoeru-player/background`）：以 `https://<LAN IP>:5173/demo/?background=1` 開啟 Demo 頁，或勾選「背景播放模組」（預設不勾選）。底稿來自 kikoeru 的行動瀏覽器背景播放 research；Android 只在使用靜音 anchor 時才有背景播放（[ADR-0006](adr/0006-background-playback-module.md)）。Demo 頁沒有設定 Media Session 的 handler 與 metadata（App 負責），以下項目記下的是沒有 handler 時的行為；Media Session 的上一首、下一首、seek、metadata、artwork 與進度條在 kikoeru 驗證。模組的 log 以 `[background]` 開頭出現在事件 log。
 
 ### 共同（iOS Safari、Android Chrome）
 

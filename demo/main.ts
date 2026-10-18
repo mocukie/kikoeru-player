@@ -58,6 +58,8 @@ const fileInput = element('file', HTMLInputElement);
 const logList = element('log', HTMLOListElement);
 const autoplayInput = element('autoplay', HTMLInputElement);
 const backgroundInput = element('background', HTMLInputElement);
+// 背景播放模組預設不 attach（其他 E2E 只測 Engine 本身）；query `background=1` 時一開始就 attach，實機清單用。
+backgroundInput.checked = new URLSearchParams(location.search).get('background') === '1';
 const nextOnEndedInput = element('next-on-ended', HTMLInputElement);
 element('engine-options', HTMLElement).textContent =
   `EngineOptions（由頁面 query 覆蓋）：${JSON.stringify(options)}`;
