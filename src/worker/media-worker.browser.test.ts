@@ -259,7 +259,7 @@ describe('供料', () => {
     expect(driver.worklet).toEqual([{ type: 'eof', epoch: 1 }]);
   });
 
-  test('port：改接重建後的 worklet，以新的 epoch 從指定時間重新供料，舊的 port 不再收到資料', async () => {
+  test('port：改接重建後的 worklet，以新的 epoch 從指定時間精準 seek 重新供料，舊的 port 不再收到資料', async () => {
     const driver = await WorkerDriver.init(inPage());
     await driver.load({ kind: 'bytes', data: await mediaBytes('audio/flac.flac') });
     await driver.decode(0, { frames: 10_000 });
@@ -270,7 +270,8 @@ describe('供料', () => {
     channel.port2.onmessage = ({ data }: MessageEvent<WorkerToWorkletMessage>) => {
       received.push(data);
     };
-    driver.post({ type: 'port', port: channel.port1, epoch: 2, time: 3 }, [channel.port1]);
+    // 比已經送出的位置早：要經 seek 才回得去。
+    driver.post({ type: 'port', port: channel.port1, epoch: 2, time: 0.125 }, [channel.port1]);
     channel.port2.postMessage({ type: 'need', epoch: 2, frames: 8192 });
     const deadline = performance.now() + 5000;
     while (frames(received, 2) < 8192 && performance.now() < deadline) {
@@ -282,7 +283,7 @@ describe('供料', () => {
 
     expect(frames(received, 2)).toBeGreaterThanOrEqual(8192);
     const first = received.find((m) => m.type === 'pcm');
-    expect(first?.type === 'pcm' && first.time).toBeGreaterThanOrEqual(3);
+    expect(first?.type === 'pcm' && first.time).toBe(0.125);
     expect(driver.worklet.slice(before).filter((m) => m.type === 'pcm')).toEqual([]);
     channel.port2.close();
   });
