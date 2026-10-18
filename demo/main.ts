@@ -74,7 +74,8 @@ function log(message: string): void {
   const item = document.createElement('li');
   item.textContent = line;
   logList.append(item);
-  item.scrollIntoView({ block: 'nearest' });
+  // 只捲動 log 本身：scrollIntoView() 也會捲動頁面，頁面比視窗高時，按鈕會在 E2E 點下去之前被移走。
+  logList.scrollTop = logList.scrollHeight;
 }
 
 element('copy-log', HTMLElement).addEventListener('click', () => {

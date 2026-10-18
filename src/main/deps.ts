@@ -88,6 +88,7 @@ export interface AudioOutput {
   /**
    * 建立新的 `MessageChannel`，一端接上 worklet，回傳交給新的 media Worker 的另一端。
    * worklet 載入失敗時以 `AssetLoadError` reject，其他失敗（例如建立 `AudioWorkletNode`）以原本的錯誤 reject。
+   * 載入完成前已經 `disconnect()` 時也 reject，且不建立 node、不接上 destination。
    */
   connect(): Promise<MessagePort>;
   /**
