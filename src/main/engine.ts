@@ -79,7 +79,7 @@ export function createEngineWith(deps: EngineDeps, options?: EngineOptions): Eng
   return new EngineImpl(deps, resolveEngineOptions(options, deps.platform));
 }
 
-type CommandKind = 'load' | 'play' | 'pause' | 'seek';
+type CommandKind = 'load' | 'unload' | 'play' | 'pause' | 'seek';
 
 /** 暫停超過這麼久（ms）才經佇列 `suspend()` AudioContext 以省電（ADR-0004）。 */
 const IDLE_SUSPEND_MS = 30_000;
@@ -344,13 +344,15 @@ class EngineImpl extends EventTarget implements Engine {
 
   load(source: Source, options: LoadOptions = {}): Promise<MediaInfo> {
     if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    // 外部取消等同被取代：已經 abort 時什麼都不做。
+    if (options.signal?.aborted) return Promise.reject(abortError());
     // 與 play() 一樣在呼叫內同步解鎖。
     const starting = options.paused === false ? this.#startAudio() : null;
     // beforeaudiostart 的 listener 可能已經 destroy()。
     if (this.#destroyedDuring()) return Promise.reject(this.#destroyedError());
     return this.#queue.enqueue(
       'load',
-      (signal) => this.#runLoad(source, options, starting, signal),
+      (signal) => this.#runCancelableLoad(source, options, starting, signal),
       () => true,
     );
   }
@@ -420,7 +422,15 @@ class EngineImpl extends EventTarget implements Engine {
     return notImplemented('setAudioOffset()');
   }
   unload(): Promise<void> {
-    return notImplemented('unload()');
+    if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    return this.#queue.enqueue(
+      'unload',
+      () => {
+        this.#clearMedia();
+        return Promise.resolve();
+      },
+      () => true,
+    );
   }
 
   destroy(): Promise<void> {
@@ -492,6 +502,38 @@ class EngineImpl extends EventTarget implements Engine {
     );
   }
 
+  /**
+   * 帶 `options.signal` 的 load：signal abort 時與被取代一樣中止這個 load，並以 AbortError reject（不論 reason）。
+   * 沒有下一個 load 接手，所以由這裡結束媒體、回到 `'idle'`。load 結束後就不再看 signal。
+   */
+  async #runCancelableLoad(
+    source: Source,
+    options: LoadOptions,
+    starting: Promise<StartResult> | null,
+    signal: AbortSignal,
+  ): Promise<MediaInfo> {
+    const external = options.signal;
+    if (!external) return this.#runLoad(source, options, starting, signal);
+    const controller = new AbortController();
+    const onSuperseded = () => {
+      controller.abort(signal.reason);
+    };
+    const onCanceled = () => {
+      controller.abort(abortError());
+    };
+    signal.addEventListener('abort', onSuperseded);
+    external.addEventListener('abort', onCanceled);
+    try {
+      return await this.#runLoad(source, options, starting, controller.signal);
+    } catch (error) {
+      if (external.aborted && !signal.aborted) this.#clearMedia();
+      throw error;
+    } finally {
+      signal.removeEventListener('abort', onSuperseded);
+      external.removeEventListener('abort', onCanceled);
+    }
+  }
+
   async #runLoad(
     source: Source,
     options: LoadOptions,
@@ -500,7 +542,12 @@ class EngineImpl extends EventTarget implements Engine {
     reloadOf: ReloadOf | null = null,
   ): Promise<MediaInfo> {
     this.#terminateWorker();
-    if (!reloadOf) this.#lastLoad = { source, options };
+    if (!reloadOf) {
+      // reload() 不沿用這次 load 的 signal。
+      const rest = { ...options };
+      delete rest.signal;
+      this.#lastLoad = { source, options: rest };
+    }
     const epoch = ++this.#epoch;
     const startTime = Number.isFinite(options.startTime) ? Math.max(0, options.startTime ?? 0) : 0;
     const load: LoadContext = {
@@ -661,19 +708,34 @@ class EngineImpl extends EventTarget implements Engine {
 
   async #runDestroy(): Promise<void> {
     this.#isDestroyed = true;
-    this.#epoch++;
     this.#queue.close(() => this.#destroyedError());
-    this.#loadContext = null;
-    this.#terminateWorker();
     // 主執行緒還沒有持有任何 VideoFrame；影片的 issue 在這裡 close() 它們。
+    this.#clearMedia();
     // 斷開 worklet 並經佇列 close()；佇列的 timeout 保證一定會 settle，失敗也不讓 destroy() 失敗。
     const closing = this.#context.close();
     this.#stopWatchdog();
     this.#updateIdleSuspend();
-    this.#error = null;
-    this.#publishMedia(null, noSelection);
-    this.#setState('idle', 'command', true);
     await closing;
+  }
+
+  /**
+   * 結束當前媒體、回到 `'idle'`（`unload()` 與 `destroy()`）：terminate Worker、遞增 epoch 並 flush worklet（停掉 ring
+   * 內剩下的聲音），清掉媒體的鏡像與 `reload()` 的來源。AudioContext 與 worklet 不動。
+   */
+  #clearMedia(): void {
+    this.#terminateWorker();
+    this.#loadContext = null;
+    this.#lastLoad = null;
+    this.#played = false;
+    this.#error = null;
+    this.#watchdogStep = 0;
+    this.#buffer = null;
+    this.#lastReadError = null;
+    const epoch = ++this.#epoch;
+    this.#flushAudio(0);
+    this.#publishMedia(null, noSelection);
+    if (this.#epoch !== epoch) return;
+    this.#setState('idle', 'command', true);
   }
 
   // ───────────────────────────── 訊息 ─────────────────────────────
@@ -723,7 +785,11 @@ class EngineImpl extends EventTarget implements Engine {
       },
       crash: (cause) => {
         if (worker !== this.#worker) return;
-        this.#fail(this.#fatal('INTERNAL', 'media Worker 崩潰', cause));
+        this.#fail(
+          cause instanceof AssetLoadError
+            ? this.#fatal('ASSET_LOAD_FAILED', 'media Worker 的 script 載入失敗', cause)
+            : this.#fatal('INTERNAL', 'media Worker 崩潰', cause),
+        );
       },
     });
     this.#worker = worker;

@@ -38,6 +38,17 @@ function spawn(
   );
 }
 
+test('script 執行完畢就送出 ready，在任何其他訊息之前', async () => {
+  const worker = new Worker(new URL('./index.js', import.meta.url), { type: 'module' });
+  workers.push(worker);
+  const first = await new Promise<WorkerToMainMessage>((resolve) => {
+    worker.onmessage = ({ data }: MessageEvent<WorkerToMainMessage>) => {
+      resolve(data);
+    };
+  });
+  expect(first).toEqual({ type: 'ready' });
+});
+
 test('http 來源：回覆 probe 結果與帶 epoch 的 PCM，直到 EOF', async () => {
   const driver = await spawn();
   const media = await driver.load({ kind: 'http', url: mediaUrl('audio/flac.flac') }, 3);
@@ -192,7 +203,7 @@ describe('http 的故障（test/server 的故障注入）', () => {
       source: { kind: 'http', url: faultyMediaUrl('audio/flac.flac', 'fault=stall@0') },
     });
     await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(driver.messages.filter((m) => m.type !== 'stats')).toEqual([]);
+    expect(driver.messages.filter((m) => m.type !== 'stats' && m.type !== 'ready')).toEqual([]);
 
     const media = await driver.load({ kind: 'http', url: mediaUrl('audio/flac.flac') }, 2);
     expect(audioTracks(media)).toHaveLength(1);

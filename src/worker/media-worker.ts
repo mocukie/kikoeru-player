@@ -17,7 +17,7 @@ import type {
 import { BufferPool, Demand, type AudioPipeline } from './audio-pipeline.js';
 import { BufferTracker } from './buffer-tracker.js';
 import { initialByteRate } from './byte-rate.js';
-import { toWireError, WorkerError } from './errors.js';
+import { crashReason, toWireError, WorkerError } from './errors.js';
 import type { WorkerHost } from './host.js';
 import { LibavMedia, type Instantiate, type LibavAssets } from './libav.js';
 import { NORMAL_QUEUE_BYTES, NORMAL_QUEUE_SECONDS } from './packet-queue.js';
@@ -370,9 +370,14 @@ export class MediaWorker {
   }
 
   #reportError(epoch: number, error: unknown): void {
-    if (error instanceof WebAssembly.RuntimeError) {
-      // wasm trap 之後 instance 不能再用；主執行緒回報 INTERNAL（完整的崩潰路線見 #40）。
-      this.#deps.postMessage({ type: 'crash', reason: 'wasm-trap', message: error.message });
+    // wasm trap 或記憶體用完：instance 不能再用，主執行緒回報 INTERNAL 並 terminate 這個 Worker。
+    const reason = crashReason(error);
+    if (reason !== null) {
+      this.#deps.postMessage({
+        type: 'crash',
+        reason,
+        message: error instanceof Error ? error.message : String(error),
+      });
       return;
     }
     this.#deps.postMessage({ type: 'error', epoch, error: toWireError(error) });

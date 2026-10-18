@@ -39,8 +39,8 @@ function engineOptions(query: URLSearchParams): EngineOptions {
 }
 
 const options = engineOptions(new URLSearchParams(location.search));
-const engine = createEngine(options);
-globalThis.engine = engine;
+/** 目前的 Engine；destroy 之後以「建立新的 Engine」換一個新的（E2E 的 leak 測試也用它）。 */
+let engine: Engine;
 
 function element<T extends HTMLElement>(id: string, type: new () => T): T {
   const found = document.getElementById(id);
@@ -104,40 +104,48 @@ function command(name: string, run: () => Promise<unknown>): void {
   );
 }
 
-engine.addEventListener('statechange', (e) => {
-  log(`statechange ${e.previous} → ${e.state} paused=${String(e.paused)} reason=${e.reason}`);
-});
-engine.addEventListener('durationchange', (e) => {
-  log(`durationchange ${String(e.duration)}`);
-});
-engine.addEventListener('trackschange', (e) => {
-  log(`trackschange ${String(e.tracks.length)} 軌 selected=${JSON.stringify(e.selected)}`);
-});
-engine.addEventListener('seeked', (e) => {
-  log(`seeked ${e.currentTime.toFixed(3)}`);
-});
-engine.addEventListener('ended', () => {
-  log('ended');
-});
-engine.addEventListener('error', (e) => {
-  log(`error ${describeError(e.error)}`);
-});
-engine.addEventListener('bufferedchange', (e) => {
-  log(
-    `bufferedchange ${e.buffered.map((r) => `[${r.start.toFixed(3)}, ${r.end.toFixed(3)}]`).join(' ') || '[]'}`,
-  );
-});
-engine.addEventListener('stall', (e) => {
-  log(
-    `stall position=${e.position.toFixed(3)} since=${(e.since / 1000).toFixed(3)}s，中止讀取並重新 seek`,
-  );
-});
-engine.addEventListener('stallrecovered', (e) => {
-  log(`stallrecovered stalledMs=${e.stalledMs.toFixed(0)} attempts=${String(e.attempts)}`);
-});
-engine.addEventListener('beforeaudiostart', (e) => {
-  log(`beforeaudiostart cause=${e.cause}`);
-});
+/** 建立 Engine 並接上事件 log；`globalThis.engine` 指向新的 Engine。 */
+function setupEngine(): void {
+  const target = createEngine(options);
+  engine = target;
+  globalThis.engine = target;
+  target.addEventListener('statechange', (e) => {
+    log(`statechange ${e.previous} → ${e.state} paused=${String(e.paused)} reason=${e.reason}`);
+  });
+  target.addEventListener('durationchange', (e) => {
+    log(`durationchange ${String(e.duration)}`);
+  });
+  target.addEventListener('trackschange', (e) => {
+    log(`trackschange ${String(e.tracks.length)} 軌 selected=${JSON.stringify(e.selected)}`);
+  });
+  target.addEventListener('seeked', (e) => {
+    log(`seeked ${e.currentTime.toFixed(3)}`);
+  });
+  target.addEventListener('ended', () => {
+    log('ended');
+  });
+  target.addEventListener('error', (e) => {
+    log(`error ${describeError(e.error)}`);
+  });
+  target.addEventListener('bufferedchange', (e) => {
+    log(
+      `bufferedchange ${e.buffered.map((r) => `[${r.start.toFixed(3)}, ${r.end.toFixed(3)}]`).join(' ') || '[]'}`,
+    );
+  });
+  target.addEventListener('stall', (e) => {
+    log(
+      `stall position=${e.position.toFixed(3)} since=${(e.since / 1000).toFixed(3)}s，中止讀取並重新 seek`,
+    );
+  });
+  target.addEventListener('stallrecovered', (e) => {
+    log(`stallrecovered stalledMs=${e.stalledMs.toFixed(0)} attempts=${String(e.attempts)}`);
+  });
+  target.addEventListener('beforeaudiostart', (e) => {
+    log(`beforeaudiostart cause=${e.cause}`);
+  });
+}
+
+setupEngine();
 
 // ───────────────────────────── 操作 ─────────────────────────────
 
@@ -183,6 +191,21 @@ element('unlock', HTMLElement).addEventListener('click', () => {
 });
 element('reload', HTMLElement).addEventListener('click', () => {
   command('reload', () => engine.reload().then((info) => info.format));
+});
+element('unload', HTMLElement).addEventListener('click', () => {
+  command('unload', () => engine.unload());
+});
+element('destroy', HTMLElement).addEventListener('click', () => {
+  command('destroy', () => engine.destroy());
+});
+element('recreate', HTMLElement).addEventListener('click', () => {
+  // 沒有 destroy 的舊 Engine 先 destroy，避免留著它的 Worker 與 AudioContext。
+  const previous = engine;
+  command('destroy（舊的 Engine）', () => previous.destroy());
+  setupEngine();
+  engine.volume = Number(volumeInput.value);
+  engine.muted = mutedInput.checked;
+  log('建立新的 Engine');
 });
 
 // 進度條：拖曳中只更新顯示的時間，放開（change）時才 seek；其餘時候跟著 currentTime。
@@ -235,13 +258,15 @@ const audioStatsText = element('audio-stats', HTMLElement);
 const bufferedText = element('buffered', HTMLElement);
 const cacheStatsText = element('cache-stats', HTMLElement);
 const networkStatsText = element('network-stats', HTMLElement);
+const resourcesText = element('resources', HTMLElement);
 
 const MiB = 1024 * 1024;
 
-// getStats() 是非同步的：每秒取一次 ring 水位、underrun 與輸出延遲（實機檢查藍牙延遲用），以及 Range 快取與網路。
+// getStats() 是非同步的：每秒取一次 ring 水位、underrun、輸出延遲（實機檢查藍牙延遲用）、Range 快取、網路
+// 與存活的資源數。
 setInterval(() => {
   engine.getStats().then(
-    ({ audio, cache, network, bufferAhead, packetQueue }) => {
+    ({ audio, cache, network, bufferAhead, packetQueue, resources }) => {
       audioStatsText.textContent =
         `ring ${audio.ringMs.toFixed(0)} ms／target ${String(audio.targetMs)} ms，` +
         `underruns ${String(audio.underruns)}，outputLatency ${audio.outputLatencyMs.toFixed(1)} ms`;
@@ -255,6 +280,9 @@ setInterval(() => {
         network.inflight
           .map((r) => ` [${String(r.start)}-${String(r.end)} ${r.elapsedMs.toFixed(0)} ms]`)
           .join('');
+      resourcesText.textContent =
+        `workers ${String(resources.workers)}，libavInstances ${String(resources.libavInstances)}，` +
+        `openVideoFrames ${String(resources.openVideoFrames)}`;
     },
     () => undefined,
   );
