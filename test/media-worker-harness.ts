@@ -98,12 +98,11 @@ export class WorkerDriver {
   /** `module` 預設為 `wasmAssets()` 的 Module；給別的 Module 可以模擬與 glue 不符的資產。 */
   static async init(
     endpoint: WorkerEndpoint,
-    sampleRate = 48_000,
-    module?: WebAssembly.Module,
+    options: { sampleRate?: number; module?: WebAssembly.Module } = {},
   ): Promise<WorkerDriver> {
     const assets = await wasmAssets();
-    const glueUrl = assets.glueUrl;
-    module ??= assets.module;
+    const { sampleRate = 48_000, module = assets.module } = options;
+    const { glueUrl } = assets;
     const channel = new MessageChannel();
     endpoint.post({ type: 'init', module, glueUrl, workletPort: channel.port1, sampleRate }, [
       channel.port1,

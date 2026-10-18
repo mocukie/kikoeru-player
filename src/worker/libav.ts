@@ -26,7 +26,7 @@ export type Instantiate = (
   imports: WebAssembly.Imports,
 ) => Promise<WebAssembly.Instance>;
 
-/** 主執行緒 compile 好的 wasm 與 glue 的 URL。 */
+/** 建立 libav instance 需要的東西：主執行緒 compile 好的 wasm、glue 的 URL，以及建立 instance 的方式。 */
 export interface LibavAssets {
   module: WebAssembly.Module;
   glueUrl: string;

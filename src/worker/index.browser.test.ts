@@ -28,8 +28,7 @@ function spawn(module?: WebAssembly.Module): Promise<WorkerDriver> {
         };
       },
     },
-    48_000,
-    module,
+    { module },
   );
 }
 

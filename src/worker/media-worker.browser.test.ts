@@ -30,7 +30,7 @@ function inPage(deps: Omit<MediaWorkerDeps, 'postMessage'> = {}): WorkerEndpoint
 }
 
 async function decodeFile(path: string, sampleRate = 48_000) {
-  const driver = await WorkerDriver.init(inPage(), sampleRate);
+  const driver = await WorkerDriver.init(inPage(), { sampleRate });
   const media = await driver.load({ kind: 'bytes', data: await mediaBytes(path) });
   const [track] = audioTracks(media);
   if (!track) throw new Error(`${path} 沒有音軌`);
@@ -383,7 +383,9 @@ describe('建立 libav instance 失敗', () => {
     ['LinkError', 'a', 'kikoeru_missing'],
     ['TypeError', 'kikoeru', 'missing'],
   ])('imports 不符（%s）為 ASSET_LOAD_FAILED，並丟掉 instance', async (_, module, field) => {
-    const driver = await WorkerDriver.init(inPage(), 48_000, importOnlyWasm(module, field));
+    const driver = await WorkerDriver.init(inPage(), {
+      module: importOnlyWasm(module, field),
+    });
     const data = await mediaBytes('audio/flac.flac');
     await expect(driver.load({ kind: 'bytes', data })).rejects.toMatchObject({
       code: 'ASSET_LOAD_FAILED',
