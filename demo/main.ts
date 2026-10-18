@@ -17,6 +17,8 @@ function element<T extends HTMLElement>(id: string, type: new () => T): T {
 }
 
 const mediaSelect = element('media', HTMLSelectElement);
+const faultSelect = element('fault', HTMLSelectElement);
+const faultInput = element('fault-custom', HTMLInputElement);
 const urlInput = element('url', HTMLInputElement);
 const fileInput = element('file', HTMLInputElement);
 const logList = element('log', HTMLOListElement);
@@ -49,7 +51,8 @@ element('copy-log', HTMLElement).addEventListener('click', () => {
 
 function describeError(error: unknown): string {
   if (error instanceof EngineError) {
-    return `${error.code}${error.fatal ? '（fatal）' : ''}：${error.message}`;
+    const detail = Object.keys(error.detail).length > 0 ? ` ${JSON.stringify(error.detail)}` : '';
+    return `${error.code}${error.fatal ? '（fatal）' : ''} position=${error.position.toFixed(3)}${detail}：${error.message}`;
   }
   return error instanceof Error ? `${error.name}：${error.message}` : String(error);
 }
@@ -95,8 +98,23 @@ engine.addEventListener('beforeaudiostart', (e) => {
 function selectedSource(): { name: string; source: Source } {
   const file = fileInput.files?.[0];
   if (file) return { name: file.name, source: { kind: 'blob', blob: file } };
-  const url = urlInput.value.trim() || new URL(`/media/${mediaSelect.value}`, location.href).href;
+  const url = urlInput.value.trim() || mediaUrl();
   return { name: url, source: { kind: 'http', url } };
+}
+
+let loadSeq = 0;
+
+/**
+ * CI 組媒體的 URL，加上選擇的故障參數（test/server/faults.ts）。每次 load 帶一個新的 `id`，故障的請求計數
+ * 從頭開始；`reload()` 沿用同一個 URL，所以 `401@4` 這類只發生一次的故障在 reload 後不再出現。
+ */
+function mediaUrl(): string {
+  const url = new URL(`/media/${mediaSelect.value}`, location.href);
+  const faults = faultInput.value.trim() || faultSelect.value;
+  if (faults) {
+    url.search = `id=${String(Date.now())}-${String(++loadSeq)}&${faults.replace(/^\?/, '')}`;
+  }
+  return url.href;
 }
 
 element('load', HTMLElement).addEventListener('click', () => {
@@ -149,6 +167,7 @@ const unlockedText = element('audio-unlocked', HTMLElement);
 const currentTimeText = element('current-time', HTMLElement);
 const durationText = element('duration', HTMLElement);
 const mediaText = element('media-info', HTMLElement);
+const errorText = element('error', HTMLElement);
 
 function render(): void {
   stateText.textContent = engine.state;
@@ -163,6 +182,7 @@ function render(): void {
     seekBar.value = String(engine.currentTime);
     seekTime.value = engine.currentTime.toFixed(3);
   }
+  errorText.textContent = engine.error ? describeError(engine.error) : '—';
   const media = engine.media;
   mediaText.textContent = media
     ? `${media.format}，${String(media.size)} bytes，${media.tracks

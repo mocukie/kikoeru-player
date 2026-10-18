@@ -57,8 +57,11 @@ export interface EngineOptions {
     readaheadSeconds?: number;
   };
   /**
-   * 讀取失敗的自動重試：只針對 5xx 與網路錯誤，以指數退避重試；401／403／404 不重試、直接回報。
-   * `attempts` 是 0 以上的整數，`baseDelayMs` 不得為負。預設 `{ attempts: 3, baseDelayMs: 500 }`。
+   * 讀取失敗的自動重試：只針對 5xx 與網路錯誤（含回應中途斷線），以指數退避重試；其他 HTTP 錯誤
+   *（401／403／404／410、不回 206 等）不重試、直接回報。`attempts` 是第一次請求之外最多重試的次數，第 n 次重試前
+   * 等 `baseDelayMs * 2^(n-1)` ms；退避中的等待也會隨讀取一起被中止（例如被 seek 或 load 取代）。
+   * 用完仍失敗就以最後一次的錯誤回報。`attempts` 是 0 以上的整數，`baseDelayMs` 不得為負。
+   * 預設 `{ attempts: 3, baseDelayMs: 500 }`。
    */
   retry?: { attempts?: number; baseDelayMs?: number };
   /**
@@ -364,7 +367,7 @@ export interface HttpSource {
   credentials?: RequestCredentials;
   /** 每個請求附帶的 header。 */
   headers?: Record<string, string>;
-  /** 已知的來源大小（bytes），可省掉一次探測。 */
+  /** 已知的來源大小（bytes），可省掉一次探測；沒有給時以第一個 Range 回應的 `Content-Range` 取得。 */
   size?: number;
 }
 
@@ -581,9 +584,9 @@ export type StateChangeReason =
  * - `SOURCE_UNAUTHORIZED`：401；App 應走 session 失效流程，之後 `reload()`。
  * - `SOURCE_FORBIDDEN`：403。
  * - `SOURCE_NOT_FOUND`：404／410。
- * - `SOURCE_SERVER`：5xx，自動重試後仍失敗。
- * - `SOURCE_NETWORK`：網路中斷、CORS、DNS，自動重試後仍失敗。
- * - `SOURCE_RANGE_UNSUPPORTED`：伺服器不回 206。
+ * - `SOURCE_SERVER`：5xx，自動重試後仍失敗；其他沒有分類的 HTTP 錯誤（例如 429）也是這個，但不重試。
+ * - `SOURCE_NETWORK`：網路中斷（含回應中途斷線）、CORS、DNS，自動重試後仍失敗。
+ * - `SOURCE_RANGE_UNSUPPORTED`：伺服器不回 206（忽略 Range 回應 200、416），或沒有回報檔案大小。
  * - `SOURCE_CHANGED`：`reload()` 時軌道的組成與先前不同。
  *
  * 格式與解碼：

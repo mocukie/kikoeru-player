@@ -67,9 +67,18 @@
 
 `test/server/` 的 Vite middleware 供 browser mode 與 Demo 頁共用：
 
-- `/media/*` 提供 `test/media/out/` 的檔案，支援 Range；`/media/index.json` 列出 CI 組媒體的路徑，Demo 頁以它列出可選的媒體。
+- `/media/*` 提供 `test/media/out/` 的檔案，支援 Range；`/media/index.json` 列出 CI 組媒體的路徑，Demo 頁以它列出可選的媒體。browser mode 的測試媒體也走 `/media/*`：Vitest 自己的靜態檔案不正確處理 Range。
 - `/src/wasm/*` 原樣提供 `wasm/dist/` 的檔案，讓 Engine 預設的 wasm 與 glue 位置在 dev 與測試中也能用（見[架構規則「平台與部署」](architecture.md#平台與部署)）。
-- 故障由 query 參數控制，例如 `?fault=503@2`、`stall@1MB`、`drop@500KB`、`delay=200`；401 也由它模擬。
+- `/media/*` 的故障由 query 參數控制（實作與完整說明在 `test/server/faults.ts`），Demo 頁可以選擇：
+
+  | 參數 | 效果 |
+  |---|---|
+  | `fault=<status>@<n>` | 第 n 個請求回應 `<status>`，例如 `503@2`、`401@4`；`200` 表示忽略 Range、回應整個檔案 |
+  | `fault=stall@<位置>` | 第一個涵蓋該檔案位置的回應送到那裡就停住，連線保持開著，例如 `stall@1MB` |
+  | `fault=drop@<位置>` | 同上，但在那裡切斷連線，例如 `drop@500KB` |
+  | `delay=<ms>` | 每個回應先等 `<ms>` 毫秒 |
+
+  規則結尾加 `+`（URL 中寫成 `%2B`）表示持續發生，例如 `503@2+`；多個規則以逗號分隔。請求的計數以完整的 URL 區分，測試在 query 加上不重複的 `id` 就互不影響；同一個 URL 的 `reload()` 接著計數。
 
 不需要 kikoeru 後端。cookie、`.wasm` 的 Content-Type 與壓縮屬於 kikoeru 端的部署驗證。
 

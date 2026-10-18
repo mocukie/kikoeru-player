@@ -26,6 +26,7 @@
         align-items: center;
       }
       input[type='url'],
+      input[type='text'],
       input[type='range'],
       select {
         flex: 1 1 16rem;
@@ -66,6 +67,27 @@
         <select id="media"></select>
       </div>
       <div class="row">
+        <label for="fault">CI 組媒體的故障注入</label>
+        <select id="fault">
+          <option value="">無</option>
+          <option value="fault=401@4">401@4：播放中 session 失效（之後 reload 可接續）</option>
+          <option value="fault=403@1">403@1：開檔時 403</option>
+          <option value="fault=410@1">410@1：開檔時 410</option>
+          <option value="fault=200@1">200@1：伺服器不回 206</option>
+          <option value="fault=503@2">503@2：一次 503，重試後恢復</option>
+          <option value="fault=503@2%2B">503@2+：持續 503，重試用完後錯誤</option>
+          <option value="fault=drop@500KB">drop@500KB：一次斷線，重試後恢復</option>
+          <option value="fault=drop@500KB%2B">drop@500KB+：持續斷線，重試用完後錯誤</option>
+          <option value="fault=stall@1MB">stall@1MB：送到 1 MiB 停住</option>
+          <option value="delay=200">delay=200：每個回應慢 200 ms</option>
+        </select>
+        <input
+          id="fault-custom"
+          type="text"
+          placeholder="或自訂 query，例如 fault=503@2&amp;delay=200（填了就優先使用）"
+        />
+      </div>
+      <div class="row">
         <label for="url">或 URL</label>
         <input id="url" type="url" placeholder="https://…（填了就優先使用）" />
       </div>
@@ -101,6 +123,8 @@
       <dd id="current-time">0.000</dd>
       <dt>duration</dt>
       <dd id="duration">NaN</dd>
+      <dt>error</dt>
+      <dd id="error">—</dd>
       <dt>media</dt>
       <dd id="media-info">—</dd>
     </dl>
