@@ -37,7 +37,7 @@
 - **leak 測試**：連續 load 100 次，混入被取代的 load、播放中 destroy、外掛音軌，使用 CI 組的短檔。斷言：
   - 以 CDP 數 Worker target，並在 GC 後量 JS heap。
   - `getStats().resources = { workers, libavInstances, openVideoFrames }`：destroy 後全為 0；換檔後 `workers` 為 1、`libavInstances` 等於來源數。
-  - `network.inflight` 為空。
+  - destroy 後 `network.inflight` 為空；換檔後進行中的請求都屬於目前的媒體（預讀）。
 
 ## 瀏覽器
 
@@ -79,6 +79,8 @@
   | `delay=<ms>` | 每個回應先等 `<ms>` 毫秒 |
 
   規則結尾加 `+`（URL 中寫成 `%2B`）表示持續發生，例如 `503@2+`；多個規則以逗號分隔。請求的計數以完整的 URL 區分，測試在 query 加上不重複的 `id` 就互不影響；同一個 URL 的 `reload()` 接著計數。
+
+  預讀會在播放位置之前發出請求，「第 n 個請求」不一定在播放到那裡時才發生。要讓網路跟不上播放，Demo 頁的 query 可以縮短預讀（`/demo/?readahead=0.5`，另有 `cacheMiB`、`stallTimeout`、`stallAttempts`，見 `demo/main.ts`），再加上 `delay`。
 
 不需要 kikoeru 後端。cookie、`.wasm` 的 Content-Type 與壓縮屬於 kikoeru 端的部署驗證。
 

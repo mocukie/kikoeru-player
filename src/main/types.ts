@@ -65,11 +65,14 @@ export interface EngineOptions {
    */
   retry?: { attempts?: number; baseDelayMs?: number };
   /**
-   * 卡住偵測（ms），必須大於 0：buffering 超過這個時間就中止讀取、從目前位置重新 seek，並發出 `stall`。
-   * 預設 8000。
+   * 卡住偵測（ms），必須大於 0：buffering 超過這個時間就中止讀取、從目前位置重新 seek，並發出 `stall`；
+   * 之後每再過這麼久仍在 buffering 就再試一次。預設 8000。
    */
   stallTimeout?: number;
-  /** 卡住後自動恢復的次數上限，0 以上的整數；用完仍卡住就以最後一次的讀取錯誤進入 `'error'`。預設 2。 */
+  /**
+   * 卡住後自動恢復的次數上限，0 以上的整數；用完仍卡住就以最後一次的讀取錯誤（致命）進入 `'error'`，
+   * `statechange` 的 reason 為 `'stall'`。請求只是停住、沒有失敗過時，錯誤為 `SOURCE_NETWORK`。預設 2。
+   */
   stallAttempts?: number;
   /** 預設的偏好語言（BCP 47），`load()` 的 `preferredLanguages` 會覆蓋。預設沒有偏好。 */
   preferredLanguages?: { audio?: string[]; subtitle?: string[] };

@@ -4,6 +4,7 @@ import type {
   HostTypes,
   MainToWorkerMessage,
   ProbedMedia,
+  WorkerStats,
   WorkerToMainMessage,
 } from '../../src/protocol/index.js';
 
@@ -72,16 +73,41 @@ export class FakeMediaWorker {
     this.reply({ type: 'probe', epoch: load.epoch, media });
   }
 
-  /** 回覆最後一個 `stats` 要求（還沒收到時等第一個）。 */
-  async stats(libavInstances: number): Promise<void> {
+  /** 回覆最後一個 `stats` 要求（還沒收到時等第一個）；`stats` 沒有給的欄位為 0／空值。 */
+  async stats(
+    libavInstances: number,
+    stats: Partial<Omit<WorkerStats, 'libavInstances'>> = {},
+  ): Promise<void> {
     const request = await this.next('stats', Math.max(1, this.messages('stats').length));
-    this.reply({ type: 'stats', id: request.id, stats: { libavInstances } });
+    this.reply({
+      type: 'stats',
+      id: request.id,
+      stats: { ...emptyWorkerStats(), ...stats, libavInstances },
+    });
   }
 
   /** 模擬 Worker 的 `onerror`。 */
   crash(error: unknown = new Error('worker crashed')): void {
     this.#handlers.crash(error);
   }
+}
+
+/** 什麼都沒有的 `WorkerStats`。 */
+export function emptyWorkerStats(): WorkerStats {
+  return {
+    libavInstances: 0,
+    cache: {
+      bytes: 0,
+      limitBytes: 0,
+      aheadBytes: 0,
+      readaheadTarget: 0,
+      fetching: false,
+      hits: 0,
+      misses: 0,
+    },
+    network: { bytesLoaded: 0, inflight: [] },
+    packetQueue: { audioSeconds: 0, videoSeconds: 0, bytes: 0 },
+  };
 }
 
 /** 假 Worker 的 factory，依建立順序記錄每個 Worker。 */

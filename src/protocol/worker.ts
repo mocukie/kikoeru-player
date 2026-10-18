@@ -24,6 +24,18 @@ export interface WorkerInitMessage<H extends HostTypes> {
   sampleRate: number;
   /** http 讀取的自動重試（`EngineOptions.retry`）。 */
   retry: RetryPolicy;
+  /** 記憶體與預讀的上限（ADR-0007）。 */
+  limits: WorkerLimits;
+}
+
+/** 補上平台預設值的 `EngineOptions.limits`，加上內部的封包佇列硬上限。 */
+export interface WorkerLimits {
+  /** Range 快取的上限（bytes），Worker 內所有 http 來源共用。 */
+  cacheBytes: number;
+  /** 每個選用中來源的預讀目標（秒）。 */
+  readaheadSeconds: number;
+  /** 封包佇列的硬上限（bytes），超過時 fatal 的 `MEMORY_LIMIT`。 */
+  packetQueueBytes: number;
 }
 
 /**
@@ -83,7 +95,9 @@ export type WorkerToMainMessage =
   | WorkerProbeMessage
   | WorkerErrorMessage
   | WorkerCrashMessage
-  | WorkerStatsMessage;
+  | WorkerStatsMessage
+  | WorkerBufferMessage
+  | WorkerReadErrorMessage;
 
 /**
  * Worker 的 script 執行完畢、開始接收訊息時送出的第一個訊息。在它之前的 `error` 事件是 script 載入失敗
@@ -108,6 +122,27 @@ export interface WorkerErrorMessage {
 }
 
 /**
+ * 輸出開始後，資料備妥的進度：媒體時間 `end` 之前的資料已經在 Worker 內（封包佇列，加上 Range 快取中的預讀 bytes
+ * 以位元組率換算的秒數），是估計值。`end` 變動或 `eof`／`fetching` 改變時送出；每個 epoch 在第一次 demux 之後才送。
+ */
+export interface WorkerBufferMessage {
+  type: 'buffer';
+  epoch: number;
+  /** 已備妥資料的終點（秒）；不超過 duration。 */
+  end: number;
+  /** 已備妥的資料到達來源的結尾（`bytes`／`blob` 來源一律為 true）。 */
+  eof: boolean;
+  /** 預讀正在抓取；false 表示已達目標（或沒有預讀），等待也不會再增加資料。 */
+  fetching: boolean;
+}
+
+/** http 的一個請求失敗（包括之後會重試的）；非致命，供卡住而放棄時回報最後一次的讀取錯誤。 */
+export interface WorkerReadErrorMessage {
+  type: 'readerror';
+  error: WireError;
+}
+
+/**
  * Worker 無法繼續運作：wasm trap，或 wasm 記憶體用完（`MAXIMUM_MEMORY`）。主執行緒回報 `INTERNAL` 並 terminate Worker；
  * 不帶 epoch，因為整個 Worker 都不能再用。
  */
@@ -128,4 +163,21 @@ export interface WorkerStatsMessage {
 export interface WorkerStats {
   /** 目前存在的 libav instance 數：建立 instance 時加一，被取代或 open／probe 失敗而丟棄時減一。 */
   libavInstances: number;
+  /** Range 快取，欄位同 `EngineStats.cache`；沒有 http 來源時 bytes 等為 0。 */
+  cache: {
+    bytes: number;
+    limitBytes: number;
+    aheadBytes: number;
+    readaheadTarget: number;
+    fetching: boolean;
+    hits: number;
+    misses: number;
+  };
+  /** 網路，欄位同 `EngineStats.network`。 */
+  network: {
+    bytesLoaded: number;
+    inflight: { url: string; start: number; end: number; elapsedMs: number }[];
+  };
+  /** 封包佇列，欄位同 `EngineStats.packetQueue`。 */
+  packetQueue: { audioSeconds: number; videoSeconds: number; bytes: number };
 }
