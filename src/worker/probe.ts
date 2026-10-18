@@ -41,6 +41,8 @@ export interface RawStream {
   /** `AVStream.disposition`。 */
   disposition: number;
   extradata: Uint8Array | null;
+  /** `AVCodecParameters.bit_rate`（bits/s）；沒有記錄時為 0。 */
+  bitRate: number;
 }
 
 const AV_DISPOSITION_DEFAULT = 0x1;

@@ -6,12 +6,21 @@ import type {
   ProbedAudioTrack,
   ProbedMedia,
   RetryPolicy,
+  WorkerLimits,
+  WorkerStats,
   WorkerToMainMessage,
   WorkerToWorkletMessage,
   WorkletPcmMessage,
 } from '../src/protocol/index.js';
 import type { WorkerHost as BrowserHost } from '../src/worker/host.js';
 import type { LibavAssets } from '../src/worker/libav.js';
+
+/** 桌面平台的 `WorkerLimits`（Engine 的預設值）。 */
+export const desktopLimits: WorkerLimits = {
+  cacheBytes: 128 * 1024 * 1024,
+  readaheadSeconds: 60,
+  packetQueueBytes: 64 * 1024 * 1024,
+};
 
 /** 主執行緒 compile 一次、分給每個 Worker 的 wasm（與 Engine 相同的做法）。 */
 let assets: Promise<LibavAssets> | null = null;
@@ -112,11 +121,16 @@ export class WorkerDriver {
 
   /**
    * `module` 預設為 `wasmAssets()` 的 Module；給別的 Module 可以模擬與 glue 不符的資產。
-   * `retry` 預設不重試。
+   * `retry` 預設不重試；`limits` 預設為桌面的值（`readaheadSeconds` 60）。
    */
   static async init(
     endpoint: WorkerEndpoint,
-    options: { sampleRate?: number; module?: WebAssembly.Module; retry?: RetryPolicy } = {},
+    options: {
+      sampleRate?: number;
+      module?: WebAssembly.Module;
+      retry?: RetryPolicy;
+      limits?: Partial<WorkerLimits>;
+    } = {},
   ): Promise<WorkerDriver> {
     const assets = await wasmAssets();
     const {
@@ -124,10 +138,11 @@ export class WorkerDriver {
       module = assets.module,
       retry = { attempts: 0, baseDelayMs: 0 },
     } = options;
+    const limits: WorkerLimits = { ...desktopLimits, ...options.limits };
     const { glueUrl } = assets;
     const channel = new MessageChannel();
     endpoint.post(
-      { type: 'init', module, glueUrl, workletPort: channel.port1, sampleRate, retry },
+      { type: 'init', module, glueUrl, workletPort: channel.port1, sampleRate, retry, limits },
       [channel.port1],
     );
     return new WorkerDriver(endpoint, channel.port2, sampleRate);
@@ -195,7 +210,7 @@ export class WorkerDriver {
     this.#port.postMessage({ type: 'need', epoch, frames });
   }
 
-  async stats(): Promise<{ libavInstances: number }> {
+  async stats(): Promise<WorkerStats> {
     const id = ++this.#statsId;
     this.post({ type: 'stats', id });
     const reply = await this.waitFor((m) => m.type === 'stats' && m.id === id);

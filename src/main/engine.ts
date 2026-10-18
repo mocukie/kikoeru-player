@@ -2,7 +2,10 @@
 
 import type {
   ProbedMedia,
+  WireError,
   WireSource,
+  WorkerBufferMessage,
+  WorkerStats,
   WorkletClockMessage,
   WorkletToMainMessage,
 } from '../protocol/index.js';
@@ -20,9 +23,12 @@ import {
 import { EngineError } from './errors.js';
 import {
   BeforeAudioStartEvent,
+  BufferedChangeEvent,
   DurationChangeEvent,
   EngineErrorEvent,
   SeekedEvent,
+  StallEvent,
+  StallRecoveredEvent,
   StateChangeEvent,
   TimeUpdateEvent,
   TracksChangeEvent,
@@ -79,6 +85,12 @@ type CommandKind = 'load' | 'play' | 'pause' | 'seek';
 const IDLE_SUSPEND_MS = 30_000;
 /** Engine 處於 playing 而 worklet 回報的 frame 超過這麼久（ms）沒有前進時，watchdog 介入（ADR-0004）。 */
 const WATCHDOG_MS = 1000;
+/** worklet starved 超過這麼久（ms）才進入 buffering；更短的只計入 underrun（ADR-0004）。 */
+const STARVED_MS = 250;
+/** 因網路不足進入 buffering 之後，bufferAhead 要到這麼多秒才恢復（「記憶體上限的數值」#23）。 */
+const RESUME_AHEAD_SECONDS = 3;
+/** `buffered` 的終點變動至少這麼多秒才發出 bufferedchange。 */
+const BUFFERED_CHANGE_SECONDS = 0.5;
 
 const noSelection: Readonly<TrackSelection> = { audio: null, video: null, subtitle: null };
 
@@ -86,6 +98,15 @@ const noSelection: Readonly<TrackSelection> = { audio: null, video: null, subtit
 interface ReloadOf {
   info: MediaInfo;
   selection: TrackSelection;
+}
+
+/** 一次 buffering 的卡住偵測。 */
+interface StallEpisode {
+  /** 進入 buffering 的 `performance.now()`。 */
+  since: number;
+  /** 已經嘗試自動恢復的次數。 */
+  attempts: number;
+  timer: ReturnType<typeof setTimeout> | null;
 }
 
 /** 執行中的 load。 */
@@ -125,8 +146,8 @@ class EngineImpl extends EventTarget implements Engine {
   /** playing 期間依 `timeUpdateInterval` 發出 timeupdate 的 timer。 */
   #timeUpdateTimer: ReturnType<typeof setInterval> | null = null;
   #lastTimeUpdate = NaN;
-  /** 等待 Worker 回覆的 `stats` 要求；Worker 被 terminate 時以 0 個 instance resolve。 */
-  readonly #statsRequests = new Map<number, (libavInstances: number) => void>();
+  /** 等待 Worker 回覆的 `stats` 要求；Worker 被 terminate 時以 null resolve。 */
+  readonly #statsRequests = new Map<number, (stats: WorkerStats | null) => void>();
   #statsSeq = 0;
   #duration = NaN;
   #media: MediaInfo | null = null;
@@ -135,6 +156,25 @@ class EngineImpl extends EventTarget implements Engine {
   #error: EngineError | null = null;
   #volume = 1;
   #muted = false;
+  /** Worker 最後回報的資料備妥進度；load 時清掉。 */
+  #buffer: WorkerBufferMessage | null = null;
+  /** worklet 回報 starved 之後、補回之前（時鐘停住）；flush 時清掉。 */
+  #starved = false;
+  /** starved 之後 `STARVED_MS` 進入 buffering 的 timer。 */
+  #starveTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * 因網路不足進入 buffering：worklet 先停住，等 bufferAhead ≥ `RESUME_AHEAD_SECONDS`（或已讀到檔尾、預讀不再抓取）
+   * 才恢復輸出，避免網路比位元率慢時播一下停一下。離開 buffering 時清掉。
+   */
+  #holding = false;
+  /** 這次 buffering 的卡住偵測：開始的 `performance.now()`、已經嘗試恢復的次數與逾時的 timer。 */
+  #stall: StallEpisode | null = null;
+  /** Worker 回報的最後一次讀取錯誤；卡住而放棄時以它進入 error。load 時清掉。 */
+  #lastReadError: WireError | null = null;
+  /** 最後一次 bufferedchange 的終點（沒有範圍時為 null）、節流的 timer 與節流期間是否有變動。 */
+  #bufferedEmitted: number | null = null;
+  #bufferedTimer: ReturnType<typeof setTimeout> | null = null;
+  #bufferedPending = false;
 
   /**
    * 會改變輸出的指令（load、seek）、致命錯誤與 destroy 遞增；Worker 與 worklet 的訊息 epoch 不符即丟棄。
@@ -222,7 +262,7 @@ class EngineImpl extends EventTarget implements Engine {
     // clock：`position` 的 sample 在 context frame `frame` 進入 graph；聽到的 frame 已扣掉輸出延遲。
     let time = clock.position + (heard - clock.frame) / audio.sampleRate;
     // 時鐘停住（pause 的淡出結束、ring 用完）之後，輸出延遲內聽到的還是停住之前的 sample。
-    if (stopped) time = Math.min(time, clock.position);
+    if (stopped || this.#starved) time = Math.min(time, clock.position);
     time = Math.max(time, this.#heardFloor);
     if (!Number.isNaN(this.#duration)) time = Math.min(time, this.#duration);
     this.#heardFloor = time;
@@ -232,7 +272,18 @@ class EngineImpl extends EventTarget implements Engine {
     return this.#duration;
   }
   get buffered(): readonly TimeRange[] {
-    return notImplemented('buffered');
+    if (this.#state === 'idle' || this.#state === 'error') return [];
+    if (this.#lastLoad?.source.kind !== 'http') {
+      // bytes／blob 整個在本機。
+      return this.#media && Number.isFinite(this.#duration)
+        ? [{ start: 0, end: this.#duration }]
+        : [];
+    }
+    const buffer = this.#buffer;
+    if (!buffer) return [];
+    const start = this.currentTime;
+    const end = Number.isNaN(this.#duration) ? buffer.end : Math.min(buffer.end, this.#duration);
+    return end > start ? [{ start, end }] : [];
   }
   get media(): MediaInfo | null {
     return this.#media;
@@ -380,15 +431,14 @@ class EngineImpl extends EventTarget implements Engine {
   attachCanvas(): void {
     notImplemented('attachCanvas()');
   }
-  /**
-   * 目前只有 `resources` 與 `audio` 是實際的數字，其餘欄位是 0／空值，由快取與預讀 #39、診斷 #45 接上。
-   */
+  /** `video` 與 `wasmHeapBytes` 還是 null／0，由影片與診斷的 issue 接上。 */
   async getStats(): Promise<EngineStats> {
-    const libavInstances = await this.#workerStats();
+    const worker = await this.#workerStats();
     const audio = this.#audio;
     const sampleRate = audio?.sampleRate ?? 0;
+    const [range] = this.buffered;
     return {
-      bufferAhead: 0,
+      bufferAhead: range ? Math.max(0, range.end - this.currentTime) : 0,
       audio: {
         ringMs: sampleRate > 0 ? (this.#ringFrames * 1000) / sampleRate : 0,
         underruns: this.#underruns,
@@ -396,19 +446,23 @@ class EngineImpl extends EventTarget implements Engine {
         targetMs: this.#options.audioBuffer.targetMs,
       },
       video: null,
-      packetQueue: { audioSeconds: 0, videoSeconds: 0, bytes: 0 },
+      packetQueue: worker?.packetQueue ?? { audioSeconds: 0, videoSeconds: 0, bytes: 0 },
       cache: {
-        bytes: 0,
+        bytes: worker?.cache.bytes ?? 0,
         limitBytes: this.#options.limits.cacheBytes,
-        aheadBytes: 0,
-        readaheadTarget: 0,
-        fetching: false,
-        hits: 0,
-        misses: 0,
+        aheadBytes: worker?.cache.aheadBytes ?? 0,
+        readaheadTarget: worker?.cache.readaheadTarget ?? 0,
+        fetching: worker?.cache.fetching ?? false,
+        hits: worker?.cache.hits ?? 0,
+        misses: worker?.cache.misses ?? 0,
       },
-      network: { bytesLoaded: 0, inflight: [] },
+      network: worker?.network ?? { bytesLoaded: 0, inflight: [] },
       wasmHeapBytes: 0,
-      resources: { workers: this.#worker ? 1 : 0, libavInstances, openVideoFrames: 0 },
+      resources: {
+        workers: this.#worker ? 1 : 0,
+        libavInstances: worker?.libavInstances ?? 0,
+        openVideoFrames: 0,
+      },
     };
   }
 
@@ -465,6 +519,8 @@ class EngineImpl extends EventTarget implements Engine {
     this.#played = false;
     this.#error = null;
     this.#watchdogStep = 0;
+    this.#buffer = null;
+    this.#lastReadError = null;
     this.#currentTime = startTime;
     if (!reloadOf) this.#publishMedia(null, noSelection);
     signal.throwIfAborted();
@@ -494,6 +550,7 @@ class EngineImpl extends EventTarget implements Engine {
           workletPort: port,
           sampleRate: audio.sampleRate,
           retry: this.#options.retry,
+          limits: this.#options.limits,
         },
         [port],
       );
@@ -649,8 +706,17 @@ class EngineImpl extends EventTarget implements Engine {
             );
             break;
           case 'stats':
-            this.#statsRequests.get(message.id)?.(message.stats.libavInstances);
+            this.#statsRequests.get(message.id)?.(message.stats);
             this.#statsRequests.delete(message.id);
+            break;
+          case 'buffer':
+            if (message.epoch !== this.#epoch) break;
+            this.#buffer = message;
+            this.#checkHold();
+            this.#bufferedChanged();
+            break;
+          case 'readerror':
+            this.#lastReadError = message.error;
             break;
         }
         this.#notify();
@@ -681,10 +747,12 @@ class EngineImpl extends EventTarget implements Engine {
         break;
       case 'playing':
       case 'paused':
+        if (message.type === 'playing') this.#clearStarved();
         this.#applyOutput(message.type);
         break;
       case 'starved':
-        if (this.#state === 'playing') this.#setState('buffering', 'media');
+        this.#starved = true;
+        if (this.#state === 'playing') this.#armStarve();
         break;
       case 'ended':
         if (this.#state === 'playing' || this.#state === 'buffering') {
@@ -702,6 +770,8 @@ class EngineImpl extends EventTarget implements Engine {
   /** worklet 開始輸出（`playing`）或停止輸出、資料已備妥（`paused`）。 */
   #applyOutput(output: 'playing' | 'paused'): void {
     this.#lastOutput = output;
+    // 等 bufferAhead 時 worklet 被要求停住，它回報的 paused 不是使用者的暫停。
+    if (output === 'paused' && this.#holding && !this.#paused) return;
     // 想播放而 context 還在啟動：等啟動的結果（成功時 worklet 會開始輸出，失敗時 #onStartFailed() 再套用）。
     if (output === 'paused' && !this.#paused && this.#context.starting) return;
     const reason = this.#intentReason;
@@ -757,7 +827,8 @@ class EngineImpl extends EventTarget implements Engine {
     if (this.#paused === paused) return;
     this.#paused = paused;
     this.#intentReason = reason;
-    this.#syncWorklet();
+    // 等 bufferAhead 時 worklet 已經被要求停住：再送一次 pause，讓它回報 paused、Engine 離開 buffering。
+    this.#syncWorklet(this.#holding && paused);
     this.#updateIdleSuspend();
   }
 
@@ -775,7 +846,7 @@ class EngineImpl extends EventTarget implements Engine {
     const output = this.#audio;
     if (!output) return;
     const running = this.#context.running;
-    const play = !this.#paused && running;
+    const play = !this.#paused && running && !this.#holding;
     if (!force && play === this.#workletPlay) return;
     this.#workletPlay = play;
     const epoch = this.#epoch;
@@ -932,15 +1003,30 @@ class EngineImpl extends EventTarget implements Engine {
       this.#syncWorklet();
       this.#updateIdleSuspend();
     }
+    // 離開 buffering：這次的卡住偵測結束。
+    const stall = state !== previous && previous === 'buffering' ? this.#endStall() : null;
     if (state !== previous) this.#onStateEntered(state);
+    const epoch = this.#epoch;
     this.dispatchEvent(new StateChangeEvent({ state, previous, paused, reason }));
+    if (stall && stall.attempts > 0 && state === 'playing' && this.#epoch === epoch) {
+      const { since, attempts } = stall;
+      this.dispatchEvent(
+        new StallRecoveredEvent({ stalledMs: performance.now() - since, attempts }),
+      );
+    }
     this.#notify();
   }
 
-  /** 進入新的 state：播放中依 `timeUpdateInterval` 發出 timeupdate，離開 playing 就停。 */
+  /**
+   * 進入新的 state：播放中依 `timeUpdateInterval` 發出 timeupdate，離開 playing 就停。buffering 開始卡住偵測；
+   * 離開 buffering 就不再等 bufferAhead。
+   */
   #onStateEntered(state: EngineState): void {
     if (state === 'playing') this.#armWatchdog();
     else this.#stopWatchdog();
+    if (state !== 'playing') this.#clearStarveTimer();
+    if (state === 'buffering') this.#beginStall();
+    else this.#holding = false;
     if (state !== 'playing') {
       if (this.#timeUpdateTimer !== null) clearInterval(this.#timeUpdateTimer);
       this.#timeUpdateTimer = null;
@@ -958,12 +1044,12 @@ class EngineImpl extends EventTarget implements Engine {
     }, this.#options.timeUpdateInterval);
   }
 
-  /** Worker 持有的 libav instance 數；沒有 Worker 時為 0。 */
-  #workerStats(): Promise<number> {
+  /** Worker 內的統計；沒有 Worker 時為 null。 */
+  #workerStats(): Promise<WorkerStats | null> {
     const worker = this.#worker;
-    if (!worker) return Promise.resolve(0);
+    if (!worker) return Promise.resolve(null);
     const id = ++this.#statsSeq;
-    return new Promise<number>((resolve) => {
+    return new Promise<WorkerStats | null>((resolve) => {
       this.#statsRequests.set(id, resolve);
       worker.post({ type: 'stats', id });
     });
@@ -988,6 +1074,131 @@ class EngineImpl extends EventTarget implements Engine {
     if (tracksChanged || selectionChanged) {
       this.dispatchEvent(new TracksChangeEvent({ tracks, selected: selection }));
     }
+    if (this.#epoch !== epoch) return;
+    this.#bufferedChanged();
+  }
+
+  // ───────────────────────────── buffering 與卡住 ─────────────────────────────
+
+  /** worklet starved：`STARVED_MS` 內沒有補回就進入 buffering，並等 bufferAhead 足夠才恢復。 */
+  #armStarve(): void {
+    this.#starveTimer ??= setTimeout(() => {
+      this.#starveTimer = null;
+      if (this.#isDestroyed || this.#state !== 'playing' || !this.#starved) return;
+      this.#holding = true;
+      const epoch = this.#epoch;
+      this.#setState('buffering', 'media');
+      // listener 可能已經改變了狀態。
+      if (this.#epoch !== epoch || this.#stateNow() !== 'buffering') return;
+      this.#syncWorklet();
+      this.#checkHold();
+    }, STARVED_MS);
+  }
+
+  #clearStarveTimer(): void {
+    if (this.#starveTimer !== null) clearTimeout(this.#starveTimer);
+    this.#starveTimer = null;
+  }
+
+  #clearStarved(): void {
+    this.#starved = false;
+    this.#clearStarveTimer();
+  }
+
+  /** 等 bufferAhead 時：資料足夠（≥ 3 秒、已讀到檔尾，或預讀已不再抓取）就讓 worklet 恢復輸出。 */
+  #checkHold(): void {
+    if (!this.#holding) return;
+    const buffer = this.#buffer;
+    if (buffer?.epoch !== this.#epoch) return;
+    if (buffer.eof || !buffer.fetching || buffer.end - this.currentTime >= RESUME_AHEAD_SECONDS) {
+      this.#holding = false;
+      this.#syncWorklet();
+    }
+  }
+
+  /** 進入 buffering：開始卡住偵測（同一次 buffering 內的自動恢復沿用同一個計數）。 */
+  #beginStall(): void {
+    this.#stall ??= { since: performance.now(), attempts: 0, timer: null };
+    this.#armStall(this.#stall);
+  }
+
+  #armStall(stall: StallEpisode): void {
+    if (stall.timer !== null) clearTimeout(stall.timer);
+    stall.timer = setTimeout(() => {
+      stall.timer = null;
+      this.#onStall(stall);
+    }, this.#options.stallTimeout);
+  }
+
+  /** 結束這次 buffering 的卡住偵測，回傳它（供 stallrecovered）。 */
+  #endStall(): { since: number; attempts: number } | null {
+    const stall = this.#stall;
+    if (!stall) return null;
+    if (stall.timer !== null) clearTimeout(stall.timer);
+    this.#stall = null;
+    return stall;
+  }
+
+  /**
+   * buffering 超過 `stallTimeout`：還有次數就發出 `stall`，中止讀取並從目前位置重新 seek（Worker 收到 seek 時中止
+   * 所有進行中的讀取與請求）；用完就以最後一次的讀取錯誤進入 error（reason `stall`）。
+   */
+  #onStall(stall: StallEpisode): void {
+    if (this.#isDestroyed || this.#stall !== stall || this.#state !== 'buffering') return;
+    stall.attempts++;
+    const position = this.currentTime;
+    if (stall.attempts > this.#options.stallAttempts) {
+      this.#fail(this.#stallError(position), 'stall');
+      return;
+    }
+    const epoch = this.#epoch;
+    this.dispatchEvent(new StallEvent({ since: stall.since, position }));
+    if (this.#epoch !== epoch || this.#stall !== stall) return;
+    this.#retarget(position);
+    this.#armStall(stall);
+  }
+
+  /** 卡住而放棄時的錯誤：最後一次的讀取錯誤；沒有（請求停住、沒有失敗）時是 `SOURCE_NETWORK`。 */
+  #stallError(position: number): EngineError {
+    const last = this.#lastReadError;
+    if (last) {
+      return new EngineError(last.code, {
+        fatal: true,
+        position,
+        message: last.message,
+        ...(last.detail && { detail: last.detail }),
+      });
+    }
+    const source = this.#lastLoad?.source;
+    return new EngineError('SOURCE_NETWORK', {
+      fatal: true,
+      position,
+      message: `超過 ${String(this.#options.stallTimeout)} ms 等不到資料，自動恢復 ${String(this.#options.stallAttempts)} 次仍然卡住`,
+      ...(source?.kind === 'http' && { detail: { url: String(source.url) } }),
+    });
+  }
+
+  /** `buffered` 的終點變動 ≥ 0.5 秒（或有無範圍改變）時發出 bufferedchange，每 `timeUpdateInterval` 最多一次。 */
+  #bufferedChanged(): void {
+    const end = this.buffered[0]?.end ?? null;
+    const last = this.#bufferedEmitted;
+    const changed =
+      end === null || last === null
+        ? end !== last
+        : Math.abs(end - last) >= BUFFERED_CHANGE_SECONDS;
+    if (!changed) return;
+    if (this.#bufferedTimer !== null) {
+      this.#bufferedPending = true;
+      return;
+    }
+    this.#bufferedEmitted = end;
+    this.#bufferedTimer = setTimeout(() => {
+      this.#bufferedTimer = null;
+      if (!this.#bufferedPending || this.#isDestroyed) return;
+      this.#bufferedPending = false;
+      this.#bufferedChanged();
+    }, this.#options.timeUpdateInterval);
+    this.dispatchEvent(new BufferedChangeEvent({ buffered: this.buffered }));
   }
 
   /** 遞增 epoch，讓 Worker 從 `time` 重新供料、worklet 丟掉舊的資料。 */
@@ -1001,6 +1212,7 @@ class EngineImpl extends EventTarget implements Engine {
     this.#currentTime = position;
     this.#heardFloor = position;
     this.#clock = null;
+    this.#clearStarved();
     this.#lastOutput = null;
     if (this.#loadContext) this.#loadContext.flushedAt = position;
     this.#audio?.post({ type: 'flush', epoch: this.#epoch, position });
@@ -1012,7 +1224,7 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   /** 致命錯誤：結束當前媒體，state 進入 `'error'`，未完成的指令都以 `error` reject。不自動 reload。 */
-  #fail(error: EngineError): void {
+  #fail(error: EngineError, reason: StateChangeReason = 'error'): void {
     const position = this.currentTime;
     this.#terminateWorker();
     this.#loadContext = null;
@@ -1021,14 +1233,14 @@ class EngineImpl extends EventTarget implements Engine {
     const epoch = ++this.#epoch;
     this.#flushAudio(position);
     this.#queue.fail(error);
-    this.#setState('error', 'error');
+    this.#setState('error', reason);
     if (this.#epoch === epoch) this.dispatchEvent(new EngineErrorEvent({ error }));
   }
 
   #terminateWorker(): void {
     this.#worker?.terminate();
     this.#worker = null;
-    for (const resolve of this.#statsRequests.values()) resolve(0);
+    for (const resolve of this.#statsRequests.values()) resolve(null);
     this.#statsRequests.clear();
   }
 
@@ -1117,6 +1329,11 @@ class EngineImpl extends EventTarget implements Engine {
     return error instanceof EngineError
       ? error
       : this.#fatal('INTERNAL', error instanceof Error ? error.message : String(error), error);
+  }
+
+  /** 同步 dispatch 之後的狀態；以方法讀取，避開 TypeScript 對欄位的窄化。 */
+  #stateNow(): EngineState {
+    return this.#state;
   }
 
   /** 同步 dispatch 的 listener 內可能呼叫了 destroy()；以方法讀取，避開 TypeScript 對欄位的窄化。 */

@@ -95,7 +95,7 @@ interface BlockRequest {
   /** 被 `abort()` 丟掉之後不再更新狀態。 */
   dead: boolean;
   /** 結束時的錯誤；成功或還沒結束時為 null。 */
-  error: unknown;
+  error: Error | null;
   settled: boolean;
 }
 
@@ -352,13 +352,13 @@ export class CachedSource implements ByteSource {
         this.#finish(request, null);
       },
       (error: unknown) => {
-        this.#finish(request, error);
+        this.#finish(request, error instanceof Error ? error : new Error(String(error)));
       },
     );
     return request;
   }
 
-  #finish(request: BlockRequest, error: unknown): void {
+  #finish(request: BlockRequest, error: Error | null): void {
     request.settled = true;
     if (request.dead) return;
     request.error = error;

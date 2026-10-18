@@ -6,22 +6,31 @@
 import type {
   MainToWorkerMessage,
   RetryPolicy,
+  WorkerLimits,
   WorkerLoadMessage,
   WorkerPortMessage,
+  WorkerStats,
   WorkerToMainMessage,
   WorkerToWorkletMessage,
   WorkletToWorkerMessage,
 } from '../protocol/index.js';
-import { BufferPool, Demand } from './audio-pipeline.js';
+import { BufferPool, Demand, type AudioPipeline } from './audio-pipeline.js';
+import { BufferTracker } from './buffer-tracker.js';
+import { initialByteRate } from './byte-rate.js';
 import { toWireError, WorkerError } from './errors.js';
 import type { WorkerHost } from './host.js';
 import { LibavMedia, type Instantiate, type LibavAssets } from './libav.js';
+import { NORMAL_QUEUE_BYTES, NORMAL_QUEUE_SECONDS } from './packet-queue.js';
 import { hasPlayableTrack, toProbedMedia } from './probe.js';
+import { CachedSource, RangeCache } from './range-cache.js';
 import { openSource, type ByteSource } from './source.js';
 
 export interface MediaWorkerDeps {
   postMessage(message: WorkerToMainMessage): void;
-  /** 開啟來源；預設為 `source.ts` 的實作，測試可以換成可控制的來源。 */
+  /**
+   * 開啟來源；預設為 `source.ts` 的實作（http 經過 Worker 的 Range 快取），測試可以換成可控制的來源。
+   * 回傳的不是 `CachedSource` 時不預讀。
+   */
   openSource?: (
     wire: WorkerLoadMessage<WorkerHost>['source'],
     signal: AbortSignal,
@@ -37,6 +46,9 @@ interface Environment {
   port: MessagePort;
   sampleRate: number;
   retry: RetryPolicy;
+  limits: WorkerLimits;
+  /** Worker 內所有 http 來源共用的 Range 快取。 */
+  cache: RangeCache;
 }
 
 /** 一個 epoch 的輸出：`start` 或 `seek`。 */
@@ -55,6 +67,10 @@ interface Load {
   controller: AbortController;
   /** 開檔完成後才有。 */
   media: LibavMedia | null;
+  /** 開好的來源；http 時是 `CachedSource`。 */
+  source: ByteSource | null;
+  /** probe 之後才有。 */
+  tracker: BufferTracker | null;
   /** 開檔、probe 中。start 等它完成。 */
   opening: Promise<void>;
   /** 已建立（或正在建立）libav instance，計入 `libavInstances`。 */
@@ -72,6 +88,8 @@ export class MediaWorker {
   #output: AbortController | null = null;
   /** 前一個 start 的供料，結束（含被中止）時 resolve；同一個 demuxer 上的下一個 start 等它停下。 */
   #outputDone: Promise<void> = Promise.resolve();
+  /** 目前輸出的 pipeline，供 stats 的封包佇列。 */
+  #pipeline: AudioPipeline<unknown> | null = null;
   /** `start` 選用的音軌；之後的 `seek` 沿用。`start` 之前為 undefined。 */
   #audio: number | null | undefined = undefined;
   #libavInstances = 0;
@@ -92,6 +110,8 @@ export class MediaWorker {
           port: message.workletPort,
           sampleRate: message.sampleRate,
           retry: message.retry,
+          limits: message.limits,
+          cache: new RangeCache(message.limits.cacheBytes),
         };
         this.#listen(message.workletPort);
         break;
@@ -111,11 +131,7 @@ export class MediaWorker {
         this.#startOutput({ ...message, audio: this.#audio, seek: true });
         break;
       case 'stats':
-        this.#deps.postMessage({
-          type: 'stats',
-          id: message.id,
-          stats: { libavInstances: this.#libavInstances },
-        });
+        this.#deps.postMessage({ type: 'stats', id: message.id, stats: this.#stats() });
         break;
     }
   }
@@ -162,11 +178,14 @@ export class MediaWorker {
   #startLoad(message: WorkerLoadMessage<WorkerHost>): void {
     this.#stopOutput();
     this.#audio = undefined;
+    this.#pipeline = null;
     if (this.#load) this.#dispose(this.#load);
     const load: Load = {
       epoch: message.epoch,
       controller: new AbortController(),
       media: null,
+      source: null,
+      tracker: null,
       opening: Promise.resolve(),
       hasInstance: false,
       disposed: false,
@@ -180,9 +199,31 @@ export class MediaWorker {
     try {
       const env = this.#requireEnv();
       const open =
-        this.#deps.openSource ?? ((wire, signal, retry) => openSource(wire, signal, { retry }));
-      const source = await open(wire, signal, env.retry);
-      signal.throwIfAborted();
+        this.#deps.openSource ??
+        ((wire, signal, retry) =>
+          openSource(wire, signal, {
+            retry,
+            cache: env.cache,
+            onRequestError: (error) => {
+              if (this.#load === load) {
+                this.#deps.postMessage({ type: 'readerror', error: toWireError(error) });
+              }
+            },
+          }));
+      const opened = await open(wire, signal, env.retry);
+      if (signal.aborted) {
+        if (opened instanceof CachedSource) opened.close();
+        signal.throwIfAborted();
+      }
+      load.source = opened;
+      // demux 讀取的位置與當時的 demux 進度用來修正位元組率。
+      const source: ByteSource = {
+        size: opened.size,
+        read: (offset, length, readSignal) => {
+          load.tracker?.onRead(offset);
+          return opened.read(offset, length, readSignal);
+        },
+      };
       load.hasInstance = true;
       this.#libavInstances++;
       const media = await LibavMedia.open(env.assets, source, signal);
@@ -192,6 +233,22 @@ export class MediaWorker {
         throw new WorkerError('CODEC_UNSUPPORTED', '沒有可以播放的音軌或影片軌');
       }
       load.media = media;
+      load.tracker = new BufferTracker({
+        source: opened,
+        size: opened.size,
+        duration: probed.duration,
+        byteRate: initialByteRate({
+          size: probed.size,
+          duration: probed.duration,
+          bitRates: media.raw.streams
+            .filter((s) => s.type === 'audio' || s.type === 'video')
+            .map((s) => s.bitRate),
+        }),
+        readaheadSeconds: env.limits.readaheadSeconds,
+        post: (message) => {
+          if (this.#load === load) this.#deps.postMessage(message);
+        },
+      });
       this.#deps.postMessage({ type: 'probe', epoch: load.epoch, media: probed });
     } catch (error) {
       // open／probe 被中止或失敗：丟掉這個 instance。被取代的 load 不回報。
@@ -210,6 +267,8 @@ export class MediaWorker {
     if (!load) return;
     this.#stopOutput();
     load.media?.abortReads();
+    // 進行中的網路請求（含預讀）一起中止：卡住的請求要換新的才能恢復。
+    if (load.source instanceof CachedSource) load.source.abort();
     const output = new AbortController();
     this.#output = output;
     this.#demand.setEpoch(message.epoch);
@@ -230,11 +289,14 @@ export class MediaWorker {
       const post = (m: WorkerToWorkletMessage, transfer: Transferable[]) => {
         env.port.postMessage(m, transfer);
       };
+      const tracker = load.tracker;
+      tracker?.start(message.epoch, Math.max(0, message.time));
       if (message.audio === null) {
         // 不輸出音訊：worklet 以靜音推進時鐘。
         post({ type: 'eof', epoch: message.epoch }, []);
         return;
       }
+      const { limits } = env;
       const pipeline = await load.media.startAudio(message.audio, {
         sampleRate: env.sampleRate,
         startTime: Math.max(0, message.time),
@@ -244,8 +306,17 @@ export class MediaWorker {
         pool: this.#pool,
         signal,
         post,
+        queueLimits: {
+          seconds: NORMAL_QUEUE_SECONDS,
+          bytes: NORMAL_QUEUE_BYTES,
+          hardBytes: limits.packetQueueBytes,
+        },
+        onDemux: (end, eof) => {
+          tracker?.onDemux(message.epoch, end, eof);
+        },
       });
       signal.throwIfAborted();
+      this.#pipeline = pipeline as AudioPipeline<unknown>;
       await pipeline.run();
     } catch (error) {
       // 被取代：中止的讀取或 libav 回傳的任何錯誤都不回報。
@@ -263,9 +334,38 @@ export class MediaWorker {
     if (load.disposed) return;
     load.disposed = true;
     load.controller.abort();
+    if (load.source instanceof CachedSource) load.source.close();
     load.media = null;
     if (load.hasInstance) this.#libavInstances--;
     if (this.#load === load) this.#load = null;
+  }
+
+  #stats(): WorkerStats {
+    const env = this.#env;
+    const source = this.#load?.source;
+    const cached = source instanceof CachedSource ? source : null;
+    const pipeline = this.#pipeline;
+    return {
+      libavInstances: this.#libavInstances,
+      cache: {
+        bytes: env?.cache.bytes ?? 0,
+        limitBytes: env?.cache.limitBytes ?? 0,
+        aheadBytes: cached?.aheadBytes ?? 0,
+        readaheadTarget: cached?.readaheadTarget ?? 0,
+        fetching: cached?.fetching ?? false,
+        hits: env?.cache.hits ?? 0,
+        misses: env?.cache.misses ?? 0,
+      },
+      network: {
+        bytesLoaded: cached?.client.bytesLoaded ?? 0,
+        inflight: cached?.client.inflight() ?? [],
+      },
+      packetQueue: {
+        audioSeconds: pipeline?.queuedSeconds ?? 0,
+        videoSeconds: 0,
+        bytes: pipeline?.queuedBytes ?? 0,
+      },
+    };
   }
 
   #reportError(epoch: number, error: unknown): void {
