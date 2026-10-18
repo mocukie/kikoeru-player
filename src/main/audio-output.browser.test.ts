@@ -170,6 +170,14 @@ test('worklet 載入失敗時 connect() 以 AssetLoadError reject', async () => 
   await expect(output.connect()).rejects.toBeInstanceOf(AssetLoadError);
 });
 
+test('worklet 載入完成前 disconnect()：之後不建立 node，也不接上 destination', async () => {
+  const audio = open();
+  audio.disconnect();
+  // 載入照常完成，但斷開的輸出不再接上 destination；connect() 以錯誤結束，不給出 port。
+  await expect(audio.connect()).rejects.toThrow();
+  expect(capture.context).toBeNull();
+});
+
 /** 相鄰 sample 差的最大值。 */
 function maxStep(samples: Float32Array): number {
   let max = 0;

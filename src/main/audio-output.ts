@@ -62,6 +62,9 @@ class WebAudioOutput implements AudioOutput {
       } catch (cause) {
         throw new AssetLoadError(`無法載入 AudioWorklet（${String(url)}）`, { cause });
       }
+      // 載入期間已經 disconnect()（destroy 或 watchdog 重建）：不再建立 node、不接上 destination，
+      // 否則已關閉的 context 會留下接著 destination 的 node 與沒有關閉的 port。
+      if (this.#disconnected) throw new Error('音訊輸出在 AudioWorklet 載入期間已經斷開');
       const name: WorkletProcessorName = 'kikoeru-player-output';
       const processorOptions: WorkletProcessorOptions = {
         audioBuffer: config.audioBuffer,
