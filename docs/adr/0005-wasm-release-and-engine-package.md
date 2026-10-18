@@ -18,7 +18,7 @@ kikoeru-player 改為 public，Engine 自己的程式碼採 MIT，wasm 維持 LG
 
 ## Consequences
 
-- push、PR 與 tag 的 CI 只有一個 `ci.yml`：`ensure-wasm`（tag 已存在就跳過，否則在 Docker 內 build、檢查 `config.h` 為 LGPL；發 Release 由接在後面的 `publish-wasm` 以 tag 跨 PR 互斥執行）與 `check`（lint、typecheck、Node 測試）平行 → `browser`（Chromium 與 Firefox 的 Vitest browser mode 與 Playwright 跑 Demo 頁，加上 Vite fixture App 的驗收：license header 完整、`application/wasm`、streaming compile）→ `release`（只在 `v*` tag 時執行）。Safari 的排程 job 另外開，見[測試規範](../testing.md#本機與-ci)。cache 只用來加速：pnpm store、Playwright 的瀏覽器、上游 tarball、產生的測試媒體。
+- push、PR 與 tag 的 CI 只有一個 `ci.yml`：`ensure-wasm`（tag 已存在就跳過，否則在 Docker 內 build、檢查 `config.h` 為 LGPL；發 Release 由接在後面的 `publish-wasm` 以 tag 跨 PR 互斥執行）→ `check`（lint、typecheck、Node 測試；型別取自 wasm Release 的 `libav.types.d.ts`）與 `browser`（Chromium 與 Firefox 的 Vitest browser mode 與 Playwright 跑 Demo 頁，加上 Vite fixture App 的驗收：license header 完整、`application/wasm`、streaming compile）→ `release`（只在 `v*` tag 時執行）。Safari 的排程 job 另外開，見[測試規範](../testing.md#本機與-ci)。cache 只用來加速：pnpm store、Playwright 的瀏覽器、上游 tarball、產生的測試媒體。
 - `ensure-wasm` 在本 repo 每個 branch 的 push 都會執行，被放棄的 PR 會留下沒人用的 wasm Release。只要有 Engine 版本引用的 wasm Release 就永遠不刪，其他的可以手動清掉。
 - 本機開發用 `pnpm wasm:fetch` 下載與 tree hash 相符的 Release，修改 `wasm/**` 時用 `pnpm wasm:build` 在 Docker 內 build。`dev`、`build`、`test:browser`、`e2e` 會先檢查 `wasm/dist/` 是否符合目前的 tree hash，不符合就停下並提示指令，不會自動下載。
 - 打包規則：

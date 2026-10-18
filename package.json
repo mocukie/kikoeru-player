@@ -18,6 +18,12 @@
       "default": "./dist/background/index.js"
     }
   },
+  "imports": {
+    "#libav": {
+      "types": "./wasm/dist/libav.types.d.ts",
+      "default": "./wasm/dist/libav-6.10.9.0-kikoeru.mjs"
+    }
+  },
   "files": [
     "dist/",
     "LICENSE",
