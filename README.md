@@ -62,7 +62,23 @@ pauseButton.addEventListener('click', () => engine.pause().catch(report));
 
 ### 背景播放模組
 
-`kikoeru-player/background` 的 `attachBackgroundPlayback(engine, options?)` 讓 OS 把 App 當成正在播放的媒體播放器（鎖屏、背景、系統媒體控制）。Media Session 的 handler 仍由 App 負責。（範例待補）
+`kikoeru-player/background` 的 `attachBackgroundPlayback(engine, options?)` 讓 OS 把 App 當成正在播放的媒體播放器（鎖屏、背景、系統媒體控制）。Media Session 的 handler 仍由 App 負責。
+
+```ts
+import { createEngine } from 'kikoeru-player';
+import { attachBackgroundPlayback } from 'kikoeru-player/background';
+
+const engine = createEngine();
+// 建立 Engine 之後、第一次 play() 之前 attach：設定 audioSession，並讓靜音 anchor 跟著 paused 播放與停止。
+const background = attachBackgroundPlayback(engine, { log: (entry) => console.debug(entry) });
+
+// Media Session 由 App 自己設定。
+navigator.mediaSession.setActionHandler('play', () => void engine.play());
+navigator.mediaSession.setActionHandler('pause', () => void engine.pause());
+
+// 不再需要時（engine.destroy() 會自動 detach）。
+background.detach();
+```
 
 ### 支援的瀏覽器
 

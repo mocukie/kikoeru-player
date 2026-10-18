@@ -310,7 +310,7 @@ export interface Engine extends EventTarget {
   /**
    * 立即釋放所有資源：中止讀取、關閉 decoder、terminate Worker、關閉 AudioContext。
    * 所有未完成的指令 reject AbortError，之後任何指令都 reject `EngineError('DESTROYED')`。可重複呼叫。
-   * 完成後 state 為 `'idle'`、`paused` 為 true。
+   * 完成後 state 為 `'idle'`、`paused` 為 true。第一次呼叫時在呼叫內同步發出 `destroy` 事件。
    */
   destroy(): Promise<void>;
 
@@ -590,6 +590,12 @@ export interface EngineEventMap {
    * `navigator.audioSession.type = "playback"`、啟動靜音 anchor `<audio>`。
    */
   beforeaudiostart: BeforeAudioStartEvent;
+  /**
+   * `destroy()` 開始釋放資源。第一次呼叫 `destroy()` 時在呼叫內同步發出一次，此時 state 已是 `'idle'`、`paused` 為 true，
+   * 之後的指令都 reject `EngineError('DESTROYED')`。背景播放模組以它自動 detach；state 沒有改變時不會有 `statechange`，
+   * 要知道 Engine 被 destroy 只能靠這個事件。
+   */
+  destroy: Event;
 }
 
 /**

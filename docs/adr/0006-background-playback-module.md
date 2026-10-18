@@ -18,4 +18,5 @@
 - 不是模組自己觸發的 anchor `pause`／`play`（Android 來電、audio focus 被搶、沒有 handler 時的通知與鎖屏按鍵）雙向鏡像為 `engine.pause()`／`engine.play()`，不另外通知 App，`statechange.reason` 為 `'command'`。
 - anchor 啟動失敗不是 Engine 的錯誤，也不影響播放；下一次 `beforeaudiostart` 或 `paused` 變成 false 時再試，經 `options.log`（scope `'background'`）記錄。
 - core 的 API 約定因此新增兩條：`ended` 時 `paused` 維持 false；`play()`／`pause()` 改變 `paused` 時，在呼叫內同步發出 `statechange`。
+- 「`engine.destroy()` 時自動 detach」需要知道 Engine 被 destroy，但 destroy 時 state 可能沒有改變（沒有 `statechange`），所以 core 另外提供 `destroy` 事件（#44 實作時補上）。
 - App 的 CSP 若限制 `media-src`，要允許 `blob:`。Media Session 的 handler、metadata 與 position 仍由 App 負責。
