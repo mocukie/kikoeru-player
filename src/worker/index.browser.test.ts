@@ -1,6 +1,11 @@
 // 真實的 media Worker：以主執行緒的寫法建立，依 src/protocol/ 回覆 probe 結果與 PCM。
 import { afterEach, expect, test } from 'vitest';
-import { audioTracks, mediaUrl, WorkerDriver } from '../../test/media-worker-harness.js';
+import {
+  audioTracks,
+  importOnlyWasm,
+  mediaUrl,
+  WorkerDriver,
+} from '../../test/media-worker-harness.js';
 import type { WorkerToMainMessage } from '../protocol/index.js';
 
 const workers: Worker[] = [];
@@ -9,19 +14,23 @@ afterEach(() => {
   for (const worker of workers.splice(0)) worker.terminate();
 });
 
-function spawn(): Promise<WorkerDriver> {
+function spawn(module?: WebAssembly.Module): Promise<WorkerDriver> {
   const worker = new Worker(new URL('./index.js', import.meta.url), { type: 'module' });
   workers.push(worker);
-  return WorkerDriver.init({
-    post: (message, transfer = []) => {
-      worker.postMessage(message, transfer);
+  return WorkerDriver.init(
+    {
+      post: (message, transfer = []) => {
+        worker.postMessage(message, transfer);
+      },
+      onMessage: (listener) => {
+        worker.onmessage = ({ data }: MessageEvent<WorkerToMainMessage>) => {
+          listener(data);
+        };
+      },
     },
-    onMessage: (listener) => {
-      worker.onmessage = ({ data }: MessageEvent<WorkerToMainMessage>) => {
-        listener(data);
-      };
-    },
-  });
+    48_000,
+    module,
+  );
 }
 
 test('http 來源：回覆 probe 結果與帶 epoch 的 PCM，直到 EOF', async () => {
@@ -65,5 +74,16 @@ test('http 404 回覆 SOURCE_NOT_FOUND', async () => {
   await expect(
     driver.load({ kind: 'http', url: mediaUrl('audio/does-not-exist.flac') }),
   ).rejects.toMatchObject({ code: 'SOURCE_NOT_FOUND', fatal: true });
+  expect(await driver.stats()).toEqual({ libavInstances: 0 });
+});
+
+test('wasm 與 glue 的 imports 不符：load 回覆 ASSET_LOAD_FAILED，instance 被丟棄', async () => {
+  // glue 的 imports 只有 module "a"，其中沒有這個函式：instantiate 以 LinkError reject。
+  const driver = await spawn(importOnlyWasm('a', 'kikoeru_missing'));
+  const data = await (await fetch(mediaUrl('audio/flac.flac'))).arrayBuffer();
+  await expect(driver.load({ kind: 'bytes', data })).rejects.toMatchObject({
+    code: 'ASSET_LOAD_FAILED',
+    fatal: true,
+  });
   expect(await driver.stats()).toEqual({ libavInstances: 0 });
 });

@@ -26,6 +26,24 @@ export function wasmAssets(): Promise<LibavAssets> {
   return assets;
 }
 
+/**
+ * 只 import 一個函式 `module.field`、其餘什麼都沒有的極小 wasm，用來模擬 imports 與 glue 不符的資產。
+ * 名稱限 ASCII 且短於 128 bytes（長度以單一 byte 的 LEB128 編碼）。
+ */
+export function importOnlyWasm(module: string, field: string): WebAssembly.Module {
+  const name = (s: string) => [s.length, ...new TextEncoder().encode(s)];
+  const section = (id: number, payload: number[]) => [id, payload.length, ...payload];
+  return new WebAssembly.Module(
+    Uint8Array.from([
+      ...[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00],
+      // type section：一個 () => void。
+      ...section(1, [1, 0x60, 0, 0]),
+      // import section：一個 func import，型別 0。
+      ...section(2, [1, ...name(module), ...name(field), 0x00, 0]),
+    ]),
+  );
+}
+
 /** CI 組測試媒體的 URL（`test/media/out/` 之下的路徑）。 */
 export function mediaUrl(path: string): string {
   return new URL(`/test/media/out/${path}`, location.href).href;
@@ -77,8 +95,15 @@ export class WorkerDriver {
     };
   }
 
-  static async init(endpoint: WorkerEndpoint, sampleRate = 48_000): Promise<WorkerDriver> {
-    const { module, glueUrl } = await wasmAssets();
+  /** `module` 預設為 `wasmAssets()` 的 Module；給別的 Module 可以模擬與 glue 不符的資產。 */
+  static async init(
+    endpoint: WorkerEndpoint,
+    sampleRate = 48_000,
+    module?: WebAssembly.Module,
+  ): Promise<WorkerDriver> {
+    const assets = await wasmAssets();
+    const glueUrl = assets.glueUrl;
+    module ??= assets.module;
     const channel = new MessageChannel();
     endpoint.post({ type: 'init', module, glueUrl, workletPort: channel.port1, sampleRate }, [
       channel.port1,
