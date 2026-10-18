@@ -68,7 +68,10 @@ export interface AudioOutputConfig {
 /** media Worker 的回呼。 */
 export interface MediaWorkerHandlers {
   message(message: WorkerToMainMessage): void;
-  /** Worker 的 `error`／`messageerror`：Worker 已無法繼續運作。 */
+  /**
+   * Worker 已無法繼續運作：`error`／`messageerror`。Worker 的 script 載入失敗時以 `AssetLoadError` 呼叫
+   *（Engine 回報 `ASSET_LOAD_FAILED`），其他情況 Engine 回報 `INTERNAL`。
+   */
   crash(error: unknown): void;
 }
 

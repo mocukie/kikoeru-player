@@ -383,6 +383,15 @@ describe('錯誤', () => {
     await expect(running).rejects.toBeInstanceOf(WebAssembly.RuntimeError);
   });
 
+  test('wasm 記憶體用完（FFmpeg 的 ENOMEM）不當成壞封包，原樣丟出', async () => {
+    const decoder = new FakeDecoder();
+    const oom = new Error('Error submitting the packet to the decoder: Out of memory');
+    decoder.decode = () => Promise.reject(oom);
+    const { demand, running, epoch } = setup({ decoder });
+    demand.need(epoch, 4096);
+    await expect(running).rejects.toBe(oom);
+  });
+
   test('demux 的錯誤原樣丟出', async () => {
     const { demand, reader, running, epoch } = setup();
     reader.failNextReadWith(new WorkerError('FORMAT_CORRUPT', 'demux 失敗'));

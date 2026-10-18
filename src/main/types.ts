@@ -291,7 +291,11 @@ export interface Engine extends EventTarget {
    */
   setAudioOffset(trackId: string, offset: number): Promise<void>;
 
-  /** 卸載當前媒體、回到 `'idle'`，並 terminate media Worker；保留 AudioContext，供之後的 `load()` 使用。 */
+  /**
+   * 卸載當前媒體、回到 `'idle'`（`paused` 為 true），並 terminate media Worker：中止讀取，`media`、`tracks`、`duration`、
+   * `error` 回到初始值，之後的 `reload()` 以 `InvalidStateError` reject。保留 AudioContext 與 worklet，供之後的
+   * `load()` 使用（暫停超過 30 秒一樣會 suspend）。`'idle'` 時什麼都不做。
+   */
   unload(): Promise<void>;
 
   /**
@@ -356,7 +360,12 @@ export interface LoadOptions {
   tracks?: Partial<TrackSelection>;
   /** 偏好語言（BCP 47），覆蓋 `EngineOptions.preferredLanguages`。 */
   preferredLanguages?: { audio?: string[]; subtitle?: string[] };
-  /** 外部取消；效果等同被下一個 `load()` 取代。 */
+  /**
+   * 外部取消；效果等同被下一個 `load()` 取代：中止這次 load 的讀取並 terminate media Worker，`load()` 與 loading 期間的
+   * `seek()` 以 `DOMException`（name `'AbortError'`）reject，不論 `signal.reason`。沒有下一個 load 接手，所以 state
+   * 回到 `'idle'`（同 `unload()`）。呼叫時已經 abort 則直接 reject、狀態不變；load 完成之後 abort 沒有作用，`reload()`
+   * 也不沿用它。
+   */
   signal?: AbortSignal;
 }
 
