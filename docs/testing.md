@@ -80,6 +80,8 @@
 
   規則結尾加 `+`（URL 中寫成 `%2B`）表示持續發生，例如 `503@2+`；多個規則以逗號分隔。請求的計數以完整的 URL 區分，測試在 query 加上不重複的 `id` 就互不影響；同一個 URL 的 `reload()` 接著計數。
 
+  預讀會在播放位置之前發出請求，「第 n 個請求」不一定在播放到那裡時才發生。要讓網路跟不上播放，Demo 頁的 query 可以縮短預讀（`/demo/?readahead=0.5`，另有 `cacheMiB`、`stallTimeout`、`stallAttempts`，見 `demo/main.ts`），再加上 `delay`。
+
 不需要 kikoeru 後端。cookie、`.wasm` 的 Content-Type 與壓縮屬於 kikoeru 端的部署驗證。
 
 ## 實機清單
