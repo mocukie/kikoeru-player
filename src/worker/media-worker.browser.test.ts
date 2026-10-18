@@ -671,3 +671,36 @@ describe('建立 libav instance 失敗', () => {
     expect(await driver.stats()).toMatchObject({ libavInstances: 1 });
   });
 });
+
+describe('診斷', () => {
+  test('stats 的 wasmHeapBytes：開檔後是 instance 的 linear memory 大小', async () => {
+    const driver = await WorkerDriver.init(inPage());
+    expect(await driver.stats()).toMatchObject({ wasmHeapBytes: 0 });
+    await driver.load({ kind: 'bytes', data: await mediaBytes('audio/flac.flac') });
+    const { wasmHeapBytes } = await driver.stats();
+    expect(wasmHeapBytes).toBeGreaterThan(0);
+    expect(wasmHeapBytes % 65_536).toBe(0);
+  });
+
+  test('init 的 logLevel：只送出等級以上的 log，帶 scope 與 timeOrigin 時基的 time', async () => {
+    const before = performance.timeOrigin + performance.now();
+    const driver = await WorkerDriver.init(inPage(), { logLevel: 'info' });
+    await driver.load({ kind: 'bytes', data: await mediaBytes('audio/flac.flac') });
+    await driver.decode(0, { frames: 4096 });
+    const after = performance.timeOrigin + performance.now();
+    const logs = driver.messages.flatMap((m) => (m.type === 'log' ? [m.entry] : []));
+    expect(logs.find((e) => e.scope === 'demux' && e.message.startsWith('開檔完成'))).toBeDefined();
+    expect(logs.every((e) => e.level !== 'debug')).toBe(true);
+    for (const entry of logs) {
+      expect(entry.time).toBeGreaterThanOrEqual(before);
+      expect(entry.time).toBeLessThanOrEqual(after);
+    }
+  });
+
+  test('logLevel 為 null 時不送任何 log', async () => {
+    const driver = await WorkerDriver.init(inPage());
+    await driver.load({ kind: 'bytes', data: await mediaBytes('audio/flac.flac') });
+    await driver.decode(0, { frames: 4096 });
+    expect(driver.messages.filter((m) => m.type === 'log')).toEqual([]);
+  });
+});

@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import type {
   MainToWorkletMessage,
+  WireLogLevel,
   WorkerToWorkletMessage,
   WorkletToMainMessage,
   WorkletToWorkerMessage,
@@ -67,12 +68,13 @@ function silence(count: number): number[] {
 }
 
 /** `audioFadeMs` 預設 0（硬切），讓與淡入淡出無關的測試直接比對 sample。 */
-function setup(audioFadeMs = 0) {
+function setup(audioFadeMs = 0, logLevel: WireLogLevel | null = null) {
   const reports: WorkletToMainMessage[] = [];
   const core = new OutputCore({
     sampleRate,
     audioBuffer,
     audioFadeMs,
+    logLevel,
     report: (m) => reports.push(m),
   });
   const worker = new FakeTransport();
@@ -95,7 +97,8 @@ function setup(audioFadeMs = 0) {
     core.handle(message);
   };
   /** 狀態回報（不含 clock）的 type。 */
-  const states = () => reports.filter((r) => r.type !== 'clock').map((r) => r.type);
+  const states = () =>
+    reports.filter((r) => r.type !== 'clock' && r.type !== 'log').map((r) => r.type);
   const lastClock = () => reports.findLast((r) => r.type === 'clock');
   return { core, worker, reports, render, renderFrames, send, states, lastClock };
 }
@@ -542,5 +545,47 @@ describe('淡入淡出（audioFadeMs 10：10 frame）', () => {
     send({ type: 'pause', epoch: 1 });
     expect(states()).toEqual(['playing', 'paused']);
     expect(renderFrames(10)).toEqual(silence(10));
+  });
+});
+
+describe('log', () => {
+  /** flush、play，播完 150 frame 後 ring 用完（starved 在 frame 150 的 quantum）。 */
+  function starve(logLevel: WireLogLevel | null) {
+    const t = setup(0, logLevel);
+    t.send({ type: 'flush', epoch: 1, position: 0 });
+    t.send({ type: 'play', epoch: 1 });
+    t.worker.pcm(1, 0, ramp(150));
+    t.renderFrames(160);
+    return t.reports.filter((r) => r.type === 'log');
+  }
+
+  it('ring 用完時送出 warn，帶發生的 quantum 的 context frame 與位置', () => {
+    expect(starve('warn')).toEqual([
+      {
+        type: 'log',
+        epoch: 1,
+        frame: 150,
+        entry: {
+          level: 'warn',
+          scope: 'audio',
+          message: expect.stringContaining('ring 用完') as string,
+          data: { position: 0.15, underruns: 1 },
+        },
+      },
+    ]);
+  });
+
+  it('低於 logLevel 的不送：error 時 starved 的 warn 不送', () => {
+    expect(starve('error')).toEqual([]);
+  });
+
+  it('logLevel 為 null（沒有 hook）時不送任何 log', () => {
+    expect(starve(null)).toEqual([]);
+  });
+
+  it('debug 時也記錄接上 Worker 與 flush', () => {
+    const messages = starve('debug').map((r) => r.entry.message);
+    expect(messages.some((m) => m.includes('Worker'))).toBe(true);
+    expect(messages.some((m) => m.includes('flush'))).toBe(true);
   });
 });

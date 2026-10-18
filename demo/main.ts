@@ -7,6 +7,8 @@ import {
   isAbortError,
   type Engine,
   type EngineOptions,
+  type LogEntry,
+  type LogLevel,
   type Source,
 } from '../src/index.js';
 
@@ -17,7 +19,8 @@ declare global {
 /**
  * 頁面 URL 的 query 可以覆蓋部分 `EngineOptions`，供 E2E 與實機測試製造網路不足的情況：
  * `readahead`（`limits.readaheadSeconds`）、`cacheMiB`（`limits.cacheBytes`，MiB）、`stallTimeout`、
- * `stallAttempts`。例如 `/demo/?readahead=1&stallTimeout=3000`。
+ * `stallAttempts`。例如 `/demo/?readahead=1&stallTimeout=3000`。log 等級由頁面上的選單決定（query `logLevel`
+ * 給初始值）。
  */
 function engineOptions(query: URLSearchParams): EngineOptions {
   const number = (name: string) => {
@@ -54,6 +57,11 @@ const faultInput = element('fault-custom', HTMLInputElement);
 const urlInput = element('url', HTMLInputElement);
 const fileInput = element('file', HTMLInputElement);
 const logList = element('log', HTMLOListElement);
+const logLevelSelect = element('log-level', HTMLSelectElement);
+const initialLogLevel = new URLSearchParams(location.search).get('logLevel');
+if (initialLogLevel && [...logLevelSelect.options].some((o) => o.value === initialLogLevel)) {
+  logLevelSelect.value = initialLogLevel;
+}
 const autoplayInput = element('autoplay', HTMLInputElement);
 element('engine-options', HTMLElement).textContent =
   `EngineOptions（由頁面 query 覆蓋）：${JSON.stringify(options)}`;
@@ -105,9 +113,21 @@ function command(name: string, run: () => Promise<unknown>): void {
   );
 }
 
+/** Engine 的診斷 log 記進事件 log：`[scope] level message data`。 */
+function logEntry(entry: LogEntry): void {
+  const data = entry.data ? ` ${JSON.stringify(entry.data)}` : '';
+  log(`[${entry.scope}] ${entry.level} ${entry.message}${data}`);
+}
+
+/** 選單的 log 等級；`off` 時不設定 hook（Engine 不輸出任何 log）。 */
+function logOptions(): EngineOptions {
+  const level = logLevelSelect.value;
+  return level === 'off' ? {} : { log: logEntry, logLevel: level as LogLevel };
+}
+
 /** 建立 Engine 並接上事件 log；`globalThis.engine` 指向新的 Engine。 */
 function setupEngine(): void {
-  const target = createEngine(options);
+  const target = createEngine({ ...options, ...logOptions() });
   engine = target;
   globalThis.engine = target;
   target.addEventListener('statechange', (e) => {
@@ -199,14 +219,22 @@ element('unload', HTMLElement).addEventListener('click', () => {
 element('destroy', HTMLElement).addEventListener('click', () => {
   command('destroy', () => engine.destroy());
 });
-element('recreate', HTMLElement).addEventListener('click', () => {
-  // 沒有 destroy 的舊 Engine 先 destroy，避免留著它的 Worker 與 AudioContext。
+/** destroy 目前的 Engine（沒有 destroy 時，避免留著它的 Worker 與 AudioContext），建立新的並沿用音量。 */
+function recreateEngine(reason: string): void {
   const previous = engine;
   command('destroy（舊的 Engine）', () => previous.destroy());
   setupEngine();
   engine.volume = Number(volumeInput.value);
   engine.muted = mutedInput.checked;
-  log('建立新的 Engine');
+  log(`建立新的 Engine（${reason}）`);
+}
+
+element('recreate', HTMLElement).addEventListener('click', () => {
+  recreateEngine('按鈕');
+});
+// logLevel 是 createEngine() 的選項：改變時換一個新的 Engine。
+logLevelSelect.addEventListener('change', () => {
+  recreateEngine(`logLevel ${logLevelSelect.value}`);
 });
 
 // 進度條：拖曳中只更新顯示的時間，放開（change）時才 seek；其餘時候跟著 currentTime。
@@ -260,14 +288,19 @@ const bufferedText = element('buffered', HTMLElement);
 const cacheStatsText = element('cache-stats', HTMLElement);
 const networkStatsText = element('network-stats', HTMLElement);
 const resourcesText = element('resources', HTMLElement);
+const wasmVideoText = element('wasm-video-stats', HTMLElement);
+const statsPanel = element('stats-panel', HTMLDetailsElement);
+const statsJson = element('stats-json', HTMLElement);
 
 const MiB = 1024 * 1024;
 
-// getStats() 是非同步的：每秒取一次 ring 水位、underrun、輸出延遲（實機檢查藍牙延遲用）、Range 快取、網路
-// 與存活的資源數。
+// getStats() 是非同步的：每秒取一次 ring 水位、underrun、輸出延遲（實機檢查藍牙延遲用）、Range 快取、網路、
+// wasm heap 與存活的資源數；展開的面板顯示完整的快照。
 setInterval(() => {
   engine.getStats().then(
-    ({ audio, cache, network, bufferAhead, packetQueue, resources }) => {
+    (stats) => {
+      const { audio, cache, network, bufferAhead, packetQueue, resources, wasmHeapBytes, video } =
+        stats;
       audioStatsText.textContent =
         `ring ${audio.ringMs.toFixed(0)} ms／target ${String(audio.targetMs)} ms，` +
         `underruns ${String(audio.underruns)}，outputLatency ${audio.outputLatencyMs.toFixed(1)} ms`;
@@ -284,6 +317,13 @@ setInterval(() => {
       resourcesText.textContent =
         `workers ${String(resources.workers)}，libavInstances ${String(resources.libavInstances)}，` +
         `openVideoFrames ${String(resources.openVideoFrames)}`;
+      wasmVideoText.textContent =
+        `wasm heap ${(wasmHeapBytes / MiB).toFixed(1)} MiB，封包佇列 ${(packetQueue.bytes / MiB).toFixed(2)} MiB，` +
+        (video
+          ? `video decoded ${String(video.decoded)}／dropped ${String(video.dropped)}，` +
+            `queue ${String(video.decodeQueueSize)}，avg ${video.avgDecodeMs.toFixed(1)} ms`
+          : 'video —');
+      if (statsPanel.open) statsJson.textContent = JSON.stringify(stats, null, 2);
     },
     () => undefined,
   );

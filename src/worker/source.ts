@@ -4,6 +4,7 @@
 import type { RetryPolicy, WireSource, WorkerErrorCode } from '../protocol/index.js';
 import { WorkerError } from './errors.js';
 import type { WorkerHost } from './host.js';
+import { silentLogger, type Logger } from './log.js';
 import { CachedSource, type RangeCache } from './range-cache.js';
 
 /** 一個可隨機讀取的來源。 */
@@ -21,6 +22,8 @@ export interface SourceDeps {
   cache?: RangeCache;
   /** http 的每個請求失敗時呼叫（包括之後會重試的），供卡住時回報最後一次的讀取錯誤。 */
   onRequestError?: (error: WorkerError) => void;
+  /** 請求、失敗與重試的 log（scope `'io'`）；省略時不記錄。 */
+  log?: Logger;
 }
 
 /** 進行中的 http 請求，供 `getStats().network.inflight`。 */
@@ -65,7 +68,7 @@ export async function openSource(
       return blobSource(wire.blob);
     case 'http': {
       const client = await openHttp(wire, signal, deps);
-      return deps.cache ? new CachedSource(client, deps.cache) : directSource(client);
+      return deps.cache ? new CachedSource(client, deps.cache, deps.log) : directSource(client);
     }
   }
 }
@@ -118,6 +121,7 @@ export async function openHttp(
 ): Promise<RangeClient> {
   const { url } = wire;
   const retry = deps.retry ?? noRetry;
+  const log = deps.log ?? silentLogger;
   const fetchImpl = deps.fetch ?? ((url: string, init: RequestInit) => fetch(url, init));
   const inflight = new Set<{ start: number; end: number; startedAt: number }>();
   let bytesLoaded = 0;
@@ -134,6 +138,7 @@ export async function openHttp(
   ): Promise<string | null> => {
     const entry = { start, end, startedAt: performance.now() };
     inflight.add(entry);
+    log.log('debug', 'io', 'Range 請求', { url, start, end });
     try {
       let response: Response;
       try {
@@ -213,9 +218,29 @@ export async function openHttp(
       } catch (error) {
         if (signal.aborted) throw signal.reason as Error;
         if (error instanceof WorkerError) deps.onRequestError?.(error);
-        if (!retryable(error) || attempt >= retry.attempts) throw error;
+        const retrying = retryable(error) && attempt < retry.attempts;
+        if (log.enabled('warn')) {
+          const detail = error instanceof WorkerError ? error : null;
+          log.log(
+            'warn',
+            'io',
+            `請求失敗：${error instanceof Error ? error.message : String(error)}`,
+            {
+              url,
+              start: position,
+              end,
+              code: detail?.code ?? 'INTERNAL',
+              ...(detail?.detail?.status !== undefined && { status: detail.detail.status }),
+              attempt: attempt + 1,
+              retrying,
+            },
+          );
+        }
+        if (!retrying) throw error;
       }
-      await sleep(retry.baseDelayMs * 2 ** attempt, signal);
+      const delayMs = retry.baseDelayMs * 2 ** attempt;
+      log.log('info', 'io', `${String(delayMs)} ms 後重試`, { url, retry: attempt + 1, delayMs });
+      await sleep(delayMs, signal);
     }
   };
 

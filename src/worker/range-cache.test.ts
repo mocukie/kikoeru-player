@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { WorkerError } from './errors.js';
 import { BLOCK_BYTES, CachedSource, RangeCache } from './range-cache.js';
+import type { Logger } from './log.js';
 import type { RangeClient } from './source.js';
 
 const B = BLOCK_BYTES;
@@ -204,10 +205,15 @@ describe('預讀', () => {
   });
 
   /** 開檔後讀過第一個區塊，預讀從 `B` 開始。 */
-  async function started(options: { size?: number; cacheBytes?: number; target: number }) {
+  async function started(options: {
+    size?: number;
+    cacheBytes?: number;
+    target: number;
+    log?: Logger;
+  }) {
     const client = fakeClient(options.size ?? 100 * B);
     const cache = new RangeCache(options.cacheBytes ?? 1000 * B);
-    const source = new CachedSource(client, cache);
+    const source = new CachedSource(client, cache, options.log);
     const first = source.read(0, B, never);
     client.requests[0]?.deliver();
     await first;
@@ -305,6 +311,22 @@ describe('預讀', () => {
     expect(client.requests).toHaveLength(3);
     await vi.advanceTimersByTimeAsync(1500);
     expect(ranges(client).slice(3)).toEqual([[9, 10]]);
+  });
+
+  test('預讀的開始、停止與錯誤都有 io 的 log', async () => {
+    vi.useFakeTimers();
+    const messages: string[] = [];
+    const log: Logger = {
+      enabled: () => true,
+      log: (level, scope, message) => messages.push(`${level}:${scope}:${message}`),
+    };
+    const { client } = await started({ target: 2 * B, log });
+    client.requests[1]?.fail(new WorkerError('SOURCE_NETWORK', 'offline'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(messages).toEqual([
+      expect.stringMatching(/^debug:io:預讀開始/) as string,
+      expect.stringMatching(/^warn:io:預讀暫停/) as string,
+    ]);
   });
 
   test('abort() 之後等下一個讀取決定新的位置才重新預讀', async () => {
