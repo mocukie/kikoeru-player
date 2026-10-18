@@ -101,7 +101,8 @@ function setup(
     demand,
     pool,
     signal: controller.signal,
-    post: (message, transfer) => posted.push({ message, transfer }),
+    // 與 MessagePort 一樣 transfer：送出後原本的 buffer 被 detach。
+    post: (message, transfer) => posted.push(structuredClone({ message, transfer }, { transfer })),
   });
   const running = pipeline.run();
   const pcm = () =>

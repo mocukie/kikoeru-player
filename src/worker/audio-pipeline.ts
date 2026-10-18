@@ -272,8 +272,10 @@ export class AudioPipeline<P> {
       }
       if (this.#queue.frames === 0) continue;
       const { time, channels } = this.#queue.take(Math.min(want, this.#queue.frames), pool);
+      // transfer 之後 view 被 detach，長度要在送出前記下。
+      const frames = channels[0].length;
       post({ type: 'pcm', epoch, time, channels }, [channels[0].buffer, channels[1].buffer]);
-      demand.consume(epoch, channels[0].length);
+      demand.consume(epoch, frames);
     }
   }
 
