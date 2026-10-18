@@ -85,7 +85,7 @@
 | 本機（agent 必須通過） | `pnpm verify` | lint → typecheck → Node 測試 → browser mode（Chromium）→ E2E（Chromium） |
 | 本機重現 CI | `pnpm verify:docker` | 在 Playwright 官方 image 內跑 Chromium 與 Firefox 的完整組合 |
 | CI `ensure-wasm`、`publish-wasm` | | wasm Release 不存在時才 build；發布以 tag 跨 PR 互斥，取得互斥後重新檢查（[ADR-0005](adr/0005-wasm-release-and-engine-package.md)） |
-| CI `check` | 與 `ensure-wasm` 平行 | lint、typecheck、Node 測試 |
+| CI `check` | 依賴 `ensure-wasm`、`publish-wasm`（lint 與 typecheck 用 wasm Release 的 `libav.types.d.ts`） | lint、typecheck、Node 測試 |
 | CI `browser` | 依賴 `ensure-wasm`、`publish-wasm` 與媒體快取 | Chromium 與 Firefox 的 browser mode 與 E2E（含 leak 測試），以及 Vite fixture App 的驗收 |
 | CI Safari | macOS runner，排程 | 見上方「瀏覽器」 |
 
