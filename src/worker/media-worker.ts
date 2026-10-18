@@ -267,8 +267,9 @@ export class MediaWorker {
     if (!load) return;
     this.#stopOutput();
     load.media?.abortReads();
-    // 進行中的網路請求（含預讀）一起中止：卡住的請求要換新的才能恢復。
-    if (load.source instanceof CachedSource) load.source.abort();
+    // seek 時進行中的網路請求（含預讀）一起中止：卡住的請求要換新的才能恢復。開檔後的第一次輸出不 seek，
+    // demuxer 接著讀，不必中止。
+    if (message.seek && load.source instanceof CachedSource) load.source.abort();
     const output = new AbortController();
     this.#output = output;
     this.#demand.setEpoch(message.epoch);

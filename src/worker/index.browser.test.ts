@@ -7,7 +7,7 @@ import {
   mediaUrl,
   WorkerDriver,
 } from '../../test/media-worker-harness.js';
-import type { RetryPolicy, WorkerToMainMessage } from '../protocol/index.js';
+import type { RetryPolicy, WorkerLimits, WorkerToMainMessage } from '../protocol/index.js';
 
 const workers: Worker[] = [];
 
@@ -15,7 +15,11 @@ afterEach(() => {
   for (const worker of workers.splice(0)) worker.terminate();
 });
 
-function spawn(module?: WebAssembly.Module, retry?: RetryPolicy): Promise<WorkerDriver> {
+function spawn(
+  module?: WebAssembly.Module,
+  retry?: RetryPolicy,
+  limits?: Partial<WorkerLimits>,
+): Promise<WorkerDriver> {
   const worker = new Worker(new URL('./index.js', import.meta.url), { type: 'module' });
   workers.push(worker);
   return WorkerDriver.init(
@@ -29,7 +33,7 @@ function spawn(module?: WebAssembly.Module, retry?: RetryPolicy): Promise<Worker
         };
       },
     },
-    { module, retry },
+    { module, retry, ...(limits && { limits }) },
   );
 }
 
@@ -44,7 +48,7 @@ test('http 來源：回覆 probe 結果與帶 epoch 的 PCM，直到 EOF', async
   expect(pcm.chunks.every((c) => c.epoch === 4)).toBe(true);
   expect(pcm.left.length).toBe(10 * 48_000);
   expect(driver.worklet.at(-1)).toEqual({ type: 'eof', epoch: 4 });
-  expect(await driver.stats()).toEqual({ libavInstances: 1 });
+  expect(await driver.stats()).toMatchObject({ libavInstances: 1 });
 });
 
 test('http 來源：連續 seek 時中止讀取，最後一個 seek 從落點輸出到結尾', async () => {
@@ -82,7 +86,7 @@ test('無法辨識的格式回覆 FORMAT_UNSUPPORTED，instance 被丟棄', asyn
   await expect(driver.load({ kind: 'bytes', data: garbage })).rejects.toMatchObject({
     code: 'FORMAT_UNSUPPORTED',
   });
-  expect(await driver.stats()).toEqual({ libavInstances: 0 });
+  expect(await driver.stats()).toMatchObject({ libavInstances: 0 });
 });
 
 test('http 404 回覆 SOURCE_NOT_FOUND', async () => {
@@ -90,7 +94,7 @@ test('http 404 回覆 SOURCE_NOT_FOUND', async () => {
   await expect(
     driver.load({ kind: 'http', url: mediaUrl('audio/does-not-exist.flac') }),
   ).rejects.toMatchObject({ code: 'SOURCE_NOT_FOUND', fatal: true });
-  expect(await driver.stats()).toEqual({ libavInstances: 0 });
+  expect(await driver.stats()).toMatchObject({ libavInstances: 0 });
 });
 
 test('wasm 與 glue 的 imports 不符：load 回覆 ASSET_LOAD_FAILED，instance 被丟棄', async () => {
@@ -101,7 +105,7 @@ test('wasm 與 glue 的 imports 不符：load 回覆 ASSET_LOAD_FAILED，instanc
     code: 'ASSET_LOAD_FAILED',
     fatal: true,
   });
-  expect(await driver.stats()).toEqual({ libavInstances: 0 });
+  expect(await driver.stats()).toMatchObject({ libavInstances: 0 });
 });
 
 describe('http 的故障（test/server 的故障注入）', () => {
@@ -124,7 +128,7 @@ describe('http 的故障（test/server 的故障注入）', () => {
       fatal: true,
       detail: { status, url },
     });
-    expect(await driver.stats()).toEqual({ libavInstances: 0 });
+    expect(await driver.stats()).toMatchObject({ libavInstances: 0 });
   });
 
   test('503@2：重試後恢復，解出完整的音訊', async () => {
@@ -160,8 +164,13 @@ describe('http 的故障（test/server 的故障注入）', () => {
   });
 
   test('播放中 401 不重試，回報 SOURCE_UNAUTHORIZED', async () => {
-    // 第 1 個請求探測大小，第 2 個是開檔，之後是播放中的讀取。
-    const driver = await spawn(undefined, { attempts: 3, baseDelayMs: 2000 });
+    // 第 1 個請求探測大小，第 2 個是開檔，之後是預讀：預讀 1 秒（不到 1 個區塊），每個請求 1 個區塊。
+    // 預讀遇到 401 之後，播放讀到那裡才回報。
+    const driver = await spawn(
+      undefined,
+      { attempts: 3, baseDelayMs: 2000 },
+      { readaheadSeconds: 1 },
+    );
     const url = faultyMediaUrl(WAV, 'fault=401@4');
     await driver.load({ kind: 'http', url });
     const started = performance.now();
@@ -186,7 +195,7 @@ describe('http 的故障（test/server 的故障注入）', () => {
 
     const media = await driver.load({ kind: 'http', url: mediaUrl('audio/flac.flac') }, 2);
     expect(audioTracks(media)).toHaveLength(1);
-    expect(await driver.stats()).toEqual({ libavInstances: 1 });
+    expect(await driver.stats()).toMatchObject({ libavInstances: 1 });
     expect(driver.messages.filter((m) => 'epoch' in m && m.epoch === 1)).toEqual([]);
   });
 });

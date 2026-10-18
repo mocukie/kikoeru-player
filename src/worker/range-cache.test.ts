@@ -123,7 +123,7 @@ describe('CachedSource 的讀取', () => {
     expect(cache).toMatchObject({ hits: 1, misses: 1 });
   });
 
-  test('循序讀時合併成最多 2 MiB 的請求', async () => {
+  test('還沒開始預讀（開檔、probe）時，循序讀也一次請求一個區塊', async () => {
     const client = fakeClient(40 * B);
     const source = new CachedSource(client, new RangeCache(100 * B));
     const first = source.read(0, B, never);
@@ -132,11 +132,28 @@ describe('CachedSource 的讀取', () => {
     const next = source.read(B, B, never);
     expect(ranges(client)).toEqual([
       [0, 1],
-      [1, 9],
+      [1, 2],
     ]);
-    // 第一個區塊到了就能交出，不等整個請求。
-    client.requests[1]?.deliver(B);
+    client.requests[1]?.deliver();
     expect([...(await next)]).toEqual(expected(B, B));
+  });
+
+  test('請求中的第一個區塊到了就交出，不等整個請求', async () => {
+    vi.useFakeTimers();
+    const client = fakeClient(40 * B);
+    const source = new CachedSource(client, new RangeCache(100 * B));
+    const first = source.read(0, B, never);
+    client.requests[0]?.deliver();
+    await first;
+    source.setReadahead(20 * B);
+    client.requests[1]?.fail(new WorkerError('SOURCE_NETWORK', 'offline'));
+    await vi.advanceTimersByTimeAsync(0);
+    // 預讀暫停中：讀取自己發出合併的請求。
+    const next = source.read(B, B, never);
+    expect(ranges(client).at(-1)).toEqual([1, 9]);
+    client.requests.at(-1)?.deliver(B);
+    expect([...(await next)]).toEqual(expected(B, B));
+    vi.useRealTimers();
   });
 
   test('區塊已在請求中時等它，不重複請求', async () => {

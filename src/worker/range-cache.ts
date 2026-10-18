@@ -1,6 +1,7 @@
 // http 來源的 Range 快取與預讀（ADR-0007）。快取以 256 KiB 的區塊為單位、LRU 淘汰，屬於 media Worker，
-// 主來源與外掛音軌共用一個上限（`limits.cacheBytes`）。每個來源以 `CachedSource` 讀取：隨機讀一次請求涵蓋的區塊，
-// 循序讀合併成最多 2 MiB 的請求；預讀從播放位置（demux 讀到的位置）往後抓到目標就停，掉到一半以下才恢復。
+// 主來源與外掛音軌共用一個上限（`limits.cacheBytes`）。每個來源以 `CachedSource` 讀取：隨機讀（開檔、probe、
+// seek 後的第一個讀取）一次請求涵蓋的區塊，開始預讀之後的循序讀合併成最多 2 MiB 的請求；預讀從播放位置（demux
+// 讀到的位置）往後抓到目標就停，掉到一半以下才恢復。
 
 import type { WorkerError } from './errors.js';
 import { retryable, type ByteSource, type RangeClient } from './source.js';
@@ -174,7 +175,9 @@ export class CachedSource implements ByteSource {
     const end = Math.min(offset + length, this.size);
     if (end <= offset) return new Uint8Array();
     const last = this.#lastEnd;
-    const sequential = last !== null && offset >= last && offset <= last + BLOCK_BYTES;
+    // 開檔與 probe（還沒有預讀目標）時一律當成隨機讀。
+    const sequential =
+      this.#target > 0 && last !== null && offset >= last && offset <= last + BLOCK_BYTES;
     this.#lastEnd = end;
     this.#position = end;
     const first = Math.floor(offset / BLOCK_BYTES);
@@ -251,14 +254,11 @@ export class CachedSource implements ByteSource {
     }
   }
 
-  /** 循序讀從區塊 `index` 起請求的區塊數：至少到 `last`，有預讀目標時到目標為止，最多 2 MiB。 */
+  /** 循序讀從區塊 `index` 起請求的區塊數：至少到 `last`，到預讀目標為止，最多 2 MiB。 */
   #sequentialCount(index: number, last: number): number {
-    let until = index + MAX_REQUEST_BLOCKS;
-    if (this.#target > 0 && this.#position !== null) {
-      const window = Math.ceil((this.#position + this.readaheadTarget) / BLOCK_BYTES);
-      until = Math.min(until, Math.max(window, last + 1));
-    }
-    return this.#missingRun(index, until - index);
+    const position = this.#position ?? index * BLOCK_BYTES;
+    const window = Math.ceil((position + this.readaheadTarget) / BLOCK_BYTES);
+    return this.#missingRun(index, Math.max(window, last + 1) - index);
   }
 
   /** 從 `index` 起連續沒有在快取、也沒有在請求中的區塊數，最多 `max` 個、不超過檔尾。 */
