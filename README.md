@@ -90,7 +90,7 @@ App 與 Engine 同時開發時，在 App 端 `pnpm link ../kikoeru-player`（不
 
 | 主題 | 權威文件 |
 |---|---|
-| 名詞 | [`CONTEXT.md`](CONTEXT.md) |
+| 名詞 | [`GLOSSARY.md`](GLOSSARY.md) |
 | 開發規則（commit、branch、PR、硬性約束） | [`AGENTS.md`](AGENTS.md) |
 | 架構：執行緒分工、目錄與依賴規則、訊息協定、不變式 | [`docs/architecture.md`](docs/architecture.md) |
 | 測試：分層、瀏覽器、測試媒體、每張實作 issue 的最低要求 | [`docs/testing.md`](docs/testing.md) |
