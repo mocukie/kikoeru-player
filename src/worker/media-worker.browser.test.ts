@@ -6,6 +6,7 @@ import {
   audioTracks,
   beepOnsets,
   beepWav,
+  importOnlyWasm,
   mediaBytes,
   peak,
   WorkerDriver,
@@ -29,7 +30,7 @@ function inPage(deps: Omit<MediaWorkerDeps, 'postMessage'> = {}): WorkerEndpoint
 }
 
 async function decodeFile(path: string, sampleRate = 48_000) {
-  const driver = await WorkerDriver.init(inPage(), sampleRate);
+  const driver = await WorkerDriver.init(inPage(), { sampleRate });
   const media = await driver.load({ kind: 'bytes', data: await mediaBytes(path) });
   const [track] = audioTracks(media);
   if (!track) throw new Error(`${path} 沒有音軌`);
@@ -373,6 +374,46 @@ describe('中止與 instance', () => {
     const pcm = await driver.decode(0, { epoch: 2, frames: 8192 });
     expect(pcm.chunks.every((c) => c.epoch === 2)).toBe(true);
     expect(driver.worklet.slice(sent).every((m) => m.epoch === 2)).toBe(true);
+    expect(await driver.stats()).toEqual({ libavInstances: 1 });
+  });
+});
+
+describe('建立 libav instance 失敗', () => {
+  test.each([
+    ['LinkError', 'a', 'kikoeru_missing'],
+    ['TypeError', 'kikoeru', 'missing'],
+  ])('imports 不符（%s）為 ASSET_LOAD_FAILED，並丟掉 instance', async (_, module, field) => {
+    const driver = await WorkerDriver.init(inPage(), {
+      module: importOnlyWasm(module, field),
+    });
+    const data = await mediaBytes('audio/flac.flac');
+    await expect(driver.load({ kind: 'bytes', data })).rejects.toMatchObject({
+      code: 'ASSET_LOAD_FAILED',
+      fatal: true,
+    });
+    expect(await driver.stats()).toEqual({ libavInstances: 0 });
+  });
+
+  test('配置不到記憶體為 MEMORY_LIMIT；Worker 之後的 load 照常完成', async () => {
+    let failures = 1;
+    const driver = await WorkerDriver.init(
+      inPage({
+        instantiate: (module, imports) =>
+          failures-- > 0
+            ? Promise.reject(new RangeError('Out of memory: Cannot allocate Wasm memory'))
+            : WebAssembly.instantiate(module, imports),
+      }),
+    );
+    const flac = await mediaBytes('audio/flac.flac');
+    await expect(driver.load({ kind: 'bytes', data: flac })).rejects.toMatchObject({
+      code: 'MEMORY_LIMIT',
+      fatal: true,
+    });
+    expect(await driver.stats()).toEqual({ libavInstances: 0 });
+    expect(driver.messages.filter((m) => m.type === 'crash')).toEqual([]);
+
+    const media = await driver.load({ kind: 'bytes', data: flac }, 2);
+    expect(audioTracks(media)).toHaveLength(1);
     expect(await driver.stats()).toEqual({ libavInstances: 1 });
   });
 });

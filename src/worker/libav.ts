@@ -20,10 +20,18 @@ type LibAV = libavjs.LibAV;
 type Packet = libavjs.Packet;
 type Frame = libavjs.Frame;
 
-/** 主執行緒 compile 好的 wasm 與 glue 的 URL。 */
+/** 以 compile 好的 Module 建立 instance；與 `WebAssembly.instantiate(module, imports)` 相同。 */
+export type Instantiate = (
+  module: WebAssembly.Module,
+  imports: WebAssembly.Imports,
+) => Promise<WebAssembly.Instance>;
+
+/** 建立 libav instance 需要的東西：主執行緒 compile 好的 wasm、glue 的 URL，以及建立 instance 的方式。 */
 export interface LibavAssets {
   module: WebAssembly.Module;
   glueUrl: string;
+  /** 預設為 `WebAssembly.instantiate`；測試以它模擬建立 instance 失敗。 */
+  instantiate?: Instantiate;
 }
 
 /** block reader device 在 wasm 內的檔名。 */
@@ -336,21 +344,43 @@ async function createInstance(assets: LibavAssets): Promise<LibAV> {
     },
   );
   const factory = (await glue) as (options: object) => Promise<unknown>;
+  const instantiate = assets.instantiate ?? ((m, imports) => WebAssembly.instantiate(m, imports));
   return libavjs.LibAV({
     noworker: true,
-    // 用主執行緒 compile 好的 Module 建立 instance，不再下載與編譯 wasm。
+    // 用主執行緒 compile 好的 Module 建立 instance，不再下載與編譯 wasm。glue 的 instantiateWasm 沒有回報失敗的
+    // 途徑：instantiate 失敗時它的 Module promise 永遠不會 settle，所以由外層的 promise 直接 reject。
     factory: (options: object) =>
-      factory({
-        ...options,
-        instantiateWasm(
-          imports: WebAssembly.Imports,
-          receive: (instance: WebAssembly.Instance) => void,
-        ) {
-          void WebAssembly.instantiate(assets.module, imports).then(receive);
-          return {};
-        },
+      new Promise((resolve, reject) => {
+        factory({
+          ...options,
+          instantiateWasm(
+            imports: WebAssembly.Imports,
+            receive: (instance: WebAssembly.Instance) => void,
+          ) {
+            instantiate(assets.module, imports)
+              .then(receive)
+              .catch((error: unknown) => {
+                reject(instantiateError(error));
+              });
+            return {};
+          },
+        }).then(resolve, reject);
       }),
   });
+}
+
+/**
+ * 建立 instance 失敗的分類：
+ * - `RangeError`：配置不到 linear memory（記憶體吃緊、同一個 Worker 內 instance 過多）→ `MEMORY_LIMIT`。
+ *   只有這個 load 失敗、Worker 仍可使用，所以以 `error` 回報，不走 `crash` 的 `out-of-memory`。
+ * - 其他（imports 不符的 `LinkError`／`TypeError`、glue 收下 instance 時找不到 export）：資產與 glue 不相符
+ *   → `ASSET_LOAD_FAILED`。
+ */
+function instantiateError(error: unknown): WorkerError {
+  if (error instanceof RangeError) {
+    return new WorkerError('MEMORY_LIMIT', '無法配置 wasm 記憶體', { cause: error });
+  }
+  return new WorkerError('ASSET_LOAD_FAILED', 'wasm 與 glue 不相符', { cause: error });
 }
 
 async function rawStream(libav: LibAV, s: libavjs.Stream): Promise<RawStream> {

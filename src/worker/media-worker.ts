@@ -13,7 +13,7 @@ import type {
 import { BufferPool, Demand } from './audio-pipeline.js';
 import { toWireError, WorkerError } from './errors.js';
 import type { WorkerHost } from './host.js';
-import { LibavMedia, type LibavAssets } from './libav.js';
+import { LibavMedia, type Instantiate, type LibavAssets } from './libav.js';
 import { hasPlayableTrack, toProbedMedia } from './probe.js';
 import { openSource, type ByteSource } from './source.js';
 
@@ -24,6 +24,8 @@ export interface MediaWorkerDeps {
     wire: WorkerLoadMessage<WorkerHost>['source'],
     signal: AbortSignal,
   ) => Promise<ByteSource>;
+  /** 建立 libav instance；預設為 `WebAssembly.instantiate`，測試可以模擬配置失敗。 */
+  instantiate?: Instantiate;
 }
 
 /** Worker 從 init 得到的環境。 */
@@ -66,7 +68,11 @@ export class MediaWorker {
     switch (message.type) {
       case 'init':
         this.#env = {
-          assets: { module: message.module, glueUrl: message.glueUrl },
+          assets: {
+            module: message.module,
+            glueUrl: message.glueUrl,
+            instantiate: this.#deps.instantiate,
+          },
           port: message.workletPort,
           sampleRate: message.sampleRate,
         };
