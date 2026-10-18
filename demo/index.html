@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>kikoeru-player Demo</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        margin: 0 auto;
+        max-width: 48rem;
+        padding: 1rem;
+      }
+      fieldset {
+        display: grid;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+      }
+      input[type='url'],
+      select {
+        flex: 1 1 16rem;
+        min-width: 0;
+      }
+      button {
+        padding: 0.4rem 0.9rem;
+      }
+      dl {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.25rem 1rem;
+        font-variant-numeric: tabular-nums;
+      }
+      dt {
+        font-weight: 600;
+      }
+      dd {
+        margin: 0;
+      }
+      #log {
+        max-height: 50vh;
+        overflow: auto;
+        padding-left: 2.5rem;
+        font:
+          0.8rem/1.4 ui-monospace,
+          monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>kikoeru-player Demo</h1>
+
+    <fieldset>
+      <legend>來源</legend>
+      <div class="row">
+        <label for="media">CI 組媒體</label>
+        <select id="media"></select>
+      </div>
+      <div class="row">
+        <label for="url">或 URL</label>
+        <input id="url" type="url" placeholder="https://…（填了就優先使用）" />
+      </div>
+      <div class="row">
+        <label for="file">或本機檔案</label>
+        <input id="file" type="file" />
+      </div>
+    </fieldset>
+
+    <div class="row">
+      <button id="load" type="button">load</button>
+      <button id="play" type="button">play</button>
+      <button id="pause" type="button">pause</button>
+    </div>
+
+    <h2>狀態</h2>
+    <dl>
+      <dt>state</dt>
+      <dd id="state">idle</dd>
+      <dt>paused</dt>
+      <dd id="paused">true</dd>
+      <dt>currentTime</dt>
+      <dd id="current-time">0.000</dd>
+      <dt>duration</dt>
+      <dd id="duration">NaN</dd>
+      <dt>media</dt>
+      <dd id="media-info">—</dd>
+    </dl>
+
+    <h2>事件 log <button id="copy-log" type="button">複製</button></h2>
+    <ol id="log"></ol>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

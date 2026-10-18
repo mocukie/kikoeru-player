@@ -21,6 +21,14 @@ export interface WasmAssets {
   glueUrl: string;
 }
 
+/**
+ * 資產（wasm、glue、Worker、worklet）載入失敗；deps 以它 reject，Engine 回報 `ASSET_LOAD_FAILED`。
+ * 其他的失敗依發生處分類（例如音訊輸出的是 `AUDIO_OUTPUT`）。
+ */
+export class AssetLoadError extends Error {
+  override readonly name = 'AssetLoadError';
+}
+
 /** `createEngineWith()` 的依賴。 */
 export interface EngineDeps {
   /** 平台；決定 `audioBuffer` 與 `limits` 的預設值。 */
@@ -61,8 +69,18 @@ export interface MediaWorker {
 export interface AudioOutput {
   /** `AudioContext.sampleRate`。 */
   readonly sampleRate: number;
-  /** 建立新的 `MessageChannel`，一端接上 worklet，回傳交給新的 media Worker 的另一端。 */
+  /**
+   * 建立新的 `MessageChannel`，一端接上 worklet，回傳交給新的 media Worker 的另一端。
+   * worklet 載入失敗時以 `AssetLoadError` reject，其他失敗（例如建立 `AudioWorkletNode`）以原本的錯誤 reject。
+   */
   connect(): Promise<MessagePort>;
+  /**
+   * 此刻聽到的 sample 的 context frame（與 worklet 的 `currentFrame` 同一條軸），以 `getOutputTimestamp()` 換算；
+   * context 還沒開始時為 null。完整的延遲 fallback 由「音量、淡入淡出與輸出延遲」#42 加入。
+   */
+  heardFrame(): number | null;
+  /** 輸出延遲（秒）：sample 進入 audio graph 到被聽到的時間；`getStats().audio.outputLatencyMs` 的來源。 */
+  outputLatency(): number;
   /** 送給 worklet；worklet 還沒載入完成時先排隊，載入後依序送出。 */
   post(message: MainToWorkletMessage): void;
   /**

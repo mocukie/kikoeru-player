@@ -8,7 +8,7 @@ import type {
   WorkletProcessorOptions,
   WorkletToMainMessage,
 } from '../protocol/index.js';
-import type { AudioOutput, AudioOutputConfig, MainHost } from './deps.js';
+import { AssetLoadError, type AudioOutput, type AudioOutputConfig, type MainHost } from './deps.js';
 
 /** `unlock()` 與 `close()` 等待 AudioContext 的上限（ms），對齊 ADR-0004 的 2 秒 timeout。 */
 const CONTEXT_TIMEOUT_MS = 2000;
@@ -42,7 +42,12 @@ class WebAudioOutput implements AudioOutput {
     const context = new AudioContext({ latencyHint: 'playback' });
     this.#context = context;
     this.#ready = (async () => {
-      await context.audioWorklet.addModule(config.workletUrl ?? defaultWorkletUrl());
+      const url = config.workletUrl ?? defaultWorkletUrl();
+      try {
+        await context.audioWorklet.addModule(url);
+      } catch (cause) {
+        throw new AssetLoadError(`無法載入 AudioWorklet（${String(url)}）`, { cause });
+      }
       const name: WorkletProcessorName = 'kikoeru-player-output';
       const processorOptions: WorkletProcessorOptions = { audioBuffer: config.audioBuffer };
       const node = new AudioWorkletNode(context, name, {
@@ -73,6 +78,33 @@ class WebAudioOutput implements AudioOutput {
     const message: WorkletConnectMessage<MainHost> = { type: 'connect', port: channel.port1 };
     node.port.postMessage(message, [channel.port1]);
     return channel.port2;
+  }
+
+  heardFrame(): number | null {
+    const heard = this.#heardTime();
+    return heard === null ? null : heard * this.#context.sampleRate;
+  }
+
+  outputLatency(): number {
+    const heard = this.#heardTime();
+    return heard === null ? 0 : Math.max(0, this.#context.currentTime - heard);
+  }
+
+  /**
+   * 此刻聽到的 context 時間（秒）：`getOutputTimestamp()` 的 `contextTime` 加上它之後經過的時間，
+   * 不超過 `currentTime`（context 停住時不往前推）。取不到 timestamp 時退回 `currentTime`；
+   * 完整的 fallback（`outputLatency`、`baseLatency`）由 #42 加入。
+   */
+  #heardTime(): number | null {
+    const context = this.#context;
+    const rendered = context.currentTime;
+    if (rendered <= 0) return null;
+    const { contextTime, performanceTime } = context.getOutputTimestamp();
+    if (contextTime === undefined || performanceTime === undefined || contextTime <= 0) {
+      return rendered;
+    }
+    const elapsed = Math.max(0, performance.now() - performanceTime) / 1000;
+    return Math.min(contextTime + elapsed, rendered);
   }
 
   post(message: MainToWorkletMessage): void {

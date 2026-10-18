@@ -31,6 +31,7 @@
     "LICENSES/"
   ],
   "scripts": {
+    "dev": "node scripts/check-wasm.ts && node scripts/check-media.ts && vite --open /demo/",
     "build": "node scripts/check-wasm.ts && rm -rf dist && tsc -b tsconfig.build.json --force",
     "typecheck": "tsc -b",
     "lint": "eslint . && prettier --check .",
@@ -50,6 +51,8 @@
     "@playwright/test": "1.64.1",
     "@types/audioworklet": "^0.0.100",
     "@types/node": "^24.19.2",
+    "@types/send": "^1.2.1",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitest/browser-playwright": "^5.0.4",
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",
@@ -58,8 +61,10 @@
     "globals": "^17.13.0",
     "playwright": "1.64.1",
     "prettier": "^3.9.10",
+    "send": "^1.2.1",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.2",
+    "vite": "^8.3.4",
     "vitest": "^5.0.4"
   }
 }

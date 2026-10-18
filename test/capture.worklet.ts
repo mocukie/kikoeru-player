@@ -1,9 +1,11 @@
 // 錄音 worklet：把輸入原樣送到輸出，並把每個 render quantum 的 stereo 輸入複製後經 `port` 送出
-// （每 8 個 quantum 一批，`{ left: Float32Array; right: Float32Array }`）。由 addModule 原樣載入，不 import 任何東西。
+// （每 8 個 quantum 一批，`{ frame: number; left: Float32Array; right: Float32Array }`，`frame` 是這批第一個 sample 的
+// context frame）。由 addModule 原樣載入，不 import 任何東西。
 
 const BATCH_QUANTA = 8;
 
 class CaptureProcessor extends AudioWorkletProcessor {
+  #frame = 0;
   #left: Float32Array[] = [];
   #right: Float32Array[] = [];
 
@@ -16,10 +18,15 @@ class CaptureProcessor extends AudioWorkletProcessor {
     const right = input[1] ?? left;
     output[0]?.set(left);
     output[1]?.set(right);
+    if (this.#left.length === 0) this.#frame = currentFrame;
     this.#left.push(left.slice());
     this.#right.push(right.slice());
     if (this.#left.length >= BATCH_QUANTA) {
-      this.port.postMessage({ left: concat(this.#left), right: concat(this.#right) });
+      this.port.postMessage({
+        frame: this.#frame,
+        left: concat(this.#left),
+        right: concat(this.#right),
+      });
       this.#left = [];
       this.#right = [];
     }

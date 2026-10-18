@@ -72,6 +72,12 @@ export class FakeMediaWorker {
     this.reply({ type: 'probe', epoch: load.epoch, media });
   }
 
+  /** 回覆最後一個 `stats` 要求（還沒收到時等第一個）。 */
+  async stats(libavInstances: number): Promise<void> {
+    const request = await this.next('stats', Math.max(1, this.messages('stats').length));
+    this.reply({ type: 'stats', id: request.id, stats: { libavInstances } });
+  }
+
   /** 模擬 Worker 的 `onerror`。 */
   crash(error: unknown = new Error('worker crashed')): void {
     this.#handlers.crash(error);

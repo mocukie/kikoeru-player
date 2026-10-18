@@ -67,7 +67,8 @@
 
 `test/server/` 的 Vite middleware 供 browser mode 與 Demo 頁共用：
 
-- `/media/*` 提供 `test/media/out/` 的檔案，支援 Range。
+- `/media/*` 提供 `test/media/out/` 的檔案，支援 Range；`/media/index.json` 列出 CI 組媒體的路徑，Demo 頁以它列出可選的媒體。
+- `/src/wasm/*` 原樣提供 `wasm/dist/` 的檔案，讓 Engine 預設的 wasm 與 glue 位置在 dev 與測試中也能用（見[架構規則「平台與部署」](architecture.md#平台與部署)）。
 - 故障由 query 參數控制，例如 `?fault=503@2`、`stall@1MB`、`drop@500KB`、`delay=200`；401 也由它模擬。
 
 不需要 kikoeru 後端。cookie、`.wasm` 的 Content-Type 與壓縮屬於 kikoeru 端的部署驗證。
