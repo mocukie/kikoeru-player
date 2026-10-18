@@ -130,6 +130,8 @@ export class WorkerDriver {
       module?: WebAssembly.Module;
       retry?: RetryPolicy;
       limits?: Partial<WorkerLimits>;
+      /** 播放速度，預設 1。 */
+      rate?: number;
     } = {},
   ): Promise<WorkerDriver> {
     const assets = await wasmAssets();
@@ -137,12 +139,22 @@ export class WorkerDriver {
       sampleRate = 48_000,
       module = assets.module,
       retry = { attempts: 0, baseDelayMs: 0 },
+      rate = 1,
     } = options;
     const limits: WorkerLimits = { ...desktopLimits, ...options.limits };
     const { glueUrl } = assets;
     const channel = new MessageChannel();
     endpoint.post(
-      { type: 'init', module, glueUrl, workletPort: channel.port1, sampleRate, retry, limits },
+      {
+        type: 'init',
+        module,
+        glueUrl,
+        workletPort: channel.port1,
+        sampleRate,
+        retry,
+        limits,
+        rate,
+      },
       [channel.port1],
     );
     return new WorkerDriver(endpoint, channel.port2, sampleRate);

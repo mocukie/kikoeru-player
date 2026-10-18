@@ -15,6 +15,7 @@ import {
 import { crashReason, WorkerError } from './errors.js';
 import type { RawMedia, RawStream } from './probe.js';
 import type { ByteSource } from './source.js';
+import type { Stereo, Stretcher } from './tempo.js';
 
 type LibAV = libavjs.LibAV;
 type Packet = libavjs.Packet;
@@ -211,7 +212,9 @@ export class LibavMedia {
    */
   async startAudio(
     streamIndex: number,
-    options: Omit<AudioPipelineOptions<Packet>, 'reader' | 'decoder'> & { seek: boolean },
+    options: Omit<AudioPipelineOptions<Packet>, 'reader' | 'decoder' | 'createStretcher'> & {
+      seek: boolean;
+    },
   ): Promise<AudioPipeline<Packet>> {
     const libav = this.#libav;
     const stream = this.#streams[streamIndex];
@@ -254,7 +257,17 @@ export class LibavMedia {
         duration: decoder.packetDuration(packet),
       }),
     };
-    return new AudioPipeline({ ...options, reader, decoder });
+    return new AudioPipeline({
+      ...options,
+      reader,
+      decoder,
+      createStretcher: (rate) => this.createStretcher(options.sampleRate, rate),
+    });
+  }
+
+  /** 建立速度為 `rate` 的 `atempo` stretcher（`sampleRate` 的 stereo fltp）。 */
+  createStretcher(sampleRate: number, rate: number): Promise<Stretcher> {
+    return LibavStretcher.create(this.#libav, sampleRate, rate);
   }
 
   /** 封包的 pts 換算到媒體時間軸（秒）；沒有時間戳時為 null。 */
@@ -290,6 +303,89 @@ export class LibavMedia {
       throw new WorkerError('FORMAT_CORRUPT', `seek 失敗：${await libav.ff_error(result)}`);
     }
   }
+}
+
+/**
+ * `atempo` 的 stretcher：abuffer → atempo → abuffersink，輸入與輸出都是 `sampleRate` 的 stereo fltp
+ * （`atempo` 只接受 packed 格式，FFmpeg 自動在前後插入轉換）。速度固定，改速度時換一個新的（tempo.ts）。
+ */
+class LibavStretcher implements Stretcher {
+  readonly #libav: LibAV;
+  readonly #graph: number;
+  readonly #src: number;
+  readonly #sink: number;
+  readonly #frame: number;
+  readonly #sampleRate: number;
+  /** 下一個輸入 frame 的 pts（以 1/sampleRate 計）。 */
+  #pts = 0;
+  #freed = false;
+
+  private constructor(
+    libav: LibAV,
+    graph: number,
+    src: number,
+    sink: number,
+    frame: number,
+    sampleRate: number,
+  ) {
+    this.#libav = libav;
+    this.#graph = graph;
+    this.#src = src;
+    this.#sink = sink;
+    this.#frame = frame;
+    this.#sampleRate = sampleRate;
+  }
+
+  static async create(libav: LibAV, sampleRate: number, rate: number): Promise<LibavStretcher> {
+    const io = {
+      sample_rate: sampleRate,
+      channel_layout: AV_CHANNEL_STEREO,
+      sample_fmt: libav.AV_SAMPLE_FMT_FLTP,
+    };
+    const [graph, src, sink] = await libav.ff_init_filter_graph(
+      `atempo=tempo=${String(rate)}`,
+      { ...io, time_base: [1, sampleRate] },
+      io,
+    );
+    const frame = await libav.av_frame_alloc();
+    return new LibavStretcher(libav, graph, src, sink, frame, sampleRate);
+  }
+
+  async push(input: Stereo): Promise<Stereo[]> {
+    const frames = input[0].length;
+    if (frames === 0) return [];
+    const pts = this.#pts;
+    this.#pts += frames;
+    const out = await this.#libav.ff_filter_multi(this.#src, this.#sink, this.#frame, [
+      {
+        data: [input[0], input[1]],
+        format: this.#libav.AV_SAMPLE_FMT_FLTP,
+        channel_layout: AV_CHANNEL_STEREO,
+        sample_rate: this.#sampleRate,
+        nb_samples: frames,
+        pts,
+      },
+    ]);
+    return out.map(stereoOf);
+  }
+
+  async drain(): Promise<Stereo[]> {
+    const out = await this.#libav.ff_filter_multi(this.#src, this.#sink, this.#frame, [], true);
+    return out.map(stereoOf);
+  }
+
+  async free(): Promise<void> {
+    if (this.#freed) return;
+    this.#freed = true;
+    await this.#libav.avfilter_graph_free_js(this.#graph);
+    await this.#libav.av_frame_free_js(this.#frame);
+  }
+}
+
+function stereoOf(frame: Frame): Stereo {
+  const [left, right] = frame.data as Float32Array[];
+  if (!left) return [new Float32Array(), new Float32Array()];
+  return [left, right ?? left];
 }
 
 /** 一條音軌的 decoder 與 filter graph（重採樣、downmix 到 stereo、轉 fltp）。 */
@@ -436,7 +532,8 @@ class LibavAudioDecoder implements AudioDecoder<Packet> {
   }
 
   /**
-   * filter graph：abuffer →（之後插入 atempo 的位置）→ aformat（fltp、`sampleRate`、mono 或 stereo）→ abuffersink。
+   * filter graph：abuffer → aformat（fltp、`sampleRate`、mono 或 stereo）→ abuffersink。變速的 `atempo` 不在這裡：
+   * 它接在對齊媒體時間（丟掉 preroll、補上空缺）之後，見 tempo.ts 與 `LibavStretcher`。
    * 重採樣與 downmix 由 FFmpeg 自動插入的 aresample 以 swresample 的預設係數處理。mono 輸出 mono，
    * 由 pipeline 複製到兩個聲道（swresample 會把 mono 以 -3 dB 分到兩邊）。
    */
@@ -452,7 +549,7 @@ class LibavAudioDecoder implements AudioDecoder<Packet> {
     if (this.#graph?.key === key) return this.#graph;
     if (this.#graph) await libav.avfilter_graph_free_js(this.#graph.graph);
     const [graph, src, sink] = await libav.ff_init_filter_graph(
-      // 不轉換的 filter；atempo 由變速的 issue 插在這裡。
+      // 不轉換的 filter；轉換由 FFmpeg 自動插入的 aresample 處理。
       'aformat',
       {
         sample_rate: rate,

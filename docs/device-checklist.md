@@ -27,6 +27,7 @@ Demo 頁的「CI 組媒體」來自 `pnpm media:gen` 產生的 `test/media/out/`
 - [ ] **currentTime 與聽到的聲音**：beep 響起時，畫面上的 `currentTime` 剛好跨過整秒；明顯提早或延後時記下差距與輸出裝置（喇叭、有線耳機、藍牙）。這同時驗證該瀏覽器的 `getOutputTimestamp().contextTime` 是否已扣掉裝置延遲（[ADR-0004](adr/0004-audio-output.md)）。
 - [ ] **連續換檔**：播放中選另一個檔案按 load，舊的聲音立即停止，新的檔案停在 `ready`。
 - [ ] **淡入淡出（`audioFadeMs`）的聽感**：以喇叭與耳機各聽一次，播放中按 pause、play、拖曳 seek，切換點沒有爆音（click／pop），也不會聽得出拖泥帶水。再於 console 以 `createEngine({ audioFadeMs: 0 })` 比較硬切（應該聽得到 click），以及 `audioFadeMs: 30`、`100` 的差別，記下覺得合適的值。
+- [ ] **變速的聽感**：以喇叭與耳機各聽一次語音與音樂（手動組或自己的檔案），拖曳 Demo 頁的 playbackRate 到 0.5、0.75、1.25、1.5、2：音高不變，沒有明顯的金屬聲、回音或忽快忽慢；記下哪個速度開始覺得不自然。播放中改速度約 0.2 秒後生效，切換點（含按「1.0x」回到原速、繞過 `atempo`）沒有 click／pop 或斷續；beep 響起時 `currentTime` 仍剛好跨過整秒。手機上另外記下 1.5x 連續播放 10 分鐘的 CPU 與耗電（實機驗證的 issue）。
 - [ ] **音量與靜音**：拖曳 Demo 頁的 volume 時音量平滑變化、沒有拉鍊聲；勾選 muted 時立即無聲，`currentTime` 照常前進，取消後回到原本的音量。
 - [ ] **藍牙延遲**：接上藍牙耳機播放，記下 Demo 頁「audio」一列的 `outputLatency`；beep 響起時 `currentTime` 是否仍剛好跨過整秒（藍牙的延遲常有 100–300 ms）。暫停時 `currentTime` 停在最後聽到的位置附近，不比聽到的超前。
 - [ ] **讀取錯誤與 reload**：選 `audio/pcm-s16.wav` 與故障注入「401@4」，load 後播放：約 2–3 秒時（預讀遇到 401，播放用完已讀到的資料時）事件 log 出現 `error SOURCE_UNAUTHORIZED（fatal） position=…`；按 reload 從該位置接續播放。故障注入改選「drop@500KB」：斷線與重試發生在預讀中，播放不出現 `buffering` 與 error。

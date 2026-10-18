@@ -35,12 +35,13 @@ class FakeTransport implements PcmTransport {
     this.#onMessage?.(message);
   }
 
-  /** 送出一段 PCM：左聲道是 `values`，右聲道是它的相反數。 */
-  pcm(epoch: number, time: number, values: number[]): void {
+  /** 送出一段 PCM：左聲道是 `values`，右聲道是它的相反數；`rate` 預設 1。 */
+  pcm(epoch: number, time: number, values: number[], rate = 1): void {
     this.deliver({
       type: 'pcm',
       epoch,
       time,
+      rate,
       channels: [Float32Array.from(values), Float32Array.from(values, (v) => -v)],
     });
   }
@@ -234,7 +235,7 @@ describe('水位與要求', () => {
     const { worker, send } = setup();
     send({ type: 'flush', epoch: 1, position: 0 });
     const channels = [new Float32Array(20), new Float32Array(20)];
-    worker.deliver({ type: 'pcm', epoch: 1, time: 0, channels });
+    worker.deliver({ type: 'pcm', epoch: 1, time: 0, rate: 1, channels });
     expect(worker.released()).toEqual(channels.map((c) => c.buffer));
   });
 });
@@ -386,7 +387,7 @@ describe('epoch', () => {
     const { worker, send } = setup();
     send({ type: 'flush', epoch: 2, position: 0 });
     const channels = [new Float32Array(20), new Float32Array(20)];
-    worker.deliver({ type: 'pcm', epoch: 1, time: 0, channels });
+    worker.deliver({ type: 'pcm', epoch: 1, time: 0, rate: 1, channels });
     expect(worker.released()).toEqual(channels.map((c) => c.buffer));
   });
 
@@ -542,5 +543,61 @@ describe('淡入淡出（audioFadeMs 10：10 frame）', () => {
     send({ type: 'pause', epoch: 1 });
     expect(states()).toEqual(['playing', 'paused']);
     expect(renderFrames(10)).toEqual(silence(10));
+  });
+});
+
+describe('變速', () => {
+  it('PCM 帶的 rate：每個 frame 推進 rate / sampleRate 秒，clock 帶 rate', () => {
+    const { worker, send, renderFrames, lastClock } = setup();
+    send({ type: 'flush', epoch: 1, position: 2 });
+    send({ type: 'play', epoch: 1 });
+    worker.pcm(1, 2, ramp(150), 1.25);
+    expect(lastClock()).toMatchObject({ position: 2, rate: 1.25 });
+    expect(renderFrames(40)).toEqual(ramp(40));
+    send({ type: 'pause', epoch: 1 });
+    expect(lastClock()).toMatchObject({ position: 2.05, frame: 40, rate: 1.25 });
+  });
+
+  it('drain：ring 內舊速度的資料照常播完；新速度的第一個 frame 播出時送出 clock，之後依新速度推進', () => {
+    const { worker, send, renderFrames, reports } = setup();
+    send({ type: 'flush', epoch: 1, position: 0 });
+    send({ type: 'play', epoch: 1 });
+    worker.pcm(1, 0, ramp(105));
+    worker.pcm(1, 0.105, ramp(100, 1000), 2);
+    expect(renderFrames(130)).toEqual([...ramp(105), ...ramp(25, 1000)]);
+    const clocks = reports.filter((r) => r.type === 'clock');
+    expect(clocks.at(-1)).toMatchObject({ position: 0.105, frame: 105, rate: 2 });
+    send({ type: 'pause', epoch: 1 });
+    expect(reports.findLast((r) => r.type === 'clock')).toMatchObject({
+      position: 0.105 + 0.05,
+      frame: 130,
+      rate: 2,
+    });
+  });
+
+  it('duration 依速度換算：變速的音訊到 duration 就 ended', () => {
+    const { worker, send, renderFrames, states, lastClock } = setup();
+    send({ type: 'flush', epoch: 1, position: 0.8 });
+    send({ type: 'duration', epoch: 1, duration: 1 });
+    send({ type: 'play', epoch: 1 });
+    worker.pcm(1, 0.8, ramp(150), 2);
+    expect(renderFrames(110)).toEqual([...ramp(100), ...silence(10)]);
+    expect(states()).toEqual(['playing', 'ended']);
+    expect(lastClock()).toMatchObject({ position: 1, frame: 100 });
+  });
+
+  it('eof 之後的靜音依主執行緒的 rate 推進；改速度時從當下的位置換算', () => {
+    const { worker, send, renderFrames, lastClock } = setup();
+    send({ type: 'rate', rate: 1.5 });
+    send({ type: 'flush', epoch: 1, position: 1 });
+    send({ type: 'duration', epoch: 1, duration: 10 });
+    worker.deliver({ type: 'eof', epoch: 1 });
+    send({ type: 'play', epoch: 1 });
+    renderFrames(100);
+    expect(lastClock()).toMatchObject({ position: 1, rate: 1.5 });
+    send({ type: 'rate', rate: 0.5 });
+    renderFrames(100);
+    send({ type: 'pause', epoch: 1 });
+    expect(lastClock()).toMatchObject({ position: 1 + 0.15 + 0.05, frame: 200, rate: 0.5 });
   });
 });

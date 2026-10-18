@@ -32,6 +32,7 @@
   | 白框對 beep | ≤ 1 個影片 frame + 1 個 rAF（30 fps 約 50 ms） |
   | 音軌 offset ±500 ms | 方向正確，誤差 ≤ 20 ms |
   | `atempo` 1.25x 的 beep 間隔 | 0.8 s ± 10 ms |
+  | 變速（經過 `atempo`）時 beep 起點對 `currentTime` | ≤ 30 ms（`atempo` 在靜音之後把起點提早，見 `tolerances.ts`） |
 
   容差寫成常數集中在 `test/e2e/` 的一個檔案，flaky 時只調那裡。
 - **leak 測試**：連續 load 100 次，混入被取代的 load、播放中 destroy、外掛音軌，使用 CI 組的短檔。斷言：

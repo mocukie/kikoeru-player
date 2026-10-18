@@ -89,6 +89,9 @@ const WATCHDOG_MS = 1000;
 const STARVED_MS = 250;
 /** 因網路不足進入 buffering 之後，bufferAhead 要到這麼多秒才恢復（「記憶體上限的數值」#23）。 */
 const RESUME_AHEAD_SECONDS = 3;
+/** `playbackRate` 的範圍（ADR-0004）。 */
+const MIN_RATE = 0.5;
+const MAX_RATE = 2;
 /** `buffered` 的終點變動至少這麼多秒才發出 bufferedchange。 */
 const BUFFERED_CHANGE_SECONDS = 0.5;
 
@@ -156,6 +159,7 @@ class EngineImpl extends EventTarget implements Engine {
   #error: EngineError | null = null;
   #volume = 1;
   #muted = false;
+  #rate = 1;
   /** Worker 最後回報的資料備妥進度；load 時清掉。 */
   #buffer: WorkerBufferMessage | null = null;
   /** worklet 回報 starved 之後、補回之前（時鐘停住）；flush 時清掉。 */
@@ -216,6 +220,7 @@ class EngineImpl extends EventTarget implements Engine {
       (handlers, config) => {
         const output = deps.createAudioOutput(handlers, config);
         output.setGain(this.#gain, false);
+        output.post({ type: 'rate', rate: this.#rate });
         return output;
       },
       {
@@ -259,8 +264,9 @@ class EngineImpl extends EventTarget implements Engine {
     if ((state !== 'playing' && !stopped) || !clock || !audio) return this.#currentTime;
     const heard = audio.heardFrame();
     if (heard === null) return this.#currentTime;
-    // clock：`position` 的 sample 在 context frame `frame` 進入 graph；聽到的 frame 已扣掉輸出延遲。
-    let time = clock.position + (heard - clock.frame) / audio.sampleRate;
+    // clock：`position` 的 sample 在 context frame `frame` 進入 graph，之後每個 frame 推進 `rate / sampleRate` 秒；
+    // 聽到的 frame 已扣掉輸出延遲。
+    let time = clock.position + ((heard - clock.frame) * clock.rate) / audio.sampleRate;
     // 時鐘停住（pause 的淡出結束、ring 用完）之後，輸出延遲內聽到的還是停住之前的 sample。
     if (stopped || this.#starved) time = Math.min(time, clock.position);
     time = Math.max(time, this.#heardFloor);
@@ -327,10 +333,19 @@ class EngineImpl extends EventTarget implements Engine {
     return this.#muted ? 0 : this.#volume;
   }
   get playbackRate(): number {
-    return notImplemented('playbackRate');
+    return this.#rate;
   }
-  set playbackRate(_value: number) {
-    notImplemented('playbackRate');
+  set playbackRate(value: number) {
+    if (!(value >= MIN_RATE && value <= MAX_RATE)) {
+      throw new RangeError(
+        `playbackRate 必須在 ${String(MIN_RATE)}–${String(MAX_RATE)} 之間，收到 ${String(value)}`,
+      );
+    }
+    if (value === this.#rate) return;
+    this.#rate = value;
+    // 不遞增 epoch：已經送出的 PCM 照舊速度播完（ADR-0004）。worklet 只用它推進沒有音訊時的靜音。
+    this.#worker?.post({ type: 'rate', rate: value });
+    this.#audio?.post({ type: 'rate', rate: value });
   }
 
   unlockAudio(): void {
@@ -598,6 +613,7 @@ class EngineImpl extends EventTarget implements Engine {
           sampleRate: audio.sampleRate,
           retry: this.#options.retry,
           limits: this.#options.limits,
+          rate: this.#rate,
         },
         [port],
       );

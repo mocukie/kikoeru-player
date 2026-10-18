@@ -1,5 +1,5 @@
-// media Worker 的訊息處理：init、load（開檔與 probe）、start 與 seek（音訊供料）、port（改接重建後的 worklet）
-// 與 stats。
+// media Worker 的訊息處理：init、load（開檔與 probe）、start 與 seek（音訊供料）、port（改接重建後的 worklet）、
+// rate（變速）與 stats。
 // 主執行緒每次 load 都 terminate 舊的 Worker（ADR-0002），但 Worker 也處理同一個 Worker 內的 load 取代：
 // 前一個 load 的讀取被中止、instance 被丟棄。
 
@@ -49,6 +49,8 @@ interface Environment {
   limits: WorkerLimits;
   /** Worker 內所有 http 來源共用的 Range 快取。 */
   cache: RangeCache;
+  /** 目前的播放速度；`rate` 改變它，之後的 start／seek 沿用。 */
+  rate: number;
 }
 
 /** 一個 epoch 的輸出：`start` 或 `seek`。 */
@@ -112,6 +114,7 @@ export class MediaWorker {
           retry: message.retry,
           limits: message.limits,
           cache: new RangeCache(message.limits.cacheBytes),
+          rate: message.rate,
         };
         this.#listen(message.workletPort);
         break;
@@ -129,6 +132,10 @@ export class MediaWorker {
       case 'seek':
         if (this.#audio === undefined) break;
         this.#startOutput({ ...message, audio: this.#audio, seek: true });
+        break;
+      case 'rate':
+        if (this.#env) this.#env.rate = message.rate;
+        this.#pipeline?.setRate(message.rate);
         break;
       case 'stats':
         this.#deps.postMessage({ type: 'stats', id: message.id, stats: this.#stats() });
@@ -301,6 +308,7 @@ export class MediaWorker {
       const pipeline = await load.media.startAudio(message.audio, {
         sampleRate: env.sampleRate,
         startTime: Math.max(0, message.time),
+        rate: env.rate,
         seek: message.seek,
         epoch: message.epoch,
         demand: this.#demand,
@@ -318,6 +326,8 @@ export class MediaWorker {
       });
       signal.throwIfAborted();
       this.#pipeline = pipeline as AudioPipeline<unknown>;
+      // 建立 pipeline 期間（seek）收到的 rate。
+      pipeline.setRate(env.rate);
       await pipeline.run();
     } catch (error) {
       // 被取代：中止的讀取或 libav 回傳的任何錯誤都不回報。
