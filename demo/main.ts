@@ -1,13 +1,45 @@
 // Demo 頁：以公開 API 操作 Engine，顯示狀態並記錄事件（docs/testing.md「實機清單」、「E2E」）。
 // E2E 與實機除錯可以從 console 以 `engine` 直接使用同一個 Engine。
 
-import { createEngine, EngineError, isAbortError, type Engine, type Source } from '../src/index.js';
+import {
+  createEngine,
+  EngineError,
+  isAbortError,
+  type Engine,
+  type EngineOptions,
+  type Source,
+} from '../src/index.js';
 
 declare global {
   var engine: Engine;
 }
 
-const engine = createEngine();
+/**
+ * 頁面 URL 的 query 可以覆蓋部分 `EngineOptions`，供 E2E 與實機測試製造網路不足的情況：
+ * `readahead`（`limits.readaheadSeconds`）、`cacheMiB`（`limits.cacheBytes`，MiB）、`stallTimeout`、
+ * `stallAttempts`。例如 `/demo/?readahead=1&stallTimeout=3000`。
+ */
+function engineOptions(query: URLSearchParams): EngineOptions {
+  const number = (name: string) => {
+    const value = query.get(name);
+    return value === null ? undefined : Number(value);
+  };
+  const readaheadSeconds = number('readahead');
+  const cacheMiB = number('cacheMiB');
+  const stallTimeout = number('stallTimeout');
+  const stallAttempts = number('stallAttempts');
+  return {
+    limits: {
+      ...(readaheadSeconds !== undefined && { readaheadSeconds }),
+      ...(cacheMiB !== undefined && { cacheBytes: cacheMiB * 1024 * 1024 }),
+    },
+    ...(stallTimeout !== undefined && { stallTimeout }),
+    ...(stallAttempts !== undefined && { stallAttempts }),
+  };
+}
+
+const options = engineOptions(new URLSearchParams(location.search));
+const engine = createEngine(options);
 globalThis.engine = engine;
 
 function element<T extends HTMLElement>(id: string, type: new () => T): T {
@@ -23,6 +55,8 @@ const urlInput = element('url', HTMLInputElement);
 const fileInput = element('file', HTMLInputElement);
 const logList = element('log', HTMLOListElement);
 const autoplayInput = element('autoplay', HTMLInputElement);
+element('engine-options', HTMLElement).textContent =
+  `EngineOptions（由頁面 query 覆蓋）：${JSON.stringify(options)}`;
 
 // ───────────────────────────── 事件 log ─────────────────────────────
 
@@ -87,6 +121,19 @@ engine.addEventListener('ended', () => {
 });
 engine.addEventListener('error', (e) => {
   log(`error ${describeError(e.error)}`);
+});
+engine.addEventListener('bufferedchange', (e) => {
+  log(
+    `bufferedchange ${e.buffered.map((r) => `[${r.start.toFixed(3)}, ${r.end.toFixed(3)}]`).join(' ') || '[]'}`,
+  );
+});
+engine.addEventListener('stall', (e) => {
+  log(
+    `stall position=${e.position.toFixed(3)} since=${(e.since / 1000).toFixed(3)}s，中止讀取並重新 seek`,
+  );
+});
+engine.addEventListener('stallrecovered', (e) => {
+  log(`stallrecovered stalledMs=${e.stalledMs.toFixed(0)} attempts=${String(e.attempts)}`);
 });
 engine.addEventListener('beforeaudiostart', (e) => {
   log(`beforeaudiostart cause=${e.cause}`);
@@ -185,14 +232,29 @@ const durationText = element('duration', HTMLElement);
 const mediaText = element('media-info', HTMLElement);
 const errorText = element('error', HTMLElement);
 const audioStatsText = element('audio-stats', HTMLElement);
+const bufferedText = element('buffered', HTMLElement);
+const cacheStatsText = element('cache-stats', HTMLElement);
+const networkStatsText = element('network-stats', HTMLElement);
 
-// getStats() 是非同步的：每秒取一次 ring 水位、underrun 與輸出延遲（實機檢查藍牙延遲用）。
+const MiB = 1024 * 1024;
+
+// getStats() 是非同步的：每秒取一次 ring 水位、underrun 與輸出延遲（實機檢查藍牙延遲用），以及 Range 快取與網路。
 setInterval(() => {
   engine.getStats().then(
-    ({ audio }) => {
+    ({ audio, cache, network, bufferAhead, packetQueue }) => {
       audioStatsText.textContent =
         `ring ${audio.ringMs.toFixed(0)} ms／target ${String(audio.targetMs)} ms，` +
         `underruns ${String(audio.underruns)}，outputLatency ${audio.outputLatencyMs.toFixed(1)} ms`;
+      cacheStatsText.textContent =
+        `${(cache.bytes / MiB).toFixed(2)}／${(cache.limitBytes / MiB).toFixed(0)} MiB，` +
+        `預讀 ${(cache.aheadBytes / MiB).toFixed(2)}／${(cache.readaheadTarget / MiB).toFixed(2)} MiB` +
+        `${cache.fetching ? '（抓取中）' : ''}，hits ${String(cache.hits)}／misses ${String(cache.misses)}，` +
+        `bufferAhead ${bufferAhead.toFixed(1)} s，封包佇列 ${packetQueue.audioSeconds.toFixed(1)} s`;
+      networkStatsText.textContent =
+        `已讀 ${(network.bytesLoaded / MiB).toFixed(2)} MiB，進行中 ${String(network.inflight.length)} 個` +
+        network.inflight
+          .map((r) => ` [${String(r.start)}-${String(r.end)} ${r.elapsedMs.toFixed(0)} ms]`)
+          .join('');
     },
     () => undefined,
   );
@@ -204,6 +266,8 @@ function render(): void {
   unlockedText.textContent = String(engine.audioUnlocked);
   currentTimeText.textContent = engine.currentTime.toFixed(3);
   durationText.textContent = String(engine.duration);
+  bufferedText.textContent =
+    engine.buffered.map((r) => `[${r.start.toFixed(1)}, ${r.end.toFixed(1)}]`).join(' ') || '—';
   const duration = engine.duration;
   seekBar.disabled = !Number.isFinite(duration);
   seekBar.max = Number.isFinite(duration) ? String(duration) : '0';

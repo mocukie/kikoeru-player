@@ -349,9 +349,10 @@ export class AudioPipeline<P> {
       }
     } catch (error) {
       if (stop.aborted) return;
-      // demux 失敗（含封包佇列超過硬上限）：不等佇列的封包解完，立即結束供料。
+      // demux 失敗：佇列中的封包照常解完、播完才回報（錯誤的位置接近實際播放到的地方）；
+      // 封包佇列超過硬上限則立即結束供料。
       this.#packets.fail(error);
-      this.#inner.abort(error);
+      if (error instanceof WorkerError && error.code === 'MEMORY_LIMIT') this.#inner.abort(error);
     }
   }
 
