@@ -1,12 +1,13 @@
 // 真實的 media Worker：以主執行緒的寫法建立，依 src/protocol/ 回覆 probe 結果與 PCM。
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, describe, expect, test } from 'vitest';
 import {
   audioTracks,
+  faultyMediaUrl,
   importOnlyWasm,
   mediaUrl,
   WorkerDriver,
 } from '../../test/media-worker-harness.js';
-import type { WorkerToMainMessage } from '../protocol/index.js';
+import type { RetryPolicy, WorkerToMainMessage } from '../protocol/index.js';
 
 const workers: Worker[] = [];
 
@@ -14,7 +15,7 @@ afterEach(() => {
   for (const worker of workers.splice(0)) worker.terminate();
 });
 
-function spawn(module?: WebAssembly.Module): Promise<WorkerDriver> {
+function spawn(module?: WebAssembly.Module, retry?: RetryPolicy): Promise<WorkerDriver> {
   const worker = new Worker(new URL('./index.js', import.meta.url), { type: 'module' });
   workers.push(worker);
   return WorkerDriver.init(
@@ -28,7 +29,7 @@ function spawn(module?: WebAssembly.Module): Promise<WorkerDriver> {
         };
       },
     },
-    { module },
+    { module, retry },
   );
 }
 
@@ -101,4 +102,91 @@ test('wasm 與 glue 的 imports 不符：load 回覆 ASSET_LOAD_FAILED，instanc
     fatal: true,
   });
   expect(await driver.stats()).toEqual({ libavInstances: 0 });
+});
+
+describe('http 的故障（test/server 的故障注入）', () => {
+  const retry: RetryPolicy = { attempts: 2, baseDelayMs: 10 };
+  /** 10 秒、48 kHz stereo s16 的 WAV（約 1.8 MiB）：Worker 每次讀 256 KiB，播放中會發出多個請求。 */
+  const WAV = 'audio/pcm-s16.wav';
+  const FRAMES = 10 * 48_000;
+
+  test.each([
+    ['401@1', 'SOURCE_UNAUTHORIZED', 401],
+    ['403@1', 'SOURCE_FORBIDDEN', 403],
+    ['410@1', 'SOURCE_NOT_FOUND', 410],
+    ['200@1', 'SOURCE_RANGE_UNSUPPORTED', 200],
+    ['503@1%2B', 'SOURCE_SERVER', 503],
+  ])('開檔時 %s 回報 %s，帶 status 與 url', async (fault, code, status) => {
+    const driver = await spawn(undefined, retry);
+    const url = faultyMediaUrl('audio/flac.flac', `fault=${fault}`);
+    await expect(driver.load({ kind: 'http', url })).rejects.toMatchObject({
+      code,
+      fatal: true,
+      detail: { status, url },
+    });
+    expect(await driver.stats()).toEqual({ libavInstances: 0 });
+  });
+
+  test('503@2：重試後恢復，解出完整的音訊', async () => {
+    const driver = await spawn(undefined, retry);
+    const url = faultyMediaUrl('audio/flac.flac', 'fault=503@2');
+    await driver.load({ kind: 'http', url });
+    const pcm = await driver.decode(0);
+    expect(pcm.left.length).toBe(FRAMES);
+  });
+
+  test('delay=200：回應變慢仍然完成', async () => {
+    const driver = await spawn(undefined, retry);
+    const url = faultyMediaUrl('audio/flac.flac', 'delay=200');
+    await driver.load({ kind: 'http', url });
+    expect((await driver.decode(0)).left.length).toBe(FRAMES);
+  });
+
+  test('drop@500KB：播放中斷線，重試後恢復，解出完整的音訊', async () => {
+    const driver = await spawn(undefined, retry);
+    await driver.load({ kind: 'http', url: faultyMediaUrl(WAV, 'fault=drop@500KB') });
+    expect((await driver.decode(0)).left.length).toBe(FRAMES);
+  });
+
+  test('drop@500KB+：重試用完，播放中回報 SOURCE_NETWORK', async () => {
+    const driver = await spawn(undefined, retry);
+    const url = faultyMediaUrl(WAV, 'fault=drop@500KB%2B');
+    await driver.load({ kind: 'http', url });
+    await expect(driver.decode(0, { epoch: 2 })).rejects.toMatchObject({
+      type: 'error',
+      epoch: 2,
+      error: { code: 'SOURCE_NETWORK', fatal: true, detail: { url } },
+    });
+  });
+
+  test('播放中 401 不重試，回報 SOURCE_UNAUTHORIZED', async () => {
+    // 第 1 個請求探測大小，第 2 個是開檔，之後是播放中的讀取。
+    const driver = await spawn(undefined, { attempts: 3, baseDelayMs: 2000 });
+    const url = faultyMediaUrl(WAV, 'fault=401@4');
+    await driver.load({ kind: 'http', url });
+    const started = performance.now();
+    await expect(driver.decode(0, { epoch: 2 })).rejects.toMatchObject({
+      type: 'error',
+      epoch: 2,
+      error: { code: 'SOURCE_UNAUTHORIZED', fatal: true, detail: { status: 401, url } },
+    });
+    // 有重試的話至少要等一次 2 秒的退避。
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+
+  test('stall@0：開檔的讀取停住，被新的 load 取代後新的 load 照常完成', async () => {
+    const driver = await spawn(undefined, retry);
+    driver.post({
+      type: 'load',
+      epoch: 1,
+      source: { kind: 'http', url: faultyMediaUrl('audio/flac.flac', 'fault=stall@0') },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(driver.messages.filter((m) => m.type !== 'stats')).toEqual([]);
+
+    const media = await driver.load({ kind: 'http', url: mediaUrl('audio/flac.flac') }, 2);
+    expect(audioTracks(media)).toHaveLength(1);
+    expect(await driver.stats()).toEqual({ libavInstances: 1 });
+    expect(driver.messages.filter((m) => 'epoch' in m && m.epoch === 1)).toEqual([]);
+  });
 });

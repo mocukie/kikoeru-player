@@ -349,8 +349,8 @@ class LibavAudioDecoder implements AudioDecoder<Packet> {
 
   /**
    * seek 時要往前多解的秒數，讓輸出在目標位置之前收斂（ADR-0003）：AAC 1 個 frame、MP3 2 個、Vorbis 1 個封包
-   *（取最長的 block 4096 sample 估）、Opus 80 ms、FLAC 與 PCM 不需要。Opus 應取容器的 `seek_preroll` 與 80 ms
-   * 中較大者，但 libav.js 沒有 `seek_preroll` 的 accessor；常見的容器（Ogg、WebM）都是 80 ms。
+   *（取最長的 block 4096 sample 估）、Opus 固定 80 ms（不讀容器的 `seek_preroll`，理由見 ADR-0003）、FLAC 與 PCM
+   * 不需要。
    */
   async preroll(codec: string): Promise<number> {
     const frameSize = await this.#libav.AVCodecContext_frame_size(this.#ctx);

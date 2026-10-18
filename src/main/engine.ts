@@ -493,6 +493,7 @@ class EngineImpl extends EventTarget implements Engine {
           glueUrl: wasm.glueUrl,
           workletPort: port,
           sampleRate: audio.sampleRate,
+          retry: this.#options.retry,
         },
         [port],
       );

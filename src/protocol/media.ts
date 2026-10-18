@@ -25,6 +25,15 @@ export type WireSource<H extends HostTypes> =
   | { kind: 'bytes'; data: ArrayBuffer | Uint8Array; name?: string }
   | { kind: 'blob'; blob: H['blob'] };
 
+/**
+ * http 讀取失敗的自動重試，對應補上預設值的 `EngineOptions.retry`：只重試 5xx 與網路錯誤，第 n 次重試前等
+ * `baseDelayMs * 2^(n-1)` ms；`attempts` 是重試的次數（不含第一次請求）。
+ */
+export interface RetryPolicy {
+  attempts: number;
+  baseDelayMs: number;
+}
+
 /** probe 結果。時間已換算到媒體時間軸（秒）。 */
 export interface ProbedMedia {
   format: string;
