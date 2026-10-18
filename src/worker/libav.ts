@@ -41,6 +41,8 @@ const READ_BLOCK = 256 * 1024;
 /** 每次 demux 讀出的封包量（bytes）。 */
 const READ_LIMIT = 32 * 1024;
 
+/** `AVSEEK_FLAG_BACKWARD`：跳到目標之前（含）最近的 keyframe。 */
+const AVSEEK_FLAG_BACKWARD = 1;
 const AV_DISCARD_DEFAULT = 0;
 const AV_DISCARD_ALL = 48;
 const AV_CHANNEL_MONO = 0x4;
@@ -60,6 +62,36 @@ const defaultChannelMasks: Readonly<Record<number, number>> = {
 let glue: Promise<unknown> | null = null;
 
 /**
+ * 來源讀取的中止：每個讀取取當下的 `signal`。`abort()` 中止進行中的讀取，之後的讀取換用新的 signal；
+ * load 被中止時一律中止。
+ */
+class ReadGate {
+  readonly #load: AbortSignal;
+  #controller = new AbortController();
+
+  constructor(load: AbortSignal) {
+    this.#load = load;
+    load.addEventListener(
+      'abort',
+      () => {
+        this.#controller.abort(load.reason);
+      },
+      { once: true },
+    );
+  }
+
+  get signal(): AbortSignal {
+    return this.#controller.signal;
+  }
+
+  abort(): void {
+    this.#controller.abort(new DOMException('讀取被 seek 中止', 'AbortError'));
+    this.#controller = new AbortController();
+    if (this.#load.aborted) this.#controller.abort(this.#load.reason);
+  }
+}
+
+/**
  * 一個來源的 libav instance 與開好的 demuxer。被丟棄（取代、錯誤）時只要放掉參照；wasm 記憶體在 Worker
  * terminate 時歸還（ADR-0002）。
  */
@@ -70,7 +102,8 @@ export class LibavMedia {
   readonly #libav: LibAV;
   readonly #fmt: number;
   readonly #streams: readonly libavjs.Stream[];
-  /** 目前音軌的 decoder；換一個 start 時釋放。 */
+  readonly #reads: ReadGate;
+  /** 目前音軌的 decoder；換音軌時釋放，seek 時 flush 後沿用。 */
   #decoder: LibavAudioDecoder | null = null;
 
   private constructor(
@@ -79,12 +112,22 @@ export class LibavMedia {
     streams: libavjs.Stream[],
     raw: RawMedia,
     origin: number,
+    reads: ReadGate,
   ) {
     this.#libav = libav;
     this.#fmt = fmt;
     this.#streams = streams;
     this.raw = raw;
     this.origin = origin;
+    this.#reads = reads;
+  }
+
+  /**
+   * 中止進行中的來源讀取：等待它的 libav 呼叫（demux、seek）以錯誤結束。之後要先經 `startAudio()` 的 seek
+   * 才能繼續讀（中止後直接續讀會讀到錯位的封包）。
+   */
+  abortReads(): void {
+    this.#reads.abort();
   }
 
   /**
@@ -98,11 +141,13 @@ export class LibavMedia {
   ): Promise<LibavMedia> {
     const libav = await createInstance(assets);
     signal.throwIfAborted();
+    const reads = new ReadGate(signal);
     // 同步的 AVIO 讀取經 Asyncify 接到非同步的來源；同一個 instance 同時只有一個 pending 的讀取。
     libav.onblockread = (name, position, length) => {
+      const readSignal = reads.signal;
       void (async () => {
         try {
-          const data = await source.read(position, Math.max(length, READ_BLOCK), signal);
+          const data = await source.read(position, Math.max(length, READ_BLOCK), readSignal);
           await libav.ff_block_reader_dev_send(name, position, data);
         } catch (error) {
           // 中止與讀取失敗都交給等待中的 libav 呼叫，它會以這個錯誤 reject。
@@ -140,26 +185,40 @@ export class LibavMedia {
       size: source.size,
       streams: await Promise.all(streams.map((s) => rawStream(libav, s))),
     };
-    return new LibavMedia(libav, fmt, streams, raw, start === null ? 0 : start / 1e6);
+    return new LibavMedia(libav, fmt, streams, raw, start === null ? 0 : start / 1e6, reads);
   }
 
   /**
-   * 只讀選用的音軌（其餘 discard），建立它的 decoder 與 filter graph，回傳這個 epoch 的供料。
-   * 呼叫端要先停下前一個供料；demuxer 不會倒回，回到較早的位置要經 seek（#37）。
+   * 只讀選用的音軌（其餘 discard），回傳從 `options.startTime` 開始的這個 epoch 的供料。音軌的 decoder 與
+   * filter graph 在換音軌時建立，同一條音軌沿用。
+   *
+   * `seek` 時先跳到 `startTime` 往前 preroll 的 keyframe，再 flush decoder 與 filter graph；pipeline 解碼並丟掉
+   * 起點之前的 sample，輸出的第一個 sample 落在 `startTime`（ADR-0003）。不 seek 時接著 demuxer 目前的位置讀，
+   * 只用於開檔後的第一次輸出。呼叫端要先停下前一個供料。
    */
   async startAudio(
     streamIndex: number,
-    options: Omit<AudioPipelineOptions<Packet>, 'reader' | 'decoder'>,
+    options: Omit<AudioPipelineOptions<Packet>, 'reader' | 'decoder'> & { seek: boolean },
   ): Promise<{ run(): Promise<void> }> {
     const libav = this.#libav;
     const stream = this.#streams[streamIndex];
     if (!stream) throw new WorkerError('INTERNAL', `沒有 stream ${String(streamIndex)}`);
-    for (const s of this.#streams) {
-      await libav.AVStream_discard_s(s.ptr, s === stream ? AV_DISCARD_DEFAULT : AV_DISCARD_ALL);
+    let decoder = this.#decoder;
+    if (decoder?.streamIndex !== streamIndex) {
+      for (const s of this.#streams) {
+        await libav.AVStream_discard_s(s.ptr, s === stream ? AV_DISCARD_DEFAULT : AV_DISCARD_ALL);
+      }
+      await this.#decoder?.free();
+      this.#decoder = null;
+      decoder = await LibavAudioDecoder.create(libav, stream, this.origin, options.sampleRate);
+      this.#decoder = decoder;
     }
-    await this.#decoder?.free();
-    const decoder = await LibavAudioDecoder.create(libav, stream, this.origin, options.sampleRate);
-    this.#decoder = decoder;
+    if (options.seek) {
+      const codec = this.raw.streams[streamIndex]?.codec ?? '';
+      // 落點在開頭附近時也往前跳：容器的第一個封包可能早於 0（例如 MP4 的 priming）。
+      await this.#seek(options.startTime - (await decoder.preroll(codec)), options.signal);
+      await decoder.reset();
+    }
     const reader: PacketReader<Packet> = {
       read: async () => {
         const [result, packets] = await libav.ff_read_frame_multi(this.#fmt, decoder.pkt, {
@@ -175,10 +234,36 @@ export class LibavMedia {
     };
     return new AudioPipeline({ ...options, reader, decoder });
   }
+
+  /**
+   * demuxer 跳到 `time`（媒體時間，秒）之前最近的 keyframe。中止的讀取會在 block reader device 與 `pb` 留下錯誤
+   * （讀到檔尾時會重丟舊的 AbortError），所以兩邊都先清掉；EOF 之後也要重設 `eof_reached`（#17）。
+   * 被中止的 seek 仍回傳 0，回傳值不用來判斷中止，中止一律看 `signal`。
+   */
+  async #seek(time: number, signal: AbortSignal): Promise<void> {
+    const libav = this.#libav;
+    await libav.ff_block_reader_dev_send(DEVICE, 0, new Uint8Array(0));
+    const pb = await libav.AVFormatContext_pb(this.#fmt);
+    await libav.AVIOContext_error_s(pb, 0);
+    await libav.AVIOContext_eof_reached_s(pb, 0);
+    const seekTo = (t: number) => {
+      // stream -1：以 AV_TIME_BASE（µs）表示、包含容器 start_time 的時間戳。
+      const [lo, hi] = libav.f64toi64(Math.round((t + this.origin) * 1e6));
+      return libav.av_seek_frame(this.#fmt, -1, lo, hi, AVSEEK_FLAG_BACKWARD);
+    };
+    let result = await seekTo(time);
+    // 早於開頭的時間：有些 demuxer（MP3、ADTS）找不到之前的 keyframe 而失敗，改跳到開頭。
+    if (result < 0 && time < 0 && !signal.aborted) result = await seekTo(0);
+    signal.throwIfAborted();
+    if (result < 0) {
+      throw new WorkerError('FORMAT_CORRUPT', `seek 失敗：${await libav.ff_error(result)}`);
+    }
+  }
 }
 
 /** 一條音軌的 decoder 與 filter graph（重採樣、downmix 到 stereo、轉 fltp）。 */
 class LibavAudioDecoder implements AudioDecoder<Packet> {
+  readonly streamIndex: number;
   readonly channels: 1 | 2;
   readonly pkt: number;
   readonly #libav: LibAV;
@@ -193,6 +278,7 @@ class LibavAudioDecoder implements AudioDecoder<Packet> {
 
   private constructor(
     libav: LibAV,
+    streamIndex: number,
     ctx: number,
     pkt: number,
     frame: number,
@@ -202,6 +288,7 @@ class LibavAudioDecoder implements AudioDecoder<Packet> {
     inputRate: number,
   ) {
     this.#libav = libav;
+    this.streamIndex = streamIndex;
     this.#ctx = ctx;
     this.pkt = pkt;
     this.#frame = frame;
@@ -234,6 +321,7 @@ class LibavAudioDecoder implements AudioDecoder<Packet> {
     const channels = await libav.AVCodecContext_channels(ctx);
     return new LibavAudioDecoder(
       libav,
+      stream.index,
       ctx,
       pkt,
       frame,
@@ -257,6 +345,34 @@ class LibavAudioDecoder implements AudioDecoder<Packet> {
       copyoutFrame: 'ptr',
     });
     return this.#filter(frames, true);
+  }
+
+  /**
+   * seek 時要往前多解的秒數，讓輸出在目標位置之前收斂（ADR-0003）：AAC 1 個 frame、MP3 2 個、Vorbis 1 個封包
+   *（取最長的 block 4096 sample 估）、Opus 固定 80 ms（不讀容器的 `seek_preroll`，理由見 ADR-0003）、FLAC 與 PCM
+   * 不需要。
+   */
+  async preroll(codec: string): Promise<number> {
+    const frameSize = await this.#libav.AVCodecContext_frame_size(this.#ctx);
+    switch (codec) {
+      case 'aac':
+        return (frameSize || 1024) / this.#inputRate;
+      case 'mp3':
+        return (2 * (frameSize || 1152)) / this.#inputRate;
+      case 'vorbis':
+        return 4096 / this.#inputRate;
+      case 'opus':
+        return 0.08;
+      default:
+        return 0;
+    }
+  }
+
+  /** seek 之後：`avcodec_flush_buffers`（不重開 decoder，避免重裁 `initial_padding`），filter graph 重建。 */
+  async reset(): Promise<void> {
+    await this.#libav.avcodec_flush_buffers(this.#ctx);
+    if (this.#graph) await this.#libav.avfilter_graph_free_js(this.#graph.graph);
+    this.#graph = null;
   }
 
   /** 釋放 decoder 與 filter graph。 */

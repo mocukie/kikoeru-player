@@ -31,7 +31,7 @@ import { notImplemented } from './not-implemented.js';
 import { resolveEngineOptions, type ResolvedEngineOptions } from './options.js';
 import { createWebMediaWorker } from './media-worker.js';
 import { detectPlatform } from './platform.js';
-import { selectInitialTracks, toContainerTracks } from './tracks.js';
+import { sameTrackStructure, selectInitialTracks, toContainerTracks } from './tracks.js';
 import { loadWasmAssets } from './wasm.js';
 import type {
   AudioTrack,
@@ -81,6 +81,12 @@ const IDLE_SUSPEND_MS = 30_000;
 const WATCHDOG_MS = 1000;
 
 const noSelection: Readonly<TrackSelection> = { audio: null, video: null, subtitle: null };
+
+/** `reload()` 沿用的上一份媒體：軌道（含 track id）與選擇。 */
+interface ReloadOf {
+  info: MediaInfo;
+  selection: TrackSelection;
+}
 
 /** 執行中的 load。 */
 interface LoadContext {
@@ -154,6 +160,8 @@ class EngineImpl extends EventTarget implements Engine {
   #watchdogStep = 0;
   #wasm: Promise<WasmAssets> | null = null;
   #loadContext: LoadContext | null = null;
+  /** 最近一次 `load()` 的來源與選項，`reload()` 以它重新開檔。 */
+  #lastLoad: { source: Source; options: LoadOptions } | null = null;
   #isDestroyed = false;
   #destroying: Promise<void> | null = null;
 
@@ -276,7 +284,15 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   reload(): Promise<MediaInfo> {
-    return notImplemented('reload()');
+    if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    // 保留播放意圖：要接續播放時與 play() 一樣在呼叫內同步解鎖。
+    const starting = this.#paused ? null : this.#startAudio();
+    if (this.#destroyedDuring()) return Promise.reject(this.#destroyedError());
+    return this.#queue.enqueue(
+      'load',
+      (signal) => this.#runReload(starting, signal),
+      () => true,
+    );
   }
 
   play(): Promise<void> {
@@ -377,13 +393,39 @@ class EngineImpl extends EventTarget implements Engine {
 
   // ───────────────────────────── 指令的執行 ─────────────────────────────
 
+  /**
+   * 以最近一次 `load()` 的來源重新開檔。媒體的鏡像（`media`、`tracks`、`selectedTracks`、`duration`）在 reload
+   * 期間維持原狀；沒有完成過的 load（例如 load 本身失敗）就以同樣的選項重新 load。
+   */
+  async #runReload(starting: Promise<StartResult> | null, signal: AbortSignal): Promise<MediaInfo> {
+    const last = this.#lastLoad;
+    if (!last || this.#state === 'idle') {
+      throw new DOMException(
+        `state 為 '${this.#state}'，沒有可以 reload 的媒體`,
+        'InvalidStateError',
+      );
+    }
+    const position =
+      this.#state === 'error' ? (this.#error?.position ?? this.#currentTime) : this.currentTime;
+    const previous = this.#media ? { info: this.#media, selection: { ...this.#selected } } : null;
+    return this.#runLoad(
+      last.source,
+      { ...last.options, startTime: position, paused: this.#paused },
+      starting,
+      signal,
+      previous,
+    );
+  }
+
   async #runLoad(
     source: Source,
     options: LoadOptions,
     starting: Promise<StartResult> | null,
     signal: AbortSignal,
+    reloadOf: ReloadOf | null = null,
   ): Promise<MediaInfo> {
     this.#terminateWorker();
+    if (!reloadOf) this.#lastLoad = { source, options };
     const epoch = ++this.#epoch;
     const startTime = Number.isFinite(options.startTime) ? Math.max(0, options.startTime ?? 0) : 0;
     const load: LoadContext = {
@@ -403,7 +445,7 @@ class EngineImpl extends EventTarget implements Engine {
     this.#error = null;
     this.#watchdogStep = 0;
     this.#currentTime = startTime;
-    this.#publishMedia(null, noSelection);
+    if (!reloadOf) this.#publishMedia(null, noSelection);
     signal.throwIfAborted();
     this.#intentReason = 'command';
     this.#setState('loading', 'command', options.paused ?? true);
@@ -438,7 +480,22 @@ class EngineImpl extends EventTarget implements Engine {
 
       const probed = await this.#waitFor(() => load.probed, signal);
       signal.throwIfAborted();
-      const tracks = toContainerTracks(probed.tracks, () => ++this.#trackSeq);
+      let tracks: readonly Track[];
+      if (reloadOf) {
+        // reload：軌道與 track id 沿用，組成不同就不能接續。
+        if (!sameTrackStructure(reloadOf.info.tracks, probed.tracks)) {
+          throw this.#fatal('SOURCE_CHANGED', '重新開檔後軌道的組成與先前不同');
+        }
+        tracks = reloadOf.info.tracks;
+        load.selection = reloadOf.selection;
+      } else {
+        tracks = toContainerTracks(probed.tracks, () => ++this.#trackSeq);
+        load.selection = selectInitialTracks(tracks, options.tracks, {
+          audio: options.preferredLanguages?.audio ?? this.#options.preferredLanguages.audio,
+          subtitle:
+            options.preferredLanguages?.subtitle ?? this.#options.preferredLanguages.subtitle,
+        });
+      }
       const info: MediaInfo = {
         format: probed.format,
         duration: probed.duration,
@@ -446,10 +503,6 @@ class EngineImpl extends EventTarget implements Engine {
         tracks,
       };
       load.info = info;
-      load.selection = selectInitialTracks(tracks, options.tracks, {
-        audio: options.preferredLanguages?.audio ?? this.#options.preferredLanguages.audio,
-        subtitle: options.preferredLanguages?.subtitle ?? this.#options.preferredLanguages.subtitle,
-      });
       load.startTime = clamp(load.startTime, probed.duration);
       this.#currentTime = load.startTime;
       if (load.startTime !== load.flushedAt) {

@@ -37,7 +37,7 @@ export interface WorkerLoadMessage<H extends HostTypes> {
 }
 
 /**
- * probe 之後開始輸出：只讀選用的音軌（其餘 discard），從 `time`（秒）開始供料，之前的 sample 丟掉。
+ * probe 之後開始輸出：只讀選用的音軌（其餘 discard），從 `time`（秒）開始供料，精準度同 `seek`。
  * Worker 依 worklet 的 `need` 送出這個 epoch 的 PCM，音訊到結尾時送出 `eof`。每個 load 只送一次；
  * 之後改變位置經由 `seek`。
  */
@@ -49,7 +49,11 @@ export interface WorkerStartMessage {
   audio: number | null;
 }
 
-/** 中止進行中的讀取，從 `time`（秒）重新供料。 */
+/**
+ * 換到新的 epoch，從 `time`（秒）重新供料，音軌沿用 `start` 的選擇；`start` 之前收到的 seek 不處理。
+ * 中止進行中的讀取，等被取代的供料停下後，跳到 `time` 往前 preroll 的 keyframe 解碼並丟掉之前的 sample：
+ * 送出的第一個 sample 就在 `time`（捨入到最近的 sample）。被取代的 seek 與供料不回報任何訊息。
+ */
 export interface WorkerSeekMessage {
   type: 'seek';
   epoch: number;

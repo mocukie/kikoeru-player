@@ -77,6 +77,59 @@ function currentTime(page: Page): Promise<number> {
   return page.evaluate(() => (window as unknown as E2EWindow).engine.currentTime);
 }
 
+/** 被聽到的 beep：聽到的 `performance.now()`（ms）與那一刻 Engine 的 `currentTime`（依前後兩筆取樣內插）。 */
+interface HeardBeep {
+  perf: number;
+  time: number;
+}
+
+/**
+ * 錄到的 beep 起點換算成被聽到的時刻：錄到的 sample → 送進 graph 的 context 時間 → 被聽到的 `performance.now()`。
+ * 只取 `since`（`performance.now()`，ms）之後聽到、前後都有取樣可以內插 `currentTime` 的。
+ */
+function heardBeeps(page: Page, since = 0): Promise<HeardBeep[]> {
+  return page.evaluate(async (since) => {
+    const w = window as unknown as E2EWindow;
+    const harness = '/test/media-worker-harness.ts';
+    const { beepOnsets } = (await import(harness)) as typeof HarnessModule;
+    const capture = await w.e2eCapture;
+    const sampleRate = capture.context?.sampleRate ?? NaN;
+    const [left] = capture.channels();
+    const samples = w.e2eSamples.slice();
+    const origins = samples.map((s) => s.heardOrigin).sort((a, b) => a - b);
+    const heardOrigin = origins[Math.floor(origins.length / 2)] ?? NaN;
+    /** 依前後兩筆取樣內插 `perf` 時的 currentTime；中間跨過不在 playing 的期間（間隔超過 100 ms）時為 NaN。 */
+    const timeAt = (perf: number): number => {
+      const after = samples.findIndex((s) => s.perf >= perf);
+      const a = samples[after - 1];
+      const b = samples[after];
+      if (!a || !b || b.perf - a.perf > 100) return NaN;
+      return a.time + ((b.time - a.time) * (perf - a.perf)) / (b.perf - a.perf);
+    };
+    return beepOnsets(left, sampleRate)
+      .map((onset) => heardOrigin + ((capture.startFrame + onset * sampleRate) / sampleRate) * 1000)
+      .filter((perf) => perf > since)
+      .map((perf) => ({ perf, time: timeAt(perf) }))
+      .filter((beep) => !Number.isNaN(beep.time));
+  }, since);
+}
+
+/**
+ * 最先聽到的幾個 beep 依序在 `expected` 秒，被聽到時 `currentTime` 與 beep 的位置相差不超過容差。
+ * 之後聽到的不比（取樣到讀取結果之間播放仍在繼續）。
+ */
+function expectBeepsOnTime(beeps: HeardBeep[], expected: number[]): void {
+  const first = beeps.slice(0, expected.length);
+  expect(first.map((b) => Math.round(b.time))).toEqual(expected);
+  for (const { time } of first) {
+    expect(Math.abs(time - Math.round(time))).toBeLessThanOrEqual(BEEP_ONSET_TOLERANCE);
+  }
+}
+
+function now(page: Page): Promise<number> {
+  return page.evaluate(() => performance.now());
+}
+
 for (const path of ['audio/flac.flac', 'audio/pcm-s16.wav']) {
   test(`beep 被聽到的時刻，currentTime 與 beep 的位置相差 ≤ 20 ms（${path}）`, async ({ page }) => {
     await load(page, path);
@@ -84,38 +137,75 @@ for (const path of ['audio/flac.flac', 'audio/pcm-s16.wav']) {
     await expect(page.locator('#state')).toHaveText('playing');
     await expect.poll(() => currentTime(page), { timeout: 5000 }).toBeGreaterThan(2.3);
 
-    const result = await page.evaluate(async () => {
-      const w = window as unknown as E2EWindow;
-      const harness = '/test/media-worker-harness.ts';
-      const { beepOnsets } = (await import(harness)) as typeof HarnessModule;
-      const capture = await w.e2eCapture;
-      const sampleRate = capture.context?.sampleRate ?? NaN;
-      const [left] = capture.channels();
-      const samples = w.e2eSamples.slice();
-      const origins = samples.map((s) => s.heardOrigin).sort((a, b) => a - b);
-      const heardOrigin = origins[Math.floor(origins.length / 2)] ?? NaN;
-      // 錄到的 beep 起點 → 送進 graph 的 context 時間 → 被聽到的 performance.now()。
-      const heardAt = beepOnsets(left, sampleRate).map(
-        (onset) => heardOrigin + ((capture.startFrame + onset * sampleRate) / sampleRate) * 1000,
-      );
-      /** 依前後兩筆取樣內插 `perf` 時的 currentTime。 */
-      const timeAt = (perf: number): number => {
-        const after = samples.findIndex((s) => s.perf >= perf);
-        const a = samples[after - 1];
-        const b = samples[after];
-        if (!a || !b) return NaN;
-        return a.time + ((b.time - a.time) * (perf - a.perf)) / (b.perf - a.perf);
-      };
-      return { onsets: heardAt.length, times: heardAt.map(timeAt) };
-    });
-
     // 播放從 0 開始，第 k 個 beep 在 k 秒；0 秒的那一聲在開始播放的瞬間，不拿來比。
-    expect(result.onsets).toBeGreaterThanOrEqual(3);
-    for (const k of [1, 2]) {
-      expect(Math.abs((result.times[k] ?? NaN) - k)).toBeLessThanOrEqual(BEEP_ONSET_TOLERANCE);
-    }
+    expectBeepsOnTime(
+      (await heardBeeps(page)).filter((b) => b.time > 0.5),
+      [1, 2],
+    );
   });
 }
+
+/** 以 Demo 頁的進度條 seek：設定值並發出拖曳（input）與放開（change）。 */
+async function seekBar(page: Page, time: number): Promise<void> {
+  await page.locator('#seek').evaluate((input: HTMLInputElement, time) => {
+    input.value = String(time);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, time);
+}
+
+test('播放中以進度條 seek：beep 起點對 currentTime ≤ 20 ms', async ({ page }) => {
+  await load(page, 'audio/flac.flac');
+  await page.locator('#play').click();
+  await expect.poll(() => currentTime(page)).toBeGreaterThan(0.5);
+
+  const before = await now(page);
+  await seekBar(page, 4.5);
+  await expect(page.locator('#log li').filter({ hasText: /seeked 4\.500$/ })).toHaveCount(1);
+  await expect(page.locator('#state')).toHaveText('playing');
+  await expect.poll(() => currentTime(page), { timeout: 5000 }).toBeGreaterThan(6.3);
+
+  expectBeepsOnTime(await heardBeeps(page, before), [5, 6]);
+});
+
+test('暫停中 seek 再播放：從落點開始，beep 起點對 currentTime ≤ 20 ms', async ({ page }) => {
+  await load(page, 'audio/pcm-s16.wav');
+  await seekBar(page, 6.75);
+  await expect(page.locator('#log li').filter({ hasText: /seeked 6\.750$/ })).toHaveCount(1);
+  await expect(page.locator('#state')).toHaveText('ready');
+  expect(await currentTime(page)).toBe(6.75);
+
+  const before = await now(page);
+  await page.locator('#play').click();
+  await expect.poll(() => currentTime(page), { timeout: 5000 }).toBeGreaterThan(8.3);
+  expectBeepsOnTime(await heardBeeps(page, before), [7, 8]);
+});
+
+test('播放中 reload：從原本的位置接續播放，舊的 Worker 被 terminate', async ({ page }) => {
+  await load(page, 'audio/flac.flac');
+  await page.locator('#play').click();
+  await expect.poll(() => currentTime(page)).toBeGreaterThan(1.3);
+
+  const before = await now(page);
+  const position = await currentTime(page);
+  await page.locator('#reload').click();
+  await expect(page.locator('#log li').filter({ hasText: /← reload resolve/ })).toHaveCount(1);
+  await expect(page.locator('#state')).toHaveText('playing');
+  // reload 期間 currentTime 停在按下時的位置附近，之後從那裡接續。
+  const resumed = await currentTime(page);
+  expect(resumed).toBeGreaterThanOrEqual(position);
+  expect(resumed).toBeLessThan(position + 1);
+  const next = Math.ceil(resumed + 0.05);
+  await expect.poll(() => currentTime(page), { timeout: 5000 }).toBeGreaterThan(next + 1.3);
+
+  expectBeepsOnTime(
+    (await heardBeeps(page, before)).filter((b) => b.time > resumed),
+    [next, next + 1],
+  );
+  const stats = await page.evaluate(() => (window as unknown as E2EWindow).engine.getStats());
+  expect(stats.resources.workers).toBe(1);
+  await expect.poll(() => page.workers().length).toBe(1);
+});
 
 test('CI 組的純音訊檔都能播放與暫停，並輸出聲音', async ({ page, request }) => {
   test.setTimeout(180_000);
