@@ -11,7 +11,7 @@ describe('resolveEngineOptions：預設值', () => {
       assets: {},
       canvas: null,
       timeUpdateInterval: 250,
-      limits: { cacheBytes: 128 * MiB, readaheadSeconds: 60 },
+      limits: { cacheBytes: 128 * MiB, readaheadSeconds: 60, packetQueueBytes: 64 * MiB },
       retry: { attempts: 3, baseDelayMs: 500 },
       stallTimeout: 8000,
       stallAttempts: 2,
@@ -25,16 +25,19 @@ describe('resolveEngineOptions：預設值', () => {
   });
 
   it.each([
-    ['desktop', { targetMs: 150, refillMs: 75, capacityMs: 400 }, 128 * MiB],
-    ['android', { targetMs: 250, refillMs: 125, capacityMs: 600 }, 64 * MiB],
-    ['ios', { targetMs: 300, refillMs: 150, capacityMs: 750 }, 64 * MiB],
-  ] as const)('%s 的 audioBuffer 與 cacheBytes', (platform, audioBuffer, cacheBytes) => {
-    const resolved = resolveEngineOptions({}, platform);
+    ['desktop', { targetMs: 150, refillMs: 75, capacityMs: 400 }, 128 * MiB, 64 * MiB],
+    ['android', { targetMs: 250, refillMs: 125, capacityMs: 600 }, 64 * MiB, 32 * MiB],
+    ['ios', { targetMs: 300, refillMs: 150, capacityMs: 750 }, 64 * MiB, 32 * MiB],
+  ] as const)(
+    '%s 的 audioBuffer、cacheBytes 與封包佇列的硬上限',
+    (platform, audioBuffer, cacheBytes, packetQueueBytes) => {
+      const resolved = resolveEngineOptions({}, platform);
 
-    expect(resolved.platform).toBe(platform);
-    expect(resolved.audioBuffer).toEqual(audioBuffer);
-    expect(resolved.limits).toEqual({ cacheBytes, readaheadSeconds: 60 });
-  });
+      expect(resolved.platform).toBe(platform);
+      expect(resolved.audioBuffer).toEqual(audioBuffer);
+      expect(resolved.limits).toEqual({ cacheBytes, readaheadSeconds: 60, packetQueueBytes });
+    },
+  );
 
   it('保留 App 給的值', () => {
     const log = () => undefined;
@@ -62,7 +65,7 @@ describe('resolveEngineOptions：預設值', () => {
       assets: { workerUrl, glueUrl: '/libav.wasm.mjs' },
       canvas: null,
       timeUpdateInterval: 100,
-      limits: { cacheBytes: 32 * MiB, readaheadSeconds: 30 },
+      limits: { cacheBytes: 32 * MiB, readaheadSeconds: 30, packetQueueBytes: 32 * MiB },
       retry: { attempts: 0, baseDelayMs: 0 },
       stallTimeout: 5000,
       stallAttempts: 0,
@@ -85,7 +88,11 @@ describe('resolveEngineOptions：預設值', () => {
       'ios',
     );
 
-    expect(resolved.limits).toEqual({ cacheBytes: 64 * MiB, readaheadSeconds: 20 });
+    expect(resolved.limits).toEqual({
+      cacheBytes: 64 * MiB,
+      readaheadSeconds: 20,
+      packetQueueBytes: 32 * MiB,
+    });
     expect(resolved.retry).toEqual({ attempts: 5, baseDelayMs: 500 });
     expect(resolved.preferredLanguages).toEqual({ audio: [], subtitle: ['ja'] });
   });

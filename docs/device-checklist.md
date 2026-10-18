@@ -29,7 +29,10 @@ Demo 頁的「CI 組媒體」來自 `pnpm media:gen` 產生的 `test/media/out/`
 - [ ] **淡入淡出（`audioFadeMs`）的聽感**：以喇叭與耳機各聽一次，播放中按 pause、play、拖曳 seek，切換點沒有爆音（click／pop），也不會聽得出拖泥帶水。再於 console 以 `createEngine({ audioFadeMs: 0 })` 比較硬切（應該聽得到 click），以及 `audioFadeMs: 30`、`100` 的差別，記下覺得合適的值。
 - [ ] **音量與靜音**：拖曳 Demo 頁的 volume 時音量平滑變化、沒有拉鍊聲；勾選 muted 時立即無聲，`currentTime` 照常前進，取消後回到原本的音量。
 - [ ] **藍牙延遲**：接上藍牙耳機播放，記下 Demo 頁「audio」一列的 `outputLatency`；beep 響起時 `currentTime` 是否仍剛好跨過整秒（藍牙的延遲常有 100–300 ms）。暫停時 `currentTime` 停在最後聽到的位置附近，不比聽到的超前。
-- [ ] **讀取錯誤與 reload**：選 `audio/pcm-s16.wav` 與故障注入「401@4」，load 後播放：約 2–3 秒時事件 log 出現 `error SOURCE_UNAUTHORIZED（fatal） position=…`；按 reload 從該位置接續播放。故障注入改選「drop@500KB」：斷線的位置可能短暫 `buffering`（重試的退避），之後繼續播放、不出現 error。
+- [ ] **讀取錯誤與 reload**：選 `audio/pcm-s16.wav` 與故障注入「401@4」，load 後播放：約 2–3 秒時（預讀遇到 401，播放用完已讀到的資料時）事件 log 出現 `error SOURCE_UNAUTHORIZED（fatal） position=…`；按 reload 從該位置接續播放。故障注入改選「drop@500KB」：斷線與重試發生在預讀中，播放不出現 `buffering` 與 error。
+- [ ] **預讀與快取**：播放 `audio/pcm-s16.wav`，Demo 頁「cache」一列的預讀很快抓到檔尾、不再「抓取中」；之後往前 seek，「network」的已讀 bytes 不增加，hits 增加。
+- [ ] **網路不足與 buffering**：開 `/demo/?readahead=0.5`，`audio/pcm-s16.wav` 加自訂故障 `delay=4000` 播放：事件 log 出現 `buffering`（reason media），之後回到 `playing`；不會在一兩百 ms 內反覆切換。手機的行動網路下以一般設定播放手動組的長檔，記下有沒有 `buffering`。
+- [ ] **卡住後自動恢復**：`audio/pcm-s16.wav` 加故障注入「stall@1MB」：約 5–6 秒處 `buffering`，約 8 秒後事件 log 出現 `stall`，接著 `stallrecovered` 並繼續播放；改選「stall@1MB+」：`stall` 兩次之後以 `error SOURCE_NETWORK（fatal）` 結束（`/demo/?stallTimeout=2000` 可以縮短等待）。
 
 ## 桌面
 
@@ -56,6 +59,7 @@ Safari 不跑 E2E，共同項目都要做。
 - [ ] **系統中斷**：播放中以來電、Siri 或計時器響鈴中斷，事件 log 出現 `paused=true reason=interrupted`；中斷結束後**不會**自動恢復出聲（WebKit 自己 resume `AudioContext` 時 worklet 仍輸出靜音），按 play 出現 `beforeaudiostart cause=resume` 並恢復播放。若中斷尚未結束就按 play，記下是否得到 `AUDIO_OUTPUT`（`play()` 的非致命 reject，`paused` 回到 true）。
 - [ ] **鎖屏控制**：沒有背景播放模組時，鎖屏的 Now Playing 是 `AudioContext`；以鎖屏的暫停、播放鍵操作，事件 log 出現 `reason=external`，`paused` 跟著改變。
 - [ ] **長時間暫停後的 resume**：暫停 40 秒以上（Engine 已 suspend `AudioContext`）後，分別以頁面的 play、鎖屏的播放鍵恢復，記下哪一種需要 gesture、有沒有聲音。
+- [ ] **記憶體壓力**：以手動組的 `long-40min-s24.wav`（約 660 MB）與 `long-30min-720p.mkv` 播放、往前往後 seek，Demo 頁「cache」一列不超過 64 MiB，分頁不被系統重新載入（`cacheBytes`／`readaheadSeconds` 預設值的實機驗證，「記憶體上限的數值」#23）。
 
 ### Android Chrome
 

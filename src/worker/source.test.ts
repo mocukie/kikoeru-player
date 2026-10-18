@@ -224,15 +224,38 @@ describe('http 的重試', () => {
     expect(calls).toHaveLength(2);
   });
 
-  test('body 比要求的範圍短是網路錯誤，會重試', async () => {
+  test('body 比要求的範圍短是網路錯誤，重試從已經收到的位置接續', async () => {
     vi.useFakeTimers({ now: 0 });
-    const short = () => new Response(bytes(2), { status: 206 });
-    const { fetch, calls } = scripted(short, ok);
+    const head = () => new Response(Uint8Array.of(10, 11), { status: 206 });
+    const tail = () => new Response(Uint8Array.of(12, 13), { status: 206 });
+    const { fetch, calls } = scripted(head, tail);
     const source = await open(fetch);
     const reading = source.read(0, 4, never);
     await vi.advanceTimersByTimeAsync(100);
-    expect((await reading).length).toBe(4);
+    expect([...(await reading)]).toEqual([10, 11, 12, 13]);
     expect(calls).toHaveLength(2);
+    expect(fetch.mock.calls[1]?.[1].headers).toEqual({ Range: 'bytes=2-3' });
+  });
+
+  test('body 超出要求的範圍是網路錯誤', async () => {
+    const { fetch } = scripted(() => new Response(bytes(8), { status: 206 }));
+    const source = await open(fetch, { attempts: 0, baseDelayMs: 0 });
+    await expect(source.read(0, 4, never)).rejects.toMatchObject({ code: 'SOURCE_NETWORK' });
+  });
+
+  test('每個失敗的請求都交給 onRequestError，包括之後重試成功的', async () => {
+    vi.useFakeTimers({ now: 0 });
+    const { fetch } = scripted(() => status(503), ok);
+    const errors: unknown[] = [];
+    const source = await openSource({ kind: 'http', url: 'u', size: 100 }, never, {
+      fetch,
+      retry: { attempts: 3, baseDelayMs: 10 },
+      onRequestError: (error) => errors.push(error),
+    });
+    const reading = source.read(0, 4, never);
+    await vi.advanceTimersByTimeAsync(10);
+    await reading;
+    expect(errors).toMatchObject([{ code: 'SOURCE_SERVER', detail: { status: 503 } }]);
   });
 
   test.each([

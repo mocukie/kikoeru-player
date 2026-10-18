@@ -126,6 +126,7 @@ describe('currentTime 與輸出延遲', () => {
     clock(deps, 1, 0);
     clock(deps, 1.5, SR / 2);
     deps.audio.reply({ type: 'starved' });
+    await new Promise((resolve) => setTimeout(resolve, 260));
     expect(engine.state).toBe('buffering');
     deps.audio.frameNow = SR / 2 - SR / 10;
     expect(engine.currentTime).toBeCloseTo(1.4, 9);

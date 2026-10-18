@@ -49,7 +49,8 @@ async function loadAndPlay(page: Page, path: string, fault: string): Promise<voi
 test('播放中 401：error 事件帶 SOURCE_UNAUTHORIZED 與 position，reload() 從該位置接續播放', async ({
   page,
 }) => {
-  // 第 1 個請求探測大小、第 2 個開檔，第 4 個是播放到約 2.7 秒時的讀取。
+  // 第 1 個請求探測大小，第 2、3 個開檔，第 4 個是開始預讀的請求（從約 2.7 秒的位置起）：預讀遇到 401 之後，
+  // 播放讀到那裡才回報。
   await loadAndPlay(page, WAV, 'fault=401@4');
   await expect(page.locator('#state')).toHaveText('error', { timeout: 10_000 });
 

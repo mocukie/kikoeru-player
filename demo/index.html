@@ -59,6 +59,7 @@
   </head>
   <body>
     <h1>kikoeru-player Demo</h1>
+    <p id="engine-options"></p>
 
     <fieldset>
       <legend>來源</legend>
@@ -78,8 +79,12 @@
           <option value="fault=503@2%2B">503@2+：持續 503，重試用完後錯誤</option>
           <option value="fault=drop@500KB">drop@500KB：一次斷線，重試後恢復</option>
           <option value="fault=drop@500KB%2B">drop@500KB+：持續斷線，重試用完後錯誤</option>
-          <option value="fault=stall@1MB">stall@1MB：送到 1 MiB 停住</option>
+          <option value="fault=stall@1MB">stall@1MB：送到 1 MiB 停住一次（卡住後自動恢復）</option>
+          <option value="fault=stall@1MB%2B">stall@1MB+：每次都停住（自動恢復用完後錯誤）</option>
           <option value="delay=200">delay=200：每個回應慢 200 ms</option>
+          <option value="delay=2000">
+            delay=2000：每個回應慢 2 秒（搭配 ?readahead=1 讓網路不足）
+          </option>
         </select>
         <input
           id="fault-custom"
@@ -132,12 +137,18 @@
       <dd id="current-time">0.000</dd>
       <dt>duration</dt>
       <dd id="duration">NaN</dd>
+      <dt>buffered</dt>
+      <dd id="buffered">—</dd>
       <dt>error</dt>
       <dd id="error">—</dd>
       <dt>media</dt>
       <dd id="media-info">—</dd>
       <dt>audio</dt>
       <dd id="audio-stats">—</dd>
+      <dt>cache</dt>
+      <dd id="cache-stats">—</dd>
+      <dt>network</dt>
+      <dd id="network-stats">—</dd>
       <dt>resources</dt>
       <dd id="resources">—</dd>
     </dl>

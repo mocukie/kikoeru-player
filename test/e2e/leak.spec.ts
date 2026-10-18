@@ -1,5 +1,6 @@
 // leak 測試（#40，docs/testing.md「E2E」）：以 CI 組的短檔連續 load 100 次，混入被取代的 load、播放中換檔與播放中
-// destroy。每次換檔後 resources 為 1 個 Worker、1 個 libav instance，destroy 後全為 0，沒有進行中的請求；
+// destroy。每次換檔後 resources 為 1 個 Worker、1 個 libav instance，進行中的請求都屬於目前的媒體（預讀），
+// destroy 後全為 0、沒有進行中的請求；
 // 最後數 Worker target，並在 GC 後量 JS heap（Chromium 的 CDP）。Firefox 跑不了 CDP 的部分。
 import { expect, test, type Page } from '@playwright/test';
 import { LEAK_HEAP_GROWTH_BYTES } from './tolerances.js';
@@ -13,7 +14,7 @@ interface PageEngine {
   destroy(): Promise<void>;
   getStats(): Promise<{
     resources: { workers: number; libavInstances: number; openVideoFrames: number };
-    network: { inflight: unknown[] };
+    network: { inflight: { url: string }[] };
   }>;
 }
 
@@ -45,7 +46,7 @@ function stepOf(i: number): Step {
 
 interface StepResult {
   resources: { workers: number; libavInstances: number; openVideoFrames: number };
-  inflight: unknown[];
+  inflight: { url: string }[];
   superseded: string[];
   state: string;
 }
@@ -180,7 +181,10 @@ test('連續 load 100 次：resources 與 Worker 不累積，destroy 後全為 0
     const next = FILES[(i + 1) % FILES.length] ?? 'audio/flac.flac';
     const result = await runStep(page, step, file, next);
     const where = `第 ${String(i)} 次（${step}，${file}）`;
-    expect(result.inflight, where).toEqual([]);
+    // 預讀會在換檔後繼續抓目前的媒體；之前（含被取代）的媒體不能留下請求。
+    const current = step === 'superseded' || step === 'seek-then-load' ? next : file;
+    const stale = result.inflight.filter((r) => !r.url.endsWith(`/media/${current}`));
+    expect(stale, where).toEqual([]);
     if (step === 'destroy-while-playing') {
       expect(result.resources, where).toEqual(none);
       expect(result.state, where).toBe('idle');

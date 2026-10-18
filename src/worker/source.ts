@@ -1,9 +1,10 @@
 // 來源：以 `read(offset, length, signal)` 讀取位元組（ADR-0001）。http 依狀態碼分類錯誤，5xx 與網路錯誤以指數退避
-// 重試；Range 快取與預讀由後續 issue 加入。
+// 重試；給了 `RangeCache` 時，http 經過 Range 快取與預讀（range-cache.ts，ADR-0007）。
 
 import type { RetryPolicy, WireSource, WorkerErrorCode } from '../protocol/index.js';
 import { WorkerError } from './errors.js';
 import type { WorkerHost } from './host.js';
+import { CachedSource, type RangeCache } from './range-cache.js';
 
 /** 一個可隨機讀取的來源。 */
 export interface ByteSource {
@@ -16,6 +17,39 @@ export interface SourceDeps {
   fetch?: (url: string, init: RequestInit) => Promise<Response>;
   /** http 讀取的重試；省略時不重試。 */
   retry?: RetryPolicy;
+  /** http 經過的 Range 快取；省略時 http 直接讀取，不快取也不預讀。 */
+  cache?: RangeCache;
+  /** http 的每個請求失敗時呼叫（包括之後會重試的），供卡住時回報最後一次的讀取錯誤。 */
+  onRequestError?: (error: WorkerError) => void;
+}
+
+/** 進行中的 http 請求，供 `getStats().network.inflight`。 */
+export interface InflightRequest {
+  url: string;
+  start: number;
+  end: number;
+  elapsedMs: number;
+}
+
+/** http 的 Range 讀取：重試、錯誤分類與網路統計。 */
+export interface RangeClient {
+  readonly url: string;
+  readonly size: number;
+  /**
+   * 讀 `[start, end]`（含兩端）的 bytes，依序以 `onData` 交出。5xx 與網路錯誤（含 body 讀到一半斷線、長度不符）以
+   * `retry` 重試，重試從已經收到的位置接續；用完重試或其他錯誤以分類過的 `WorkerError` reject，被中止時以
+   * `signal` 的 reason reject。
+   */
+  stream(
+    start: number,
+    end: number,
+    signal: AbortSignal,
+    onData: (chunk: Uint8Array) => void,
+  ): Promise<void>;
+  /** 累計收到的 body bytes。 */
+  readonly bytesLoaded: number;
+  /** 進行中的請求。 */
+  inflight(): InflightRequest[];
 }
 
 /** 開啟來源並取得大小；http 沒有給大小時發一個 Range 請求。 */
@@ -29,8 +63,10 @@ export async function openSource(
       return bytesSource(wire.data instanceof Uint8Array ? wire.data : new Uint8Array(wire.data));
     case 'blob':
       return blobSource(wire.blob);
-    case 'http':
-      return httpSource(wire, signal, deps);
+    case 'http': {
+      const client = await openHttp(wire, signal, deps);
+      return deps.cache ? new CachedSource(client, deps.cache) : directSource(client);
+    }
   }
 }
 
@@ -56,65 +92,127 @@ function blobSource(blob: Blob): ByteSource {
   };
 }
 
-async function httpSource(
+/** 不經過快取的 http：每個讀取一個 Range 請求。 */
+function directSource(client: RangeClient): ByteSource {
+  return {
+    size: client.size,
+    async read(offset, length, signal) {
+      const end = Math.min(offset + length, client.size) - 1;
+      if (end < offset) return new Uint8Array();
+      const data = new Uint8Array(end - offset + 1);
+      let filled = 0;
+      await client.stream(offset, end, signal, (chunk) => {
+        data.set(chunk, filled);
+        filled += chunk.length;
+      });
+      return data;
+    },
+  };
+}
+
+/** 建立 http 的 `RangeClient`；沒有給大小時先以 `bytes=0-0` 探測。 */
+export async function openHttp(
   wire: Extract<WireSource<WorkerHost>, { kind: 'http' }>,
   signal: AbortSignal,
-  deps: SourceDeps,
-): Promise<ByteSource> {
+  deps: SourceDeps = {},
+): Promise<RangeClient> {
   const { url } = wire;
   const retry = deps.retry ?? noRetry;
   const fetchImpl = deps.fetch ?? ((url: string, init: RequestInit) => fetch(url, init));
+  const inflight = new Set<{ start: number; end: number; startedAt: number }>();
+  let bytesLoaded = 0;
 
-  /** 一次 Range 請求，讀完整個 body；失敗時丟分類過的 `WorkerError`，被中止時丟 `signal` 的錯誤。 */
-  const request = async (start: number, end: number, signal: AbortSignal) => {
-    let response: Response;
+  /**
+   * 一次 Range 請求，body 依序交給 `onData`；body 不完整或超出範圍時丟 `SOURCE_NETWORK`，其他失敗時丟分類過的
+   * `WorkerError`，被中止時丟 `signal` 的錯誤。
+   */
+  const request = async (
+    start: number,
+    end: number,
+    signal: AbortSignal,
+    onData: (chunk: Uint8Array) => void,
+  ): Promise<string | null> => {
+    const entry = { start, end, startedAt: performance.now() };
+    inflight.add(entry);
     try {
-      response = await fetchImpl(url, {
-        ...(wire.credentials && { credentials: wire.credentials }),
-        headers: { ...wire.headers, Range: `bytes=${String(start)}-${String(end)}` },
-        signal,
-      });
-    } catch (error) {
-      signal.throwIfAborted();
-      // 網路中斷、CORS、DNS 在 fetch() 都是同一個 TypeError，分不出來。
-      throw new WorkerError('SOURCE_NETWORK', `無法連線到 ${url}`, {
-        detail: { url },
-        cause: error,
-      });
+      let response: Response;
+      try {
+        response = await fetchImpl(url, {
+          ...(wire.credentials && { credentials: wire.credentials }),
+          headers: { ...wire.headers, Range: `bytes=${String(start)}-${String(end)}` },
+          signal,
+        });
+      } catch (error) {
+        signal.throwIfAborted();
+        // 網路中斷、CORS、DNS 在 fetch() 都是同一個 TypeError，分不出來。
+        throw new WorkerError('SOURCE_NETWORK', `無法連線到 ${url}`, {
+          detail: { url },
+          cause: error,
+        });
+      }
+      if (response.status !== 206) {
+        await response.body?.cancel().catch(() => undefined);
+        const { status } = response;
+        throw new WorkerError(httpErrorCode(status), `${url} 回應 HTTP ${String(status)}`, {
+          detail: { status, url },
+        });
+      }
+      const expected = end - start + 1;
+      let received = 0;
+      const reader = response.body?.getReader();
+      try {
+        for (;;) {
+          const chunk = reader ? await reader.read() : { done: true as const, value: undefined };
+          if (chunk.done) break;
+          if (received + chunk.value.length > expected) {
+            throw new WorkerError('SOURCE_NETWORK', `${url} 的回應超出要求的範圍`, {
+              detail: { url },
+            });
+          }
+          received += chunk.value.length;
+          bytesLoaded += chunk.value.length;
+          onData(chunk.value);
+        }
+      } catch (error) {
+        signal.throwIfAborted();
+        if (error instanceof WorkerError) throw error;
+        throw new WorkerError('SOURCE_NETWORK', `讀取 ${url} 時連線中斷`, {
+          detail: { url },
+          cause: error,
+        });
+      } finally {
+        reader?.cancel().catch(() => undefined);
+      }
+      if (received !== expected) {
+        throw new WorkerError(
+          'SOURCE_NETWORK',
+          `${url} 的回應不完整：要求 ${String(expected)} bytes，收到 ${String(received)} bytes`,
+          { detail: { url } },
+        );
+      }
+      return response.headers.get('Content-Range');
+    } finally {
+      inflight.delete(entry);
     }
-    if (response.status !== 206) {
-      await response.body?.cancel().catch(() => undefined);
-      const { status } = response;
-      throw new WorkerError(httpErrorCode(status), `${url} 回應 HTTP ${String(status)}`, {
-        detail: { status, url },
-      });
-    }
-    let data: Uint8Array;
-    try {
-      data = new Uint8Array(await response.arrayBuffer());
-    } catch (error) {
-      signal.throwIfAborted();
-      throw new WorkerError('SOURCE_NETWORK', `讀取 ${url} 時連線中斷`, {
-        detail: { url },
-        cause: error,
-      });
-    }
-    if (data.length !== end - start + 1) {
-      throw new WorkerError(
-        'SOURCE_NETWORK',
-        `${url} 的回應不完整：要求 ${String(end - start + 1)} bytes，收到 ${String(data.length)} bytes`,
-        { detail: { url } },
-      );
-    }
-    return { data, contentRange: response.headers.get('Content-Range') };
   };
 
-  /** 以 `retry` 重試 5xx 與網路錯誤；退避中的等待也以 `signal` 中止。 */
-  const fetchRange = async (start: number, end: number, signal: AbortSignal) => {
+  /** 以 `retry` 重試 5xx 與網路錯誤，從已經收到的位置接續；退避中的等待也以 `signal` 中止。 */
+  const stream = async (
+    start: number,
+    end: number,
+    signal: AbortSignal,
+    onData: (chunk: Uint8Array) => void,
+  ): Promise<string | null> => {
+    let position = start;
     for (let attempt = 0; ; attempt++) {
       try {
-        return await request(start, end, signal);
+        return await request(position, end, signal, (chunk) => {
+          position += chunk.length;
+          onData(chunk);
+        });
       } catch (error) {
+        if (signal.aborted) throw signal.reason as Error;
+        if (error instanceof WorkerError) deps.onRequestError?.(error);
         if (!retryable(error) || attempt >= retry.attempts) throw error;
       }
       await sleep(retry.baseDelayMs * 2 ** attempt, signal);
@@ -124,7 +222,7 @@ async function httpSource(
   let size = wire.size;
   if (size === undefined) {
     // 第一個 Range 回應的 Content-Range 帶著總大小。
-    size = parseTotalSize((await fetchRange(0, 0, signal)).contentRange);
+    size = parseTotalSize(await stream(0, 0, signal, () => undefined));
     if (size === undefined) {
       throw new WorkerError('SOURCE_RANGE_UNSUPPORTED', `${url} 沒有回報檔案大小`, {
         detail: { url },
@@ -134,11 +232,22 @@ async function httpSource(
   const total = size;
 
   return {
+    url,
     size: total,
-    async read(offset, length, signal) {
-      const end = Math.min(offset + length, total) - 1;
-      if (end < offset) return new Uint8Array();
-      return (await fetchRange(offset, end, signal)).data;
+    async stream(start, end, signal, onData) {
+      await stream(start, end, signal, onData);
+    },
+    get bytesLoaded() {
+      return bytesLoaded;
+    },
+    inflight() {
+      const now = performance.now();
+      return [...inflight].map(({ start, end, startedAt }) => ({
+        url,
+        start,
+        end,
+        elapsedMs: now - startedAt,
+      }));
     },
   };
 }
@@ -146,7 +255,7 @@ async function httpSource(
 const noRetry: RetryPolicy = { attempts: 0, baseDelayMs: 0 };
 
 /** 只重試網路錯誤與 5xx。 */
-function retryable(error: unknown): boolean {
+export function retryable(error: unknown): boolean {
   if (!(error instanceof WorkerError)) return false;
   return error.code === 'SOURCE_NETWORK' || (error.detail?.status ?? 0) >= 500;
 }

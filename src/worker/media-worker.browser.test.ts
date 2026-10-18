@@ -490,7 +490,7 @@ describe('seek 與讀取中止', () => {
     expect(media.stalled.length).toBeGreaterThan(0);
     expect(media.stalled.every((signal) => signal.aborted)).toBe(true);
     expect(driver.messages.filter((m) => m.type === 'error' || m.type === 'crash')).toEqual([]);
-    expect(await driver.stats()).toEqual({ libavInstances: 1 });
+    expect(await driver.stats()).toMatchObject({ libavInstances: 1 });
   });
 
   test('EOF 之後 seek：從新的位置播到結尾', async () => {
@@ -558,7 +558,7 @@ describe('壞檔', () => {
       code: 'FORMAT_UNSUPPORTED',
       fatal: true,
     });
-    expect(await driver.stats()).toEqual({ libavInstances: 0 });
+    expect(await driver.stats()).toMatchObject({ libavInstances: 0 });
   });
 
   test('沒有可以播放的軌為 CODEC_UNSUPPORTED', async () => {
@@ -569,7 +569,7 @@ describe('壞檔', () => {
       code: 'CODEC_UNSUPPORTED',
       fatal: true,
     });
-    expect(await driver.stats()).toEqual({ libavInstances: 0 });
+    expect(await driver.stats()).toMatchObject({ libavInstances: 0 });
   });
 });
 
@@ -606,12 +606,12 @@ describe('中止與 instance', () => {
     );
     driver.post({ type: 'load', epoch: 1, source: { kind: 'http', url: 'stall' } });
     await expect.poll(() => stalled.reads.length).toBe(1);
-    expect(await driver.stats()).toEqual({ libavInstances: 1 });
+    expect(await driver.stats()).toMatchObject({ libavInstances: 1 });
 
     const media = await driver.load({ kind: 'bytes', data: flac }, 2);
     expect(stalled.reads[0]?.aborted).toBe(true);
     expect(audioTracks(media)).toHaveLength(1);
-    expect(await driver.stats()).toEqual({ libavInstances: 1 });
+    expect(await driver.stats()).toMatchObject({ libavInstances: 1 });
     // 被取代的 load 不回報任何東西。
     expect(driver.messages.filter((m) => 'epoch' in m && m.epoch === 1)).toEqual([]);
     const pcm = await driver.decode(0, { epoch: 2 });
@@ -628,7 +628,7 @@ describe('中止與 instance', () => {
     const pcm = await driver.decode(0, { epoch: 2, frames: 8192 });
     expect(pcm.chunks.every((c) => c.epoch === 2)).toBe(true);
     expect(driver.worklet.slice(sent).every((m) => m.epoch === 2)).toBe(true);
-    expect(await driver.stats()).toEqual({ libavInstances: 1 });
+    expect(await driver.stats()).toMatchObject({ libavInstances: 1 });
   });
 });
 
@@ -645,7 +645,7 @@ describe('建立 libav instance 失敗', () => {
       code: 'ASSET_LOAD_FAILED',
       fatal: true,
     });
-    expect(await driver.stats()).toEqual({ libavInstances: 0 });
+    expect(await driver.stats()).toMatchObject({ libavInstances: 0 });
   });
 
   test('配置不到記憶體為 MEMORY_LIMIT；Worker 之後的 load 照常完成', async () => {
@@ -663,11 +663,11 @@ describe('建立 libav instance 失敗', () => {
       code: 'MEMORY_LIMIT',
       fatal: true,
     });
-    expect(await driver.stats()).toEqual({ libavInstances: 0 });
+    expect(await driver.stats()).toMatchObject({ libavInstances: 0 });
     expect(driver.messages.filter((m) => m.type === 'crash')).toEqual([]);
 
     const media = await driver.load({ kind: 'bytes', data: flac }, 2);
     expect(audioTracks(media)).toHaveLength(1);
-    expect(await driver.stats()).toEqual({ libavInstances: 1 });
+    expect(await driver.stats()).toMatchObject({ libavInstances: 1 });
   });
 });
