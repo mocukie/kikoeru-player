@@ -97,6 +97,12 @@ export function createConfig(rootDir) {
       // wasm 的 build 工作目錄（含 libav.js 的 clone）與產物。
       'wasm/.work/',
       'wasm/dist/',
+      // fixture App 的程式以安裝的 tgz 為依賴，由 test/fixture-app/run.sh 以自己的 tsconfig 檢查；
+      // 安裝的套件與 build 產物也不 lint。spec 與設定檔仍由這裡 lint。
+      'test/fixture-app/src/',
+      'test/fixture-app/node_modules/',
+      'test/fixture-app/dist/',
+      'test/fixture-app/.pack/',
     ]),
     js.configs.recommended,
     tseslint.configs.strictTypeChecked,

@@ -1,0 +1,9 @@
+{
+  "name": "kikoeru-player-fixture-app",
+  "private": true,
+  "description": "以 pnpm pack 的 tgz 安裝 Engine 的 Vite App，驗收真正發出去的套件（test/fixture-app/run.sh）",
+  "type": "module",
+  "dependencies": {
+    "kikoeru-player": "file:.pack/kikoeru-player.tgz"
+  }
+}

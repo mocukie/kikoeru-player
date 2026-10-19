@@ -18,7 +18,9 @@
 
 - repo 根目錄就是唯一的套件 `kikoeru-player`，不使用 pnpm workspace。
 - `package.json` 的 `exports` 只有兩個 entry：`.`（Engine）與 `./background`（[背景播放模組](adr/0006-background-playback-module.md)）。內部模組（例如 `createEngineWith`）不放進 `exports`。
-- `files` 只有 `dist/`、`LICENSE`、`NOTICE`、`LICENSES/`。
+- `files` 只有 `dist/`、`LICENSE`、`NOTICE`、`LICENSES/`（pnpm 另外一定會放 `package.json` 與 `README.md`）。`scripts/pack.ts` 檢查 `pnpm pack` 的檔案清單，不得含 LGPL 原始碼（`sources.tar`）。
+- `imports` 的 `#libav` 在 repo 內指向 `wasm/dist/` 的 frontend；`publishConfig.imports` 讓打包後的 `package.json` 改指向 `dist/wasm/` 的複本。
+- `prepack` 執行 `pnpm build`，`pnpm pack` 一定以最新的 build 打包。
 - `test/fixture-app/` 有自己的 `package.json`，但**不加入 workspace**：它要以 `pnpm pack` 產生的 tgz 安裝，才能驗證真正發出去的套件。用 link 或 workspace 安裝會繞過打包。
 
 ## 執行緒分工
@@ -52,7 +54,7 @@ test/
   smoke/           不屬於任何原始碼的 browser mode smoke test，例如 CI 的音訊環境
   docker/          Playwright image 加 PulseAudio，pnpm verify:docker 與 CI browser job 的執行環境
   browser-launch.ts  Vitest browser mode 與 Playwright 共用的瀏覽器啟動設定
-  fixture-app/     Vite fixture App（不加入 workspace）
+  fixture-app/     Vite fixture App（不加入 workspace）：run.sh 以 pack 的 tgz 安裝、Vite build，acceptance.spec.ts 以 Playwright 驗收
   lint/            ESLint 設定的 Node 測試；fixtures/ 模仿套件目錄，固定依賴規則與 Worker 寫法
 scripts/           wasm 下載與 tree hash 檢查、notices 產生等 build 輔助 script
 wasm/              Dockerfile、variant、patch、版本與 sha256 清單、build script；wasm/dist/ 不進 git
@@ -142,7 +144,7 @@ Node 測試（`*.test.ts`）與 browser mode 測試（`*.browser.test.ts`）都�
 ## Build 產物
 
 - `pnpm build` 依各 tsconfig 以 tsc 輸出到 `dist/`，保留 `src/` 的目錄結構（`dist/index.js`、`dist/main/`、`dist/worker/`、`dist/worklet/`、`dist/background/`）。
-- wasm、glue 與 libav.js frontend 從 `wasm/dist/` 複製到 `dist/wasm/`。
-- `scripts/` 在 build 時產生 `wasm.json`（對應的 wasm Release tag 與 sha256）、`NOTICE`，以及寫入 wasm Release 原始碼 URL 的 `thirdPartyNotices`。
+- wasm、glue 與 libav.js frontend 從 `wasm/dist/` 原封不動複製到 `dist/wasm/`（先以 `SHA256SUMS` 驗證；不含 `libav.types.d.ts`）。
+- `scripts/package.ts` 在 tsc 之後產生：`dist/wasm/wasm.json`（對應的 wasm Release tag、網址與每個複本的 sha256）、根目錄的 `NOTICE` 與 `LICENSES/LGPL-2.1.txt`（gitignored），並把 tsc 輸出的 `dist/main/third-party-notices.js`（佔位的空陣列）換成寫入 wasm Release 原始碼 URL 與 NOTICE 全文的 `thirdPartyNotices`。直接使用原始碼（Demo 頁、測試）時 `thirdPartyNotices` 是空陣列。
 - `dev`、`build`、`test:browser`、`e2e` 開始前先檢查 `wasm/dist/` 是否符合 `wasm/` 的 tree hash，以及 CI 組的測試媒體是否存在；缺少時停下並提示 `pnpm wasm:fetch`、`pnpm media:gen`，不自動下載或產生。
 - CI 與發版流程見 [ADR-0005](adr/0005-wasm-release-and-engine-package.md) 與 [`testing.md`](testing.md#本機與-ci)。
