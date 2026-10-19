@@ -1,6 +1,6 @@
 // Engine 的指令、狀態與佇列：以假 media Worker 與假音訊輸出驅動 createEngineWith()。
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createFakeDeps, type FakeEngineDeps } from '../../test/fakes/engine-deps.js';
 import { audioMedia } from '../../test/fakes/media-worker.js';
 import { createEngineWith } from './engine.js';
@@ -97,6 +97,21 @@ describe('load', () => {
       headers: { Authorization: 'Bearer t' },
       size: 1234,
     });
+  });
+
+  it('http 的相對 URL 以 document 的 base URL 解析後才送到 Worker', async () => {
+    vi.stubGlobal('document', { baseURI: 'https://app.test/player/index.html' });
+    try {
+      const deps = createFakeDeps();
+      const engine = createEngineWith(deps);
+      void engine.load({ kind: 'http', url: '../media/a.m4a?id=1' });
+      expect((await deps.workers.last.next('load')).source).toEqual({
+        kind: 'http',
+        url: 'https://app.test/media/a.m4a?id=1',
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

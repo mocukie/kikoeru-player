@@ -155,6 +155,7 @@ export async function openHttp(
     end: number,
     signal: AbortSignal,
     onData: (chunk: Uint8Array) => void,
+    onContentRange: (header: string | null) => void = () => undefined,
   ): Promise<string | null> => {
     const entry = { start, end, startedAt: performance.now() };
     inflight.add(entry);
@@ -182,6 +183,7 @@ export async function openHttp(
           detail: { status, url },
         });
       }
+      onContentRange(response.headers.get('Content-Range'));
       const expected = end - start + 1;
       let received = 0;
       const reader = response.body?.getReader();
@@ -229,14 +231,25 @@ export async function openHttp(
     onData: (chunk: Uint8Array) => void,
   ): Promise<string | null> => {
     let position = start;
+    let contentRange: string | null = null;
     for (let attempt = 0; ; attempt++) {
       try {
-        return await request(position, end, signal, (chunk) => {
-          position += chunk.length;
-          onData(chunk);
-        });
+        return await request(
+          position,
+          end,
+          signal,
+          (chunk) => {
+            position += chunk.length;
+            onData(chunk);
+          },
+          (header) => {
+            contentRange ??= header;
+          },
+        );
       } catch (error) {
         if (signal.aborted) throw signal.reason as Error;
+        // 整段都已收到才中斷（例如少了 chunked 的結尾）：資料完整，不再要求空的範圍（伺服器會回 416）。
+        if (position > end) return contentRange;
         if (error instanceof WorkerError) deps.onRequestError?.(error);
         const retrying = retryable(error) && attempt < retry.attempts;
         if (log.enabled('warn')) {

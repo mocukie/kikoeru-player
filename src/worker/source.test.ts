@@ -276,6 +276,28 @@ describe('http 的重試', () => {
     await expect(source.read(0, 4, never)).rejects.toMatchObject({ code: 'SOURCE_NETWORK' });
   });
 
+  test('整段都收到之後才斷線：資料完整，不再發出請求', async () => {
+    let sent = false;
+    const complete = () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            if (sent) {
+              controller.error(new TypeError('network error'));
+              return;
+            }
+            sent = true;
+            controller.enqueue(Uint8Array.of(10, 11, 12, 13));
+          },
+        }),
+        { status: 206 },
+      );
+    const { fetch, calls } = scripted(complete, () => status(416));
+    const source = await open(fetch);
+    expect([...(await source.read(0, 4, never))]).toEqual([10, 11, 12, 13]);
+    expect(calls).toHaveLength(1);
+  });
+
   test('每個失敗的請求都交給 onRequestError，包括之後重試成功的', async () => {
     vi.useFakeTimers({ now: 0 });
     const { fetch } = scripted(() => status(503), ok);

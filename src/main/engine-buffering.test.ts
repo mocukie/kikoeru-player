@@ -135,6 +135,16 @@ describe('因網路不足進入 buffering 之後的恢復', () => {
     expect(deps.audio.intent).toBe('pause');
   });
 
+  it('等待中 seek()：worklet 恢復播放，落點後進入 playing', async () => {
+    const { engine, deps } = await buffering();
+    expect(deps.audio.intent).toBe('pause');
+    void engine.seek(20);
+    expect(deps.audio.intent).toBe('play');
+    deps.audio.reply({ type: 'playing' });
+    expect(engine.state).toBe('playing');
+    expect(engine.paused).toBe(false);
+  });
+
   it('等待中 pause()：進入 paused', async () => {
     const { engine, deps } = await buffering();
     deps.audio.reply({ type: 'paused' });
@@ -168,6 +178,15 @@ describe('buffered 與 bufferedchange', () => {
     await vi.advanceTimersByTimeAsync(250);
     expect(engine.buffered).toEqual([]);
     expect(changes.at(-1)?.buffered).toEqual([]);
+  });
+
+  it('seek 之後、新 epoch 的進度到來之前為空', async () => {
+    const { engine, buffer } = await playing();
+    buffer(30);
+    void engine.seek(5);
+    expect(engine.buffered).toEqual([]);
+    buffer(8);
+    expect(engine.buffered).toEqual([{ start: 5, end: 8 }]);
   });
 
   it('idle 時為空', () => {
@@ -243,8 +262,11 @@ describe('卡住', () => {
     expect(recovered).toEqual([]);
   });
 
-  it('用完 stallAttempts 仍卡住：以最後一次的讀取錯誤進入 error（reason stall）', async () => {
+  it('用完 stallAttempts 仍卡住：以最後一次重新讀取之後的讀取錯誤進入 error（reason stall）', async () => {
     const { engine, worker, stalls, states } = await stalled();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(stalls).toHaveLength(2);
+    expect(engine.state).toBe('buffering');
     worker.reply({
       type: 'readerror',
       error: { code: 'SOURCE_SERVER', fatal: false, message: '503', detail: { status: 503 } },
@@ -253,9 +275,6 @@ describe('卡住', () => {
       type: 'readerror',
       error: { code: 'SOURCE_NETWORK', fatal: false, message: '斷線', detail: { url: 'u' } },
     });
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(stalls).toHaveLength(2);
-    expect(engine.state).toBe('buffering');
     await vi.advanceTimersByTimeAsync(1000);
     expect(engine.state).toBe('error');
     expect(states.at(-1)).toBe('error:stall');
@@ -265,6 +284,16 @@ describe('卡住', () => {
       position: 5,
       detail: { url: 'u' },
     });
+  });
+
+  it('重新讀取之前的讀取錯誤不算：之後只是停住時以 SOURCE_NETWORK 進入 error', async () => {
+    const { engine, worker } = await stalled({ stallAttempts: 1 });
+    worker.reply({
+      type: 'readerror',
+      error: { code: 'SOURCE_SERVER', fatal: false, message: '503', detail: { status: 503 } },
+    });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(engine.error).toMatchObject({ code: 'SOURCE_NETWORK' });
   });
 
   it('沒有讀取錯誤（請求停住）時以 SOURCE_NETWORK 進入 error', async () => {
