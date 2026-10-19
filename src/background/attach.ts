@@ -1,7 +1,8 @@
 // 背景播放模組的實作：靜音 anchor 跟著 Engine 的播放意圖、外部操作的鏡像、audioSession 的設定與還原。
 // anchor 元素與 audioSession 由 `BackgroundEnv` 注入，Node 測試以假物件驅動；公開的 entry 在 index.ts。
 
-import { isAbortError, type Engine, type LogEntry, type LogHook } from '../index.js';
+import { isAbortError, type Engine, type LogEntry } from '../index.js';
+import type { BackgroundPlaybackOptions } from './index.js';
 
 /** anchor 用到的 `HTMLAudioElement` 成員。 */
 export interface AnchorElement extends EventTarget {
@@ -27,13 +28,6 @@ export interface BackgroundEnv {
   audioSession: AudioSessionLike | undefined;
 }
 
-/** `attachWith()` 的選項，同 `BackgroundPlaybackOptions`。 */
-export interface AttachOptions {
-  audioSession?: boolean;
-  anchor?: boolean;
-  log?: LogHook;
-}
-
 const ANCHOR_SECONDS = 5;
 const ANCHOR_SAMPLE_RATE = 8000;
 const ANCHOR_VOLUME = 0.0001;
@@ -43,7 +37,7 @@ const attached = new WeakSet<Engine>();
 
 export function attachWith(
   engine: Engine,
-  options: AttachOptions,
+  options: BackgroundPlaybackOptions,
   env: BackgroundEnv,
 ): { detach(): void } {
   if (attached.has(engine)) {
@@ -94,7 +88,7 @@ export function attachWith(
         settled();
         if (detached) return;
         // 被之後的 pause() 中斷：播放本身是允許的。
-        if (error instanceof DOMException && error.name === 'AbortError') {
+        if (isAbortError(error)) {
           granted = true;
           return;
         }
