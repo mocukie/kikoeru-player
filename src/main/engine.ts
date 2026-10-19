@@ -603,11 +603,7 @@ class EngineImpl extends EventTarget implements Engine {
       load.seek?.reject(abortReason(signal));
       if (this.#loadContext === load) this.#loadContext = null;
     });
-    this.#played = false;
-    this.#error = null;
-    this.#watchdogStep = 0;
-    this.#buffer = null;
-    this.#lastReadError = null;
+    this.#resetMediaState();
     this.#currentTime = startTime;
     if (!reloadOf) this.#publishMedia(null, noSelection);
     signal.throwIfAborted();
@@ -769,16 +765,21 @@ class EngineImpl extends EventTarget implements Engine {
     this.#terminateWorker();
     this.#loadContext = null;
     this.#lastLoad = null;
-    this.#played = false;
-    this.#error = null;
-    this.#watchdogStep = 0;
-    this.#buffer = null;
-    this.#lastReadError = null;
+    this.#resetMediaState();
     const epoch = ++this.#epoch;
     this.#flushAudio(0);
     this.#publishMedia(null, noSelection);
     if (this.#epoch !== epoch) return;
     this.#setState('idle', 'command', true);
+  }
+
+  /** 換成新的媒體（load）或結束媒體時，清掉屬於上一份媒體的播放紀錄、錯誤、watchdog 的進度與緩衝資訊。 */
+  #resetMediaState(): void {
+    this.#played = false;
+    this.#error = null;
+    this.#watchdogStep = 0;
+    this.#buffer = null;
+    this.#lastReadError = null;
   }
 
   // ───────────────────────────── 訊息 ─────────────────────────────
@@ -1155,13 +1156,9 @@ class EngineImpl extends EventTarget implements Engine {
     this.dispatchEvent(new StateChangeEvent({ state, previous, paused, reason }));
     if (stall && stall.attempts > 0 && state === 'playing' && this.#epoch === epoch) {
       const { since, attempts } = stall;
-      this.#log.log('info', 'io', '卡住後恢復播放', {
-        stalledMs: performance.now() - since,
-        attempts,
-      });
-      this.dispatchEvent(
-        new StallRecoveredEvent({ stalledMs: performance.now() - since, attempts }),
-      );
+      const stalledMs = performance.now() - since;
+      this.#log.log('info', 'io', '卡住後恢復播放', { stalledMs, attempts });
+      this.dispatchEvent(new StallRecoveredEvent({ stalledMs, attempts }));
     }
     this.#notify();
   }
