@@ -95,16 +95,25 @@
 
 | 場合 | 指令或 job | 內容 |
 |---|---|---|
-| 本機（agent 必須通過） | `pnpm verify` | lint → typecheck → Node 測試 → browser mode（Chromium）→ E2E（Chromium） |
+| 本機（agent 必須通過） | `pnpm verify` | lint → typecheck → Node 測試 → browser mode（Chromium）→ E2E（Chromium）→ fixture App（Chromium） |
 | 本機重現 CI | `pnpm verify:docker` | 在 Playwright 官方 image 內跑 Chromium 與 Firefox 的完整組合 |
 | CI `ensure-wasm`、`publish-wasm` | | wasm Release 不存在時才 build；發布以 tag 跨 PR 互斥，取得互斥後重新檢查（[ADR-0005](adr/0005-wasm-release-and-engine-package.md)） |
 | CI `check` | 依賴 `ensure-wasm`、`publish-wasm`（lint 與 typecheck 用 wasm Release 的 `libav.types.d.ts`） | lint、typecheck、Node 測試 |
-| CI `browser` | 依賴 `ensure-wasm`、`publish-wasm` 與媒體快取 | Chromium 與 Firefox 的 browser mode 與 E2E（含 leak 測試），以及 Vite fixture App 的驗收 |
+| CI `browser` | 依賴 `ensure-wasm`、`publish-wasm` 與媒體快取 | Chromium 與 Firefox 的 browser mode 與 E2E（含 leak 測試），以及 Vite fixture App 的驗收（`pnpm fixture`） |
+| CI `release` | 只在 `v*` tag 與 `workflow_dispatch`（演練）時，依賴 `check` 與 `browser` | tag 與 `package.json` 的版本一致、wasm Release 已發布，`pnpm pack` 後附在 GitHub Release；演練只上傳成 workflow artifact |
 | CI Safari | macOS runner，排程 | 見上方「瀏覽器」 |
 
 PR 必須 `check` 與 `browser` 都通過。
 
-本機 E2E 的 dev server 預設在 port 5273，非 CI 時會沿用已在跑的 server。多個 worktree 同時跑 `pnpm verify` 時，以環境變數 `E2E_PORT` 給每個 worktree 不同的 port。
+本機 E2E 的 dev server 預設在 port 5273，非 CI 時會沿用已在跑的 server。多個 worktree 同時跑 `pnpm verify` 時，以環境變數 `E2E_PORT` 給每個 worktree 不同的 port。fixture App 的 `vite preview` 在 `FIXTURE_PORT`，沒有設定時是 `E2E_PORT` 加 1000（預設 6273），不沿用已在跑的 server。
+
+### fixture App 的驗收
+
+`test/fixture-app/` 是以 `pnpm pack` 的 tgz 安裝 Engine 的 Vite App（不加入 workspace，vite 與 Playwright 取自根目錄）。`pnpm fixture`（`test/fixture-app/run.sh`）依序：檢查套件的檔案清單 → 安裝 tgz → 以 App 的角度型別檢查（`tsconfig.app.json`）→ `vite build` → `vite preview` 上跑 `acceptance.spec.ts`：
+
+- 套件內附的 wasm 對應 `wasm/dist/` 的 wasm Release，`thirdPartyNotices` 的原始碼 URL 指向它。
+- build 輸出中 glue 與 `.wasm` 與套件內的複本 bytes 相同，glue 的 license header 完整。
+- `.wasm` 以 `application/wasm` 提供、`compileStreaming` 成功，Worker 與 worklet 載入後能播放 CI 組的檔案。
 
 ## 每張實作 issue 的最低要求
 

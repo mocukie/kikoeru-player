@@ -725,8 +725,8 @@ export interface ThirdPartyNotice {
   name: string;
   /** SPDX license expression，例如 `'LGPL-2.1-or-later'`。 */
   license: string;
-  /** 對應原始碼的下載位置（wasm Release）。 */
+  /** 對應原始碼的下載位置（wasm Release 的頁面，原始碼是其中的 `sources.tar`）。 */
   sourceUrl: string;
-  /** 聲明全文。 */
+  /** 聲明全文（純文字，含換行）。 */
   noticeText: string;
 }

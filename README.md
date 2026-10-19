@@ -30,9 +30,12 @@ export default defineConfig({
 });
 ```
 
+除此之外不需要其他設定（Worker 用 Vite 預設的 `worker` 設定即可）。`vite build` 後 Worker、AudioWorklet、libav.js 的 glue（`libav-….wasm.mjs`）與 `.wasm` 都輸出到 `build.assetsDir`（預設 `assets/`），檔名帶 hash；glue 與 `.wasm` 原封不動地複製，保留 glue 開頭的 license header。
+
 ### 資產部署
 
-- `.wasm` 與 glue 必須與頁面同源，`.wasm` 以 `Content-Type: application/wasm` 提供，才能 streaming compile。
+- build 輸出的 Worker、AudioWorklet、glue 與 `.wasm` 必須與頁面同源提供。
+- `.wasm` 必須以 `Content-Type: application/wasm` 提供：Engine 以 `WebAssembly.compileStreaming` compile，MIME 不符時 `load()` 以 `ASSET_LOAD_FAILED` 失敗。`vite preview` 已是如此，其他 server 要自己設定。
 - 頁面必須是 secure context（HTTPS 或 localhost），AudioWorklet 才能使用。
 - Engine 不需要 COOP/COEP。
 - 使用背景播放模組時，CSP 的 `media-src` 要允許 `blob:`。
@@ -103,23 +106,32 @@ background.detach();
 | 指令 | 用途 |
 |---|---|
 | `pnpm dev` | 啟動 Demo 頁的 dev server（HTTPS 自簽，手機可用 LAN IP 連線） |
-| `pnpm build` | tsc 輸出到 `dist/`、複製 wasm 資產、產生 notices；加 `--watch` 可與 App 同時開發 |
+| `pnpm build` | tsc 輸出到 `dist/`、複製 wasm 資產到 `dist/wasm/`、產生 `wasm.json`、`NOTICE`、`LICENSES/` 與 `thirdPartyNotices`；加 `--watch` 可與 App 同時開發 |
 | `pnpm typecheck` | 型別檢查 |
 | `pnpm lint` | ESLint 與 Prettier 的 check |
 | `pnpm format` | Prettier 寫入 |
 | `pnpm test` | Node 測試 |
 | `pnpm test:browser` | Vitest browser mode，預設 Chromium 與 Firefox，可用 `--project` 指定 |
 | `pnpm e2e` | Playwright E2E，同上 |
-| `pnpm verify` | lint → typecheck → Node 測試 → browser mode 與 E2E（只跑 Chromium）；交付 PR 前必須通過 |
+| `pnpm fixture` | `pnpm pack` 並檢查套件內容，以 tgz 安裝到 `test/fixture-app/`，Vite build 後以 Playwright 驗收；同上可用 `--project` |
+| `pnpm verify` | lint → typecheck → Node 測試 → browser mode、E2E 與 fixture App（只跑 Chromium）；交付 PR 前必須通過 |
 | `pnpm verify:docker` | 在 Playwright image 內跑 Chromium 與 Firefox 的完整組合，用來重現 CI |
 | `pnpm wasm:fetch` | 下載與 `wasm/` tree hash 相符的 wasm Release 到 `wasm/dist/` |
 | `pnpm wasm:build` | 修改 `wasm/` 後在 Docker 內 build wasm |
 | `pnpm media:gen` | 產生 CI 組的測試媒體 |
 | `pnpm media:gen:manual` | 產生手動組的長檔 |
 
-`dev`、`build`、`test:browser`、`e2e` 開始前會檢查 wasm 與測試媒體，缺少時停下並提示要執行的指令。
+`dev`、`build`、`test:browser`、`e2e`、`fixture` 開始前會檢查 wasm 與測試媒體（`build` 只檢查 wasm），缺少時停下並提示要執行的指令。
 
 App 與 Engine 同時開發時，在 App 端 `pnpm link ../kikoeru-player`（不 commit），Engine 端執行 `pnpm build --watch`。
+
+### 發版
+
+1. 以 PR 把 `package.json` 的 `version` 改成要發的版本，合入 `main`。
+2. 在 `main` 的那個 commit 上 push tag `v<版本>`。CI 跑完 `check` 與 `browser` 後，`release` job 確認 tag 與 `version` 一致、內附 wasm 的 wasm Release 已發布，再 `pnpm pack` 並把 `kikoeru-player-<版本>.tgz` 附在同名的 GitHub Release 上。
+3. kikoeru 把 `package.json` 的 tarball URL 改成新版本。
+
+要先演練時，在 Actions 以 `workflow_dispatch` 執行 CI 並輸入 tag：同樣做檢查與打包，tgz 只上傳成 workflow artifact，不建立 tag 或 Release。
 
 ### 文件索引
 

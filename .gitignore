@@ -9,3 +9,6 @@ playwright-report/
 .vitest/
 wasm/dist/
 wasm/.work/
+/NOTICE
+/LICENSES/
+test/fixture-app/.pack/

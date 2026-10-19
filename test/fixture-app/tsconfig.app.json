@@ -1,0 +1,15 @@
+{
+  "//": "fixture App 自己的型別檢查：以 App 的角度使用 tgz 內的 .d.ts（run.sh 在安裝後執行）。不放在根目錄的 tsc -b 內，因為安裝前沒有套件。",
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "types": [],
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["src"]
+}
