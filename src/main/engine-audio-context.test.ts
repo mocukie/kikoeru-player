@@ -6,7 +6,7 @@ import { createFakeDeps, type FakeEngineDeps } from '../../test/fakes/engine-dep
 import { audioMedia } from '../../test/fakes/media-worker.js';
 import { createEngineWith } from './engine.js';
 import type { BeforeAudioStartEvent, EngineErrorEvent, StateChangeEvent } from './events.js';
-import type { Engine, Source } from './types.js';
+import type { Engine, EngineOptions, Source } from './types.js';
 
 const source: Source = { kind: 'http', url: 'https://example.test/a.flac' };
 const SR = 48_000;
@@ -34,8 +34,8 @@ async function rejection(promise: Promise<unknown>): Promise<unknown> {
 }
 
 /** 載入到 ready（paused），還沒有解鎖 AudioContext。 */
-async function loaded(deps: FakeEngineDeps = createFakeDeps()) {
-  const engine = createEngineWith(deps);
+async function loaded(deps: FakeEngineDeps = createFakeDeps(), options?: EngineOptions) {
+  const engine = createEngineWith(deps, options);
   const loading = engine.load(source);
   const worker = deps.workers.last;
   await worker.probe(audioMedia({ duration: 10 }));
@@ -46,8 +46,8 @@ async function loaded(deps: FakeEngineDeps = createFakeDeps()) {
 }
 
 /** 載入並播放中：AudioContext 已解鎖，worklet 回報過 playing 與 frame 0 的 clock。 */
-async function playing(fakes?: FakeEngineDeps) {
-  const setup = await loaded(fakes);
+async function playing(fakes?: FakeEngineDeps, options?: EngineOptions) {
+  const setup = await loaded(fakes, options);
   const { engine, deps } = setup;
   const started = engine.play();
   await settle();
@@ -310,8 +310,11 @@ describe('串行佇列', () => {
 });
 
 describe('長時間暫停', () => {
+  // 假 Worker 不送資料：放寬卡住的時限，不讓 Engine 在等待期間進入 error（error 也會 suspend）。
+  const noStall: EngineOptions = { stallTimeout: 120_000 };
+
   it('暫停超過 30 秒才 suspend；之前 play() 就不 suspend', async () => {
-    const { engine, deps } = await playing();
+    const { engine, deps } = await playing(undefined, noStall);
     void engine.pause();
     deps.audio.reply({ type: 'paused' });
     await vi.advanceTimersByTimeAsync(29_999);
@@ -326,8 +329,26 @@ describe('長時間暫停', () => {
     expect(deps.audio.calls.at(-1)).toBe('suspend');
   });
 
+  it('播放中進入 error：30 秒後 suspend', async () => {
+    const { engine, deps, worker } = await playing();
+    worker.crash();
+    expect(engine.state).toBe('error');
+    expect(engine.paused).toBe(false);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(deps.audio.calls.at(-1)).toBe('suspend');
+  });
+
+  it('load() 之前 play()：idle 中 30 秒後 suspend', async () => {
+    const deps = createFakeDeps();
+    const engine = createEngineWith(deps);
+    await rejection(engine.play());
+    expect(engine.state).toBe('idle');
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(deps.audio.calls.at(-1)).toBe('suspend');
+  });
+
   it('buffering 不 suspend', async () => {
-    const { engine, deps } = await playing();
+    const { engine, deps } = await playing(undefined, noStall);
     deps.audio.reply({ type: 'starved' });
     await vi.advanceTimersByTimeAsync(250);
     expect(engine.state).toBe('buffering');

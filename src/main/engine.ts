@@ -82,7 +82,7 @@ export function createEngineWith(deps: EngineDeps, options?: EngineOptions): Eng
 
 type CommandKind = 'load' | 'unload' | 'play' | 'pause' | 'seek';
 
-/** 暫停超過這麼久（ms）才經佇列 `suspend()` AudioContext 以省電（ADR-0004）。 */
+/** 沒有播放（暫停中、idle、error）超過這麼久（ms）才經佇列 `suspend()` AudioContext 以省電（ADR-0004）。 */
 const IDLE_SUSPEND_MS = 30_000;
 /** Engine 處於 playing 而 worklet 回報的 frame 超過這麼久（ms）沒有前進時，watchdog 介入（ADR-0004）。 */
 const WATCHDOG_MS = 1000;
@@ -206,7 +206,7 @@ class EngineImpl extends EventTarget implements Engine {
   #lastOutput: 'playing' | 'paused' | null = null;
   /** 最後一次改變播放意圖的原因；worklet 確認之後的 state 轉換沿用它。 */
   #intentReason: StateChangeReason = 'command';
-  /** 暫停中、context 執行中時，`IDLE_SUSPEND_MS` 後 suspend 的 timer。 */
+  /** 沒有在播（暫停中、idle、error）且 context 執行中時，`IDLE_SUSPEND_MS` 後 suspend 的 timer。 */
   #idleTimer: ReturnType<typeof setTimeout> | null = null;
   /** watchdog：playing 期間 worklet 回報的最大 frame、逾時的 timer，與目前在第幾步。frame 前進時歸零。 */
   #watchdogFrame = -Infinity;
@@ -1021,9 +1021,12 @@ class EngineImpl extends EventTarget implements Engine {
     this.#announceIntent(reason);
   }
 
-  /** 暫停中且 context 執行中時，`IDLE_SUSPEND_MS` 後經佇列 suspend；其他情況取消。 */
+  /**
+   * 沒有在播（暫停中，或 idle、error 時沒有媒體）且 context 執行中時，`IDLE_SUSPEND_MS` 後經佇列 suspend；
+   * 其他情況取消。
+   */
   #updateIdleSuspend(): void {
-    const idle = !this.#isDestroyed && this.#paused && this.#context.running;
+    const idle = !this.#isDestroyed && this.#notPlaying() && this.#context.running;
     if (!idle) {
       if (this.#idleTimer !== null) clearTimeout(this.#idleTimer);
       this.#idleTimer = null;
@@ -1031,14 +1034,18 @@ class EngineImpl extends EventTarget implements Engine {
     }
     this.#idleTimer ??= setTimeout(() => {
       this.#idleTimer = null;
-      if (!this.#paused) return;
+      if (!this.#notPlaying()) return;
       this.#log.log(
         'debug',
         'audio',
-        `暫停超過 ${String(IDLE_SUSPEND_MS)} ms，suspend AudioContext`,
+        `沒有播放超過 ${String(IDLE_SUSPEND_MS)} ms，suspend AudioContext`,
       );
       this.#context.suspend();
     }, IDLE_SUSPEND_MS);
+  }
+
+  #notPlaying(): boolean {
+    return this.#paused || this.#state === 'idle' || this.#state === 'error';
   }
 
   #armWatchdog(): void {
@@ -1168,6 +1175,7 @@ class EngineImpl extends EventTarget implements Engine {
    * 離開 buffering 就不再等 bufferAhead，worklet 被要求的停住也要依播放意圖重新同步（例如等待中 seek）。
    */
   #onStateEntered(state: EngineState): void {
+    this.#updateIdleSuspend();
     if (state === 'playing') this.#armWatchdog();
     else this.#stopWatchdog();
     if (state !== 'playing') this.#clearStarveTimer();
