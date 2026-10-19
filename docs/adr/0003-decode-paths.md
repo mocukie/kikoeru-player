@@ -26,6 +26,8 @@
 - wasm variant 為 `kikoeru-af` 加上 avi、aiff 與 raw ac3、eac3 的 demuxer，以及 ac3、eac3 decoder（含 ac3 parser），名稱為 `kikoeru`（`wasm/fragments.txt`）。新增 codec 只要改 variant、重新發一版 wasm。
 - 影片軌不支援時不讓 `load()` 失敗，只播音訊；只有完全沒有可播的軌才回報 `CODEC_UNSUPPORTED`。`isEngineSupported()` 不要求 WebCodecs。Safari 上的 AV1 與 Firefox Android 的影片軌都標為 `unsupportedReason: 'platform'`。
 - encoder delay 由 libavcodec 依封包的 skip samples 自動裁掉。ADTS 與沒有 LAME header 的 MP3 沒有這項資訊，開頭的 priming（約 23–25 ms）照原樣輸出，不猜測固定值。
-- 精準 seek 指輸出的第一個 sample 位置精準；內容收斂到 codec 的 preroll 能達到的程度。preroll：AAC 1 個 frame、MP3 2 個、Vorbis 1 個封包、FLAC 與 PCM 不需要、Opus 取容器的 `seek_preroll` 與 80 ms 中較大者。seek 時用 `avcodec_flush_buffers`，不關閉重開 decoder，避免重裁 `initial_padding`。
+- 精準 seek 指輸出的第一個 sample 位置精準；內容收斂到 codec 的 preroll 能達到的程度。preroll：AAC 1 個 frame、MP3 2 個、Vorbis 1 個封包、FLAC 與 PCM 不需要、Opus 固定 80 ms。seek 時用 `avcodec_flush_buffers`，不關閉重開 decoder，避免重裁 `initial_padding`。
+  - Opus 不讀容器的 `seek_preroll`：libav.js 沒有這個欄位的 accessor，要讀就得加 wasm patch、發新的 wasm Release。80 ms 是 Ogg 與 WebM 的常見值，也是 Opus 規格建議的下限。
+  - 第一個 sample 的位置只能精準到容器時間戳的精度。Matroska／WebM 的時間戳以 ms 為單位，seek 後的起點與從頭解碼可能差到 ±1 ms（AAC 約 16 sample、Opus 48 sample），不另以 codec frame 格點校正；其他容器仍要求逐 sample 精準。
 - 解碼器只在 media Worker 內產出 fltp 送進 filter graph，日後若手機實測顯示 CPU 或電量有問題，可以在這個接縫加回 `AudioDecoder`，範圍限於 AAC、MP3、FLAC 與不帶 description 的 ≤ 2ch Opus。
 - 影片的繪製路徑只接受 `VideoFrame`，不管 frame 從哪裡來。日後加入 wasm 軟體解碼時，只是在 Worker 內多一條產出 `VideoFrame` 的路，不必改公開 API。

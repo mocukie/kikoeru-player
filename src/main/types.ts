@@ -1,5 +1,6 @@
 // 公開 API 的型別。對外的時間一律在媒體時間軸上，單位是秒：0 是媒體第一個可播放的 sample，已扣掉容器的 start_time。
 
+import type { WireLogLevel, WireLogScope, WorkerStats } from '../protocol/index.js';
 import type { EngineError } from './errors.js';
 import type {
   BeforeAudioStartEvent,
@@ -26,14 +27,16 @@ import type {
  */
 export interface EngineOptions {
   /**
-   * wasm、glue、Worker 與 AudioWorklet 資產的位置。預設由套件以 `new URL(..., import.meta.url)` 解析，
+   * wasm、glue 與 AudioWorklet 資產的位置。預設由套件以 `new URL(..., import.meta.url)` 解析，
    * 交給 App 的 bundler 處理。`.wasm` 與 glue 必須與頁面同源，`.wasm` 以 `Content-Type: application/wasm` 提供。
+   *
+   * media Worker 的位置不能指定：套件以字面寫法 `new Worker(new URL('…', import.meta.url), { type: 'module' })`
+   * 建立 Worker，由 App 的 bundler 依這個寫法輸出 Worker 檔案。
    */
   assets?: {
     wasmUrl?: string | URL;
     /** libav.js 的 glue（`libav-….wasm.mjs`），由 media Worker 以動態 import 載入，不經過 bundler。 */
     glueUrl?: string | URL;
-    workerUrl?: string | URL;
     workletUrl?: string | URL;
   };
   /** 繪製影片的 canvas，也可以之後用 `attachCanvas()` 設定。 */
@@ -57,16 +60,22 @@ export interface EngineOptions {
     readaheadSeconds?: number;
   };
   /**
-   * 讀取失敗的自動重試：只針對 5xx 與網路錯誤，以指數退避重試；401／403／404 不重試、直接回報。
-   * `attempts` 是 0 以上的整數，`baseDelayMs` 不得為負。預設 `{ attempts: 3, baseDelayMs: 500 }`。
+   * 讀取失敗的自動重試：只針對 5xx 與網路錯誤（含回應中途斷線），以指數退避重試；其他 HTTP 錯誤
+   *（401／403／404／410、不回 206 等）不重試、直接回報。`attempts` 是第一次請求之外最多重試的次數，第 n 次重試前
+   * 等 `baseDelayMs * 2^(n-1)` ms；退避中的等待也會隨讀取一起被中止（例如被 seek 或 load 取代）。
+   * 用完仍失敗就以最後一次的錯誤回報。`attempts` 是 0 以上的整數，`baseDelayMs` 不得為負。
+   * 預設 `{ attempts: 3, baseDelayMs: 500 }`。
    */
   retry?: { attempts?: number; baseDelayMs?: number };
   /**
-   * 卡住偵測（ms），必須大於 0：buffering 超過這個時間就中止讀取、從目前位置重新 seek，並發出 `stall`。
-   * 預設 8000。
+   * 卡住偵測（ms），必須大於 0：buffering 超過這個時間就中止讀取、從目前位置重新 seek，並發出 `stall`；
+   * 之後每再過這麼久仍在 buffering 就再試一次。預設 8000。
    */
   stallTimeout?: number;
-  /** 卡住後自動恢復的次數上限，0 以上的整數；用完仍卡住就以最後一次的讀取錯誤進入 `'error'`。預設 2。 */
+  /**
+   * 卡住後自動恢復的次數上限，0 以上的整數；用完仍卡住就以最後一次的讀取錯誤（致命）進入 `'error'`，
+   * `statechange` 的 reason 為 `'stall'`。請求只是停住、沒有失敗過時，錯誤為 `SOURCE_NETWORK`。預設 2。
+   */
   stallAttempts?: number;
   /** 預設的偏好語言（BCP 47），`load()` 的 `preferredLanguages` 會覆蓋。預設沒有偏好。 */
   preferredLanguages?: { audio?: string[]; subtitle?: string[] };
@@ -85,9 +94,15 @@ export interface EngineOptions {
    * pause、seek、選軌與 underrun 時淡入淡出的長度（ms），範圍 0–100，超出丟 `RangeError`；0 表示硬切。預設 10。
    */
   audioFadeMs?: number;
-  /** 診斷用的 log hook；未設定時 Engine 不輸出任何 log。 */
+  /**
+   * 診斷用的 log hook，在主執行緒同步呼叫；media Worker 與 AudioWorklet 的 log 也轉送到這裡。未設定時 Engine
+   * 不輸出任何 log，其他執行緒也不送。hook 丟出的錯誤不影響 Engine，交給全域的 `reportError()`。
+   */
   log?: LogHook;
-  /** 送進 log hook 的最低等級，預設 `'warn'`。 */
+  /**
+   * 送進 log hook 的最低等級，預設 `'warn'`；不是 `LogLevel` 的值時丟 `RangeError`。過濾在產生 log 的執行緒內就做，
+   * 低於它的 log 不跨執行緒傳送。
+   */
   logLevel?: LogLevel;
 }
 
@@ -145,7 +160,12 @@ export interface Engine extends EventTarget {
    * （`state` 沒變時 `state === previous`），供背景播放模組與 Media Session 跟上。
    */
   readonly paused: boolean;
-  /** 目前聽到的位置（秒）。播放中依音訊時鐘內插，已扣除輸出延遲。 */
+  /**
+   * 目前聽到的位置（秒）。播放中依音訊時鐘內插，已扣除輸出延遲：以 `AudioContext.getOutputTimestamp()` 換算為主，
+   * 取不到（不支援或回傳 0）時依序用 `outputLatency`、`baseLatency`。
+   * pause 的淡出結束、buffering 時，停在時鐘停住的位置；剛停住的一個輸出延遲內聽到的還是之前的 sample，
+   * 所以會再前進一小段才停住，不會超前聽到的聲音。
+   */
   readonly currentTime: number;
   /** 總長度（秒）；未知時為 NaN。 */
   readonly duration: number;
@@ -162,33 +182,53 @@ export interface Engine extends EventTarget {
   readonly selectedTracks: Readonly<TrackSelection>;
   /** state 為 `'error'` 時的錯誤，其他狀態為 null。 */
   readonly error: EngineError | null;
-  /** 影片的顯示尺寸（已套用旋轉與 SAR）；沒有影片軌時為 null。 */
+  /**
+   * 影片的顯示尺寸（已套用旋轉與 SAR）；沒有選用影片軌，或選用的影片軌還沒畫出第一張 frame 時為 null。
+   * 0.1.0 還不解碼影片，一律為 null。
+   */
   readonly videoSize: VideoSize | null;
 
   // ── 同步設定（即時生效、最後一次勝出，不經過指令佇列） ──
 
-  /** 音量 0–1，套用時有 gain ramp。 */
+  /**
+   * 音量 0–1（線性），預設 1。改變時以 time constant 約 10 ms 平滑趨近，不會有爆音。
+   * 不是 0–1 之間的數（包括 NaN）時丟 `RangeError`，值不變。
+   */
   volume: number;
-  /** 靜音；不影響音訊時鐘。 */
+  /** 靜音，預設 false；不影響音訊時鐘（`currentTime` 照常前進），也不改變 `volume`。 */
   muted: boolean;
-  /** 不變調的播放速度，0.5–2；超出範圍丟 `RangeError`。 */
+  /**
+   * 不變調的播放速度，0.5–2，預設 1。不是 0.5–2 之間的數（包括 NaN）時丟 `RangeError`，值不變。
+   *
+   * 設定後 getter 立即是新值，聲音約 0.2 秒後（已經送進輸出緩衝的舊速度資料播完）才換成新的速度；不中斷播放、
+   * 不改變 `state`，也不發出事件。`currentTime`、`timeupdate` 與 `ended` 依實際播出的速度換算，仍在媒體時間軸上。
+   * 值沿用到之後的 `load()`、`reload()` 與 seek，沒有媒體時也可以設定。1 時不經過 time stretch，輸出是原本的聲音。
+   */
   playbackRate: number;
 
   // ── 音訊解鎖 ──
 
   /**
-   * 在 user gesture 的同步段內呼叫，建立或 resume AudioContext。`play()` 在 user gesture 內被呼叫時也會自動解鎖，
-   * 所以多數 App 不需要直接呼叫。之後沒有 gesture 就 `play()` 時以 `AUDIO_LOCKED` 拒絕。
-   * 建立或 resume AudioContext 之前會同步發出 `beforeaudiostart`。
+   * 在 user gesture 的同步段內呼叫，建立或 resume AudioContext。`play()` 與 `load(source, { paused: false })`
+   * 在 user gesture 內被呼叫時也會自動解鎖，所以多數 App 不需要直接呼叫。沒有 gesture 而無法解鎖時，之後的 `play()`
+   * 以 `AUDIO_LOCKED` 拒絕。AudioContext 已經在執行時什麼都不做。
+   * 建立或 resume AudioContext 之前會同步發出 `beforeaudiostart`。也會趁這時先 compile wasm，縮短第一次 `load()`。
    */
   unlockAudio(): void;
-  /** AudioContext 是否已經解鎖。 */
+  /**
+   * AudioContext 是否已經解鎖（開始過）。解鎖是非同步的：在 gesture 內呼叫 `unlockAudio()` 或 `play()` 之後，
+   * 等 AudioContext 真的開始才變為 true。之後長時間暫停而被 suspend 時仍為 true；AudioContext 停住而被重建時
+   * 回到 false，直到新的 AudioContext 開始。
+   */
   readonly audioUnlocked: boolean;
 
   // ── 指令 ──
 
   /**
    * 載入新媒體，並中止舊媒體的讀取。resolve 時 state 為 `'ready'`（`options.paused === false` 時為 `'playing'`）。
+   *
+   * `options.paused === false` 時與 `play()` 一樣在呼叫內同步解鎖 AudioContext。沒有 gesture 而 AudioContext
+   * 無法開始時，`paused` 回到 true，仍以 state `'ready'` resolve；App 可以由 `audioUnlocked` 得知，請使用者點擊後 `play()`。
    *
    * 只要還有一條可播的音軌或影片軌就成功；不支援的軌照樣列在 `tracks`（`supported: false`），
    * 影片軌不支援或 configure 失敗時 `selectedTracks.video` 為 null、只播音訊。
@@ -200,7 +240,13 @@ export interface Engine extends EventTarget {
   /**
    * 以同一份媒體重新開檔，用於 session 失效等錯誤之後的接續；`'ready'` 以後的任何狀態與 `'error'` 都可呼叫。
    * 保留位置（`'error'` 時取 `error.position`）、`paused`、軌道選擇、外掛音軌、各音軌 offset、音量與速度；
-   * track id 不變。重新開檔後軌道的組成與先前不同時 reject `EngineError('SOURCE_CHANGED')`。
+   * track id 不變。重新開檔後軌道的組成（軌道數、各軌的 kind 與 codec）與先前不同時 reject 致命的
+   * `EngineError('SOURCE_CHANGED')`，state 變為 `'error'`。
+   *
+   * 執行期間 state 為 `'loading'`，`media`、`tracks`、`selectedTracks` 維持原狀，期間的 `seek()` 改寫起點；
+   * resolve 時 state 同 `load()`：`paused` 時為 `'ready'`，否則為 `'playing'`。最近一次 `load()` 沒有完成就失敗時
+   *（例如 401），以同樣的來源與選項重新 load。沒有載入過媒體（state 為 `'idle'`）時以 `DOMException`
+   *（name `'InvalidStateError'`）reject。
    */
   reload(): Promise<MediaInfo>;
 
@@ -209,14 +255,25 @@ export interface Engine extends EventTarget {
    * 在 `'ended'` 時呼叫會從頭播放。之後若有 `pause()` 或 `load()` 先完成，reject AbortError。
    * 執行時沒有媒體（state 為 `'idle'` 或 `'error'`）則以 `DOMException`（name `'InvalidStateError'`）reject，
    * `paused` 仍然改為 false。
+   *
+   * AudioContext 還沒開始、長時間暫停後被 suspend，或被系統中斷過時，在呼叫內同步發出 `beforeaudiostart`
+   * 並 resume AudioContext，所以在 user gesture 內呼叫時會自動解鎖；AudioContext 開始之前不會進入 `'playing'`。
+   * resume 被拒絕或 2 秒內沒有完成時，以非致命的 `EngineError('AUDIO_LOCKED')` reject，`paused` 回到 true；
+   * 逾時而 AudioContext 仍處於系統中斷（iOS 的 `'interrupted'`）時改為非致命的 `EngineError('AUDIO_OUTPUT')`。
    */
   play(): Promise<void>;
 
-  /** 設定 `paused = true`，resolve 於淡出結束、時鐘停止。 */
+  /**
+   * 設定 `paused = true`，resolve 於淡出（`EngineOptions.audioFadeMs`）結束、時鐘停止；`audioFadeMs` 為 0 時於下一個
+   * render quantum。`currentTime` 停在淡出結束的位置（見 `currentTime`）。淡出途中的 `play()` 從目前的音量淡入回來。
+   * 暫停期間 AudioContext 繼續執行（worklet 輸出靜音），超過 30 秒才 suspend 以省電；之後的 `play()` 會 resume 它。
+   */
   pause(): Promise<void>;
 
   /**
    * 精準 seek（影片到 frame、音訊到 sample），resolve 實際落點（夾在 `[0, duration]`）。
+   * 執行期間 state 為 `'seeking'`；完成時發出 `seeked` 並補發一次 `timeupdate`，之後依 `paused` 回到
+   * `'playing'` 或 `'paused'`（還沒播放過時為 `'ready'`）。`'ended'` 時 seek 也一樣，從新的位置繼續。
    * 連續呼叫時只執行最後一個，被取代的 reject AbortError。
    * loading 期間呼叫時改寫該次 load 的起點，於 load 完成時一起 resolve。
    * `time` 不是有限數時 reject `TypeError`；執行時沒有媒體（state 為 `'idle'` 或 `'error'`）則以
@@ -255,13 +312,17 @@ export interface Engine extends EventTarget {
    */
   setAudioOffset(trackId: string, offset: number): Promise<void>;
 
-  /** 卸載當前媒體、回到 `'idle'`，並 terminate media Worker；保留 AudioContext，供之後的 `load()` 使用。 */
+  /**
+   * 卸載當前媒體、回到 `'idle'`（`paused` 為 true），並 terminate media Worker：中止讀取，`media`、`tracks`、`duration`、
+   * `error` 回到初始值，之後的 `reload()` 以 `InvalidStateError` reject。保留 AudioContext 與 worklet，供之後的
+   * `load()` 使用（暫停超過 30 秒一樣會 suspend）。`'idle'` 時什麼都不做。
+   */
   unload(): Promise<void>;
 
   /**
    * 立即釋放所有資源：中止讀取、關閉 decoder、terminate Worker、關閉 AudioContext。
    * 所有未完成的指令 reject AbortError，之後任何指令都 reject `EngineError('DESTROYED')`。可重複呼叫。
-   * 完成後 state 為 `'idle'`、`paused` 為 true。
+   * 完成後 state 為 `'idle'`、`paused` 為 true。第一次呼叫時在呼叫內同步發出 `destroy` 事件。
    */
   destroy(): Promise<void>;
 
@@ -300,13 +361,19 @@ export interface Engine extends EventTarget {
 
   // ── 診斷 ──
 
-  /** 取一次統計快照；非同步，因為大部分數字在 media Worker 內。 */
+  /**
+   * 取一次統計快照；非同步，因為大部分數字在 media Worker 內（主執行緒、Worker 與 worklet 的數字彙整在一起）。
+   * 沒有載入媒體時，Worker 的欄位為 0／空值。
+   */
   getStats(): Promise<EngineStats>;
 }
 
 /** `load()` 的選項。 */
 export interface LoadOptions {
-  /** 起始位置（秒），預設 0。用於 session 失效後重新載入。 */
+  /**
+   * 起始位置（秒），預設 0。用於 session 失效後重新載入。夾在 `[0, duration]`，與 `seek()` 一樣精準：
+   * 輸出的第一個 sample 就在這個位置。loading 期間的 `seek()` 改寫它。
+   */
   startTime?: number;
   /** false 時載入完成後直接播放（等同 load 完成再 `play()`）。預設 true：停在 `'ready'`。 */
   paused?: boolean;
@@ -317,7 +384,12 @@ export interface LoadOptions {
   tracks?: Partial<TrackSelection>;
   /** 偏好語言（BCP 47），覆蓋 `EngineOptions.preferredLanguages`。 */
   preferredLanguages?: { audio?: string[]; subtitle?: string[] };
-  /** 外部取消；效果等同被下一個 `load()` 取代。 */
+  /**
+   * 外部取消；效果等同被下一個 `load()` 取代：中止這次 load 的讀取並 terminate media Worker，`load()` 與 loading 期間的
+   * `seek()` 以 `DOMException`（name `'AbortError'`）reject，不論 `signal.reason`。沒有下一個 load 接手，所以 state
+   * 回到 `'idle'`（同 `unload()`）。呼叫時已經 abort 則直接 reject、狀態不變；load 完成之後 abort 沒有作用，`reload()`
+   * 也不沿用它。
+   */
   signal?: AbortSignal;
 }
 
@@ -332,12 +404,13 @@ export type Source = HttpSource | BytesSource | BlobSource;
 /** 以 HTTP Range 分段讀取的來源。 */
 export interface HttpSource {
   kind: 'http';
+  /** 相對 URL 以 `document.baseURI` 解析。 */
   url: string | URL;
   /** 預設 `'same-origin'`：同源請求自動帶 cookie。 */
   credentials?: RequestCredentials;
   /** 每個請求附帶的 header。 */
   headers?: Record<string, string>;
-  /** 已知的來源大小（bytes），可省掉一次探測。 */
+  /** 已知的來源大小（bytes），可省掉一次探測；沒有給時以第一個 Range 回應的 `Content-Range` 取得。 */
   size?: number;
 }
 
@@ -507,8 +580,9 @@ export interface EngineEventMap {
   /** 播到結尾。 */
   ended: Event;
   /**
-   * fatal 時 state 同時變為 `'error'`。非致命的只在播放中自動降級時發出（例如影片解碼失敗、退回只播音訊），
-   * state 不變；指令自己的失敗只出現在該指令的 reject，不另外發事件。
+   * fatal 時 state 同時變為 `'error'`。非致命的只在播放中自動降級時發出（例如影片解碼失敗、退回只播音訊；
+   * 停住的 AudioContext 被重建後無法開始，`AUDIO_LOCKED` 並暫停），其餘 state 不變；指令自己的失敗只出現在該指令的
+   * reject，不另外發事件。
    */
   error: EngineErrorEvent;
   /** 軌道清單或選擇改變（load 完成、加入外掛音軌、selectTracks 完成、offset 改變、影片解碼失敗退回只播音訊）。 */
@@ -529,6 +603,12 @@ export interface EngineEventMap {
    * `navigator.audioSession.type = "playback"`、啟動靜音 anchor `<audio>`。
    */
   beforeaudiostart: BeforeAudioStartEvent;
+  /**
+   * `destroy()` 開始釋放資源。第一次呼叫 `destroy()` 時在呼叫內同步發出一次，此時 state 已是 `'idle'`、`paused` 為 true，
+   * 之後的指令都 reject `EngineError('DESTROYED')`。背景播放模組以它自動 detach；state 沒有改變時不會有 `statechange`，
+   * 要知道 Engine 被 destroy 只能靠這個事件。
+   */
+  destroy: Event;
 }
 
 /**
@@ -536,7 +616,7 @@ export interface EngineEventMap {
  * - `'command'`：App 的指令（load、play、pause、seek、selectTracks…）。
  * - `'media'`：播放本身的進展（載入完成、緩衝用完或補上、seek 完成、播到結尾）。
  * - `'stall'`：卡住偵測與自動恢復。
- * - `'error'`：致命錯誤。
+ * - `'error'`：致命錯誤；或 AudioContext 停住而被重建後，新的 AudioContext 無法開始（`paused` 變為 true）。
  * - `'interrupted'`：系統中斷音訊（iOS 來電、其他 App 搶走 audio session）；`paused` 變為 true，結束後不自動恢復。
  * - `'external'`：AudioContext 被 Engine 以外的人 suspend／resume（例如 iOS 鎖屏控制直接操作 AudioContext）；
  *   `paused` 跟著變。
@@ -553,9 +633,9 @@ export type StateChangeReason =
  * - `SOURCE_UNAUTHORIZED`：401；App 應走 session 失效流程，之後 `reload()`。
  * - `SOURCE_FORBIDDEN`：403。
  * - `SOURCE_NOT_FOUND`：404／410。
- * - `SOURCE_SERVER`：5xx，自動重試後仍失敗。
- * - `SOURCE_NETWORK`：網路中斷、CORS、DNS，自動重試後仍失敗。
- * - `SOURCE_RANGE_UNSUPPORTED`：伺服器不回 206。
+ * - `SOURCE_SERVER`：5xx，自動重試後仍失敗；其他沒有分類的 HTTP 錯誤（例如 429）也是這個，但不重試。
+ * - `SOURCE_NETWORK`：網路中斷（含回應中途斷線）、CORS、DNS，自動重試後仍失敗。
+ * - `SOURCE_RANGE_UNSUPPORTED`：伺服器不回 206（忽略 Range 回應 200、416），或沒有回報檔案大小。
  * - `SOURCE_CHANGED`：`reload()` 時軌道的組成與先前不同。
  *
  * 格式與解碼：
@@ -565,13 +645,16 @@ export type StateChangeReason =
  * - `DECODE_FAILED`：播放中解碼錯誤。音訊連續失敗超過 1 媒體秒為致命；影片重新設定後仍失敗為非致命，退回只播音訊。
  *
  * 輸出與環境：
- * - `AUDIO_LOCKED`：沒有 user gesture 就要求播放，或 AudioContext 無法在沒有 gesture 時恢復。
- * - `AUDIO_OUTPUT`：AudioContext／AudioWorklet 無法啟動或恢復。
+ * - `AUDIO_LOCKED`：沒有 user gesture 就要求播放，或 AudioContext 無法在沒有 gesture 時恢復（包括停住而被重建的
+ *   AudioContext，此時以非致命的 `error` 事件送出）。
+ * - `AUDIO_OUTPUT`：AudioContext／AudioWorklet 無法啟動或恢復：系統中斷中 resume 逾時（`play()` 的非致命 reject）、
+ *   AudioContext 停住且重建後仍然停住（致命）。
  * - `ASSET_LOAD_FAILED`：wasm、glue、Worker 或 worklet 載入失敗。
  * - `DESTROYED`：`destroy()` 之後呼叫指令。
- * - `MEMORY_LIMIT`：wasm heap 到達上限，或交錯不良的媒體讓封包佇列超過硬上限（致命），重新載入也無法解決；
- *   建立 wasm instance 時配置不到記憶體（致命），釋放記憶體後重新載入可能恢復；外掛音軌超過 4 條（非致命）。
- * - `INTERNAL`：media Worker 崩潰等 Engine 內部的錯誤。
+ * - `MEMORY_LIMIT`：建立 wasm instance 時配置不到記憶體（致命），釋放記憶體後重新載入可能恢復；交錯不良的媒體讓
+ *   封包佇列超過硬上限（致命），重新載入也無法解決；外掛音軌超過 4 條（非致命）。播放中 wasm heap 用完不是這個，
+ *   而是 media Worker 崩潰的 `INTERNAL`。
+ * - `INTERNAL`：media Worker 崩潰（wasm trap、播放中 wasm heap 用完、Worker 的 `onerror`）等 Engine 內部的錯誤。
  */
 export type EngineErrorCode =
   | 'SOURCE_UNAUTHORIZED'
@@ -594,8 +677,11 @@ export type EngineErrorCode =
 
 // ───────────────────────────── 診斷 ─────────────────────────────
 
-/** log 的等級，由低到高。 */
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+/**
+ * log 的等級，由低到高。`debug`：指令、state 轉換、每個 Range 請求等逐筆的事件；`info`：開檔結果、重試、恢復；
+ * `warn`：不致命的異常（請求失敗、ring 用完、卡住、watchdog、AudioContext 無法開始）；`error`：致命錯誤與 Worker 崩潰。
+ */
+export type LogLevel = WireLogLevel;
 
 /** 接收 Engine 診斷 log 的 hook。 */
 export type LogHook = (entry: LogEntry) => void;
@@ -604,10 +690,14 @@ export type LogHook = (entry: LogEntry) => void;
 export interface LogEntry {
   level: LogLevel;
   /** 產生 log 的子系統；`'background'` 是背景播放模組。 */
-  scope: 'io' | 'demux' | 'audio' | 'video' | 'subtitle' | 'command' | 'worker' | 'background';
+  scope: WireLogScope;
   message: string;
-  /** `performance.now()` 時間（主執行緒的時基）。 */
+  /**
+   * 事件發生的 `performance.now()` 時間（ms，主執行緒的時基）；media Worker 與 AudioWorklet 的 log 已換算過。
+   * worklet 的 log 依 `AudioContext.currentTime` 換算，誤差約為瀏覽器的一個音訊 render 區塊（數 ms 到數十 ms）。
+   */
   time: number;
+  /** 結構化的細節（錯誤碼、位置、URL、範圍等），只含可以 structured clone 的值。 */
   data?: Record<string, unknown>;
 }
 
@@ -617,7 +707,8 @@ export interface EngineStats {
   bufferAhead: number;
   /**
    * 音訊輸出。`ringMs`：ring buffer 目前的水位；`underruns`：ring 用完的次數；
-   * `outputLatencyMs`：輸出延遲；`targetMs`：實際生效的 `audioBuffer.targetMs`。
+   * `outputLatencyMs`：輸出延遲（sample 進入 audio graph 到被聽到，換算方式同 `Engine.currentTime`）；
+   * `targetMs`：實際生效的 `audioBuffer.targetMs`。
    */
   audio: { ringMs: number; underruns: number; outputLatencyMs: number; targetMs: number };
   /** 影片解碼；沒有選用影片軌時為 null。 */
@@ -628,30 +719,19 @@ export interface EngineStats {
     avgDecodeMs: number;
   } | null;
   /** demux 與解碼之間的封包佇列。 */
-  packetQueue: { audioSeconds: number; videoSeconds: number; bytes: number };
+  packetQueue: WorkerStats['packetQueue'];
   /**
    * Range 快取。`bytes`／`limitBytes`：目前用量與上限；`aheadBytes`：選用中來源已預讀、在播放位置之後的 bytes 合計；
    * `readaheadTarget`：預讀目標的 bytes 合計；`fetching`：是否有來源處於抓取階段；`hits`／`misses`：命中與未命中次數。
    */
-  cache: {
-    bytes: number;
-    limitBytes: number;
-    aheadBytes: number;
-    readaheadTarget: number;
-    fetching: boolean;
-    hits: number;
-    misses: number;
-  };
+  cache: WorkerStats['cache'];
   /** 網路。`bytesLoaded`：累計讀取的 bytes；`inflight`：進行中的請求。 */
-  network: {
-    bytesLoaded: number;
-    inflight: { url: string; start: number; end: number; elapsedMs: number }[];
-  };
+  network: WorkerStats['network'];
   /** 所有 wasm instance 的 heap 合計（bytes）。 */
   wasmHeapBytes: number;
   /**
    * 存活中的資源數，用於診斷 leak：`destroy()` 後全為 0；換檔後 `workers` 為 1、
-   * `libavInstances` 等於來源數（主來源加外掛音軌）。
+   * `libavInstances` 等於來源數（主來源加外掛音軌）。`workers` 是建立之後還沒 terminate 的 media Worker 數。
    */
   resources: { workers: number; libavInstances: number; openVideoFrames: number };
 }
@@ -664,8 +744,8 @@ export interface ThirdPartyNotice {
   name: string;
   /** SPDX license expression，例如 `'LGPL-2.1-or-later'`。 */
   license: string;
-  /** 對應原始碼的下載位置（wasm Release）。 */
+  /** 對應原始碼的下載位置（wasm Release 的頁面，原始碼是其中的 `sources.tar`）。 */
   sourceUrl: string;
-  /** 聲明全文。 */
+  /** 聲明全文（純文字，含換行）。 */
   noticeText: string;
 }

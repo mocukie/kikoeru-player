@@ -25,6 +25,15 @@ export type WireSource<H extends HostTypes> =
   | { kind: 'bytes'; data: ArrayBuffer | Uint8Array; name?: string }
   | { kind: 'blob'; blob: H['blob'] };
 
+/**
+ * http 讀取失敗的自動重試，對應補上預設值的 `EngineOptions.retry`：只重試 5xx 與網路錯誤，第 n 次重試前等
+ * `baseDelayMs * 2^(n-1)` ms；`attempts` 是重試的次數（不含第一次請求）。
+ */
+export interface RetryPolicy {
+  attempts: number;
+  baseDelayMs: number;
+}
+
 /** probe 結果。時間已換算到媒體時間軸（秒）。 */
 export interface ProbedMedia {
   format: string;
@@ -98,4 +107,21 @@ export interface WireError {
   fatal: boolean;
   message: string;
   detail?: { status?: number; url?: string; codec?: string };
+}
+
+/** log 的等級，由低到高；公開的 `LogLevel` 沿用這個型別。 */
+export type WireLogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+/** 產生 log 的子系統；公開的 `LogEntry.scope` 沿用這個型別。 */
+export type WireLogScope =
+  'io' | 'demux' | 'audio' | 'video' | 'subtitle' | 'command' | 'worker' | 'background';
+
+/** 跨執行緒傳送的一筆 log；欄位同公開的 `LogEntry`，`time` 的時基由各訊息規定。 */
+export interface WireLogEntry {
+  level: WireLogLevel;
+  scope: WireLogScope;
+  message: string;
+  time: number;
+  /** 只能放 structured clone 得了的值。 */
+  data?: Record<string, unknown>;
 }

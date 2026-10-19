@@ -39,7 +39,6 @@ describe('createEngine', () => {
   it('尚未實作的成員丟出錯誤並指出成員名稱', () => {
     const engine = createEngine();
 
-    expect(() => engine.volume).toThrow(/volume/);
-    expect(() => engine.reload()).toThrow(/reload/);
+    expect(() => engine.selectTracks({})).toThrow(/selectTracks/);
   });
 });

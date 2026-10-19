@@ -3,7 +3,16 @@ name: CI
 on:
   push:
     branches: [main]
+    # 發版：release job 只在 v* tag 時發布（ADR-0005）。
+    tags: ['v*']
   pull_request:
+  # release job 的演練：跑完整的 CI 後以輸入的 tag 檢查版本並 pnpm pack，tgz 只上傳成 workflow artifact，不建立 Release。
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '演練用的 tag（例如 v0.1.0）；不會建立 tag 或 Release'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -157,5 +166,61 @@ jobs:
           path: ~/.cache/kikoeru-player/docker-pnpm-store
           key: docker-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: docker-pnpm-store-
-      - name: Browser mode and E2E (Chromium, Firefox)
-        run: test/docker/run.sh sh -c 'pnpm wasm:fetch && pnpm test:browser && pnpm e2e'
+      - name: Browser mode, E2E and fixture App (Chromium, Firefox)
+        run: test/docker/run.sh sh -c 'pnpm wasm:fetch && pnpm test:browser && pnpm e2e && pnpm fixture'
+
+  # 發版（ADR-0005）：v* tag 時確認 tag 與 package.json 的版本一致後 pnpm pack，把 tgz 附在 GitHub Release 上。
+  # workflow_dispatch 是演練：同樣檢查與打包，但只把 tgz 上傳成 workflow artifact。
+  release:
+    needs: [check, browser]
+    if: ${{ !cancelled() && needs.check.result == 'success' && needs.browser.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      - name: Get pnpm store path
+        id: pnpm-store
+        run: echo "path=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm wasm:fetch
+      # thirdPartyNotices 與 NOTICE 的原始碼網址指向這個 wasm Release，發版前確認它已發布（不是 draft）。
+      - name: Check wasm release
+        run: |
+          wasm_tag=$(node scripts/wasm-tag.ts)
+          if [[ $(gh release view "$wasm_tag" --json isDraft --jq .isDraft 2> /dev/null) != false ]]; then
+            echo "wasm Release $wasm_tag 不存在或尚未發布。" >&2
+            exit 1
+          fi
+          echo "WASM_TAG=$wasm_tag" >> "$GITHUB_ENV"
+      # tag 與版本不一致時在 build 之前失敗；prepack 會 pnpm build，並檢查套件的檔案清單。
+      - name: Pack
+        id: pack
+        run: echo "tgz=$(node scripts/pack.ts release --tag "$TAG")" >> "$GITHUB_OUTPUT"
+      - name: Upload package (dry run)
+        if: env.DRY_RUN == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: package
+          path: ${{ steps.pack.outputs.tgz }}
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish release
+        if: env.DRY_RUN != 'true'
+        env:
+          TGZ: ${{ steps.pack.outputs.tgz }}
+        run: |
+          url="https://github.com/$GH_REPO/releases/download/$TAG/$(basename "$TGZ")"
+          gh release create "$TAG" "$TGZ" --verify-tag --title "$TAG" \
+            --notes "kikoeru-player $TAG。以 tarball 安裝：\`\"kikoeru-player\": \"$url\"\`。內附的 FFmpeg（LGPL-2.1-or-later）來自 wasm Release $WASM_TAG，原始碼見該 Release 的 sources.tar。"

@@ -8,7 +8,7 @@
 
 ## Consequences
 
-- 位元組率先用容器的 `bit_rate`，沒有時用「檔案大小 ÷ duration」，播放中再依 demux 實際讀到的 byte 位置與 pts 修正。
+- 位元組率的初始值用所有音訊與影片軌 `bit_rate` 的合計：libav.js 沒有 `AVFormatContext.bit_rate` 的 accessor，FFmpeg 在容器沒有記錄時也是這樣估，不為此加 wasm patch。合計少算了容器的 overhead，播放中再依 demux 實際讀到的 byte 位置與 pts 修正。有一條軌沒有記錄 `bit_rate` 時改用「檔案大小 ÷ duration」，兩者都沒有時用保守的預設值。
 - `buffered` 因此是估計值：http 來源最多一段，從 `currentTime` 起算，長度是 `bufferAhead`（封包佇列的秒數加上預讀 bytes 換算的秒數）；播放位置之前、仍在快取中的資料不列入。`bytes`／`blob` 來源整個在本機，`buffered` 為 `[0, duration]`。CBR 音訊幾乎精確，VBR 與影片有誤差；`buffered` 只用來畫進度條，所以可以接受。
 - 往前 seek 落在預讀範圍內時直接命中快取。成批抓取讓手機的網路晶片有空檔可以休眠。
 - 單一來源的預讀最多用掉 `cacheBytes` 的 75%，剩下的留給播放位置之前的資料，讓往回 seek 也能命中。

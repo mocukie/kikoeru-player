@@ -24,6 +24,11 @@
       "default": "./wasm/dist/libav-6.10.9.0-kikoeru.mjs"
     }
   },
+  "publishConfig": {
+    "imports": {
+      "#libav": "./dist/wasm/libav-6.10.9.0-kikoeru.mjs"
+    }
+  },
   "files": [
     "dist/",
     "LICENSE",
@@ -31,15 +36,18 @@
     "LICENSES/"
   ],
   "scripts": {
-    "build": "node scripts/check-wasm.ts && rm -rf dist && tsc -b tsconfig.build.json --force",
+    "dev": "node scripts/check-wasm.ts && node scripts/check-media.ts && vite --open /demo/",
+    "build": "node scripts/build.ts",
+    "prepack": "pnpm build",
     "typecheck": "tsc -b",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run --project node",
     "test:browser": "node scripts/check-wasm.ts && node scripts/check-media.ts && vitest run --project '!node'",
     "e2e": "node scripts/check-wasm.ts && node scripts/check-media.ts && playwright test",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:browser --project chromium && pnpm e2e --project chromium",
-    "verify:docker": "test/docker/run.sh sh -c 'pnpm lint && pnpm typecheck && pnpm test && pnpm test:browser && pnpm e2e'",
+    "fixture": "test/fixture-app/run.sh",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:browser --project chromium && pnpm e2e --project chromium && pnpm fixture --project chromium",
+    "verify:docker": "test/docker/run.sh sh -c 'pnpm lint && pnpm typecheck && pnpm test && pnpm test:browser && pnpm e2e && pnpm fixture'",
     "media:gen": "test/media/gen-media.sh ci",
     "media:gen:manual": "test/media/gen-media.sh manual",
     "wasm:fetch": "node scripts/wasm-fetch.ts",
@@ -50,6 +58,8 @@
     "@playwright/test": "1.64.1",
     "@types/audioworklet": "^0.0.100",
     "@types/node": "^24.19.2",
+    "@types/send": "^1.2.1",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitest/browser-playwright": "^5.0.4",
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",
@@ -58,8 +68,10 @@
     "globals": "^17.13.0",
     "playwright": "1.64.1",
     "prettier": "^3.9.10",
+    "send": "^1.2.1",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.2",
+    "vite": "^8.3.4",
     "vitest": "^5.0.4"
   }
 }

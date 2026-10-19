@@ -5,12 +5,23 @@ import type {
   MainToWorkerMessage,
   ProbedAudioTrack,
   ProbedMedia,
+  RetryPolicy,
+  WireLogLevel,
+  WorkerLimits,
+  WorkerStats,
   WorkerToMainMessage,
   WorkerToWorkletMessage,
   WorkletPcmMessage,
 } from '../src/protocol/index.js';
 import type { WorkerHost as BrowserHost } from '../src/worker/host.js';
 import type { LibavAssets } from '../src/worker/libav.js';
+
+/** 桌面平台的 `WorkerLimits`（Engine 的預設值）。 */
+export const desktopLimits: WorkerLimits = {
+  cacheBytes: 128 * 1024 * 1024,
+  readaheadSeconds: 60,
+  packetQueueBytes: 64 * 1024 * 1024,
+};
 
 /** 主執行緒 compile 一次、分給每個 Worker 的 wasm（與 Engine 相同的做法）。 */
 let assets: Promise<LibavAssets> | null = null;
@@ -44,9 +55,23 @@ export function importOnlyWasm(module: string, field: string): WebAssembly.Modul
   );
 }
 
-/** CI 組測試媒體的 URL（`test/media/out/` 之下的路徑）。 */
+/**
+ * CI 組測試媒體的 URL（`test/media/out/` 之下的路徑），由 test/server 的 `/media/*` 提供。Vitest 自己的靜態檔案
+ * 不正確處理 Range（`bytes=0-0` 回應整個檔案），不用它。
+ */
 export function mediaUrl(path: string): string {
-  return new URL(`/test/media/out/${path}`, location.href).href;
+  return new URL(`/media/${path}`, location.href).href;
+}
+
+let faultSeq = 0;
+
+/**
+ * test/server 的 `/media/*` 加上故障參數（例如 `fault=503@2`，見 test/server/faults.ts）。每次呼叫帶一個不重複的
+ * `id`，故障的請求計數不受其他測試影響。
+ */
+export function faultyMediaUrl(path: string, faults: string): string {
+  const id = `${String(Date.now())}-${String(++faultSeq)}`;
+  return new URL(`/media/${path}?id=${id}&${faults}`, location.href).href;
 }
 
 export async function mediaBytes(path: string): Promise<ArrayBuffer> {
@@ -95,18 +120,47 @@ export class WorkerDriver {
     };
   }
 
-  /** `module` 預設為 `wasmAssets()` 的 Module；給別的 Module 可以模擬與 glue 不符的資產。 */
+  /**
+   * `module` 預設為 `wasmAssets()` 的 Module；給別的 Module 可以模擬與 glue 不符的資產。
+   * `retry` 預設不重試；`limits` 預設為桌面的值（`readaheadSeconds` 60）；`logLevel` 預設 null（不送 log）。
+   */
   static async init(
     endpoint: WorkerEndpoint,
-    options: { sampleRate?: number; module?: WebAssembly.Module } = {},
+    options: {
+      sampleRate?: number;
+      module?: WebAssembly.Module;
+      retry?: RetryPolicy;
+      limits?: Partial<WorkerLimits>;
+      /** 播放速度，預設 1。 */
+      rate?: number;
+      logLevel?: WireLogLevel | null;
+    } = {},
   ): Promise<WorkerDriver> {
     const assets = await wasmAssets();
-    const { sampleRate = 48_000, module = assets.module } = options;
+    const {
+      sampleRate = 48_000,
+      module = assets.module,
+      retry = { attempts: 0, baseDelayMs: 0 },
+      rate = 1,
+      logLevel = null,
+    } = options;
+    const limits: WorkerLimits = { ...desktopLimits, ...options.limits };
     const { glueUrl } = assets;
     const channel = new MessageChannel();
-    endpoint.post({ type: 'init', module, glueUrl, workletPort: channel.port1, sampleRate }, [
-      channel.port1,
-    ]);
+    endpoint.post(
+      {
+        type: 'init',
+        module,
+        glueUrl,
+        workletPort: channel.port1,
+        sampleRate,
+        retry,
+        limits,
+        rate,
+        logLevel,
+      },
+      [channel.port1],
+    );
     return new WorkerDriver(endpoint, channel.port2, sampleRate);
   }
 
@@ -134,9 +188,19 @@ export class WorkerDriver {
     options: { epoch?: number; time?: number; frames?: number } = {},
   ): Promise<DecodedPcm> {
     const epoch = options.epoch ?? 1;
-    const frames = options.frames ?? 1e12;
-    const from = this.worklet.length;
     this.post({ type: 'start', epoch, time: options.time ?? 0, audio });
+    return this.collect(epoch, options.frames);
+  }
+
+  /** seek 到 `time`，以新的 `epoch` 要 `frames` 個 frame（預設全部），等到 EOF 或送滿。 */
+  async seek(time: number, epoch: number, frames?: number): Promise<DecodedPcm> {
+    this.post({ type: 'seek', epoch, time });
+    return this.collect(epoch, frames);
+  }
+
+  /** 要 `epoch` 的 `frames` 個 frame（預設全部），收集之後送來的 PCM，等到 EOF 或送滿。 */
+  async collect(epoch: number, frames = 1e12): Promise<DecodedPcm> {
+    const from = this.worklet.length;
     this.need(epoch, frames);
     const ofEpoch = () => this.worklet.slice(from).filter((m) => m.epoch === epoch);
     const pcm = () => ofEpoch().filter((m): m is WorkletPcmMessage => m.type === 'pcm');
@@ -162,7 +226,7 @@ export class WorkerDriver {
     this.#port.postMessage({ type: 'need', epoch, frames });
   }
 
-  async stats(): Promise<{ libavInstances: number }> {
+  async stats(): Promise<WorkerStats> {
     const id = ++this.#statsId;
     this.post({ type: 'stats', id });
     const reply = await this.waitFor((m) => m.type === 'stats' && m.id === id);

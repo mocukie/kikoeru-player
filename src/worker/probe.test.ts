@@ -17,6 +17,7 @@ function stream(overrides: Partial<RawStream> = {}): RawStream {
     metadata: {},
     disposition: 0,
     extradata: null,
+    bitRate: 0,
     ...overrides,
   };
 }

@@ -1,5 +1,7 @@
 // createEngine() 的選項驗證與預設值。
 
+import type { AudioBufferWatermarks } from '../protocol/index.js';
+import { isLogLevel } from './log.js';
 import type { Platform } from './platform.js';
 import type { EngineOptions, LogHook, LogLevel } from './types.js';
 
@@ -10,13 +12,14 @@ export interface ResolvedEngineOptions {
   assets: NonNullable<EngineOptions['assets']>;
   canvas: HTMLCanvasElement | null;
   timeUpdateInterval: number;
-  limits: { cacheBytes: number; readaheadSeconds: number };
+  /** `packetQueueBytes` 是內部常數（封包佇列的硬上限），不在 `EngineOptions` 中。 */
+  limits: { cacheBytes: number; readaheadSeconds: number; packetQueueBytes: number };
   retry: { attempts: number; baseDelayMs: number };
   stallTimeout: number;
   stallAttempts: number;
   preferredLanguages: { audio: readonly string[]; subtitle: readonly string[] };
   suspendVideoWhenHidden: boolean;
-  audioBuffer: { targetMs: number; refillMs: number; capacityMs: number };
+  audioBuffer: AudioBufferWatermarks;
   audioFadeMs: number;
   log: LogHook | null;
   logLevel: LogLevel;
@@ -27,11 +30,23 @@ const MiB = 1024 * 1024;
 /** 依平台分級的預設值（「記憶體上限的數值」#23、「音訊輸出排程與變速」#13）；實機量測後調整。 */
 const platformDefaults: Record<
   Platform,
-  Pick<ResolvedEngineOptions, 'audioBuffer'> & { cacheBytes: number }
+  Pick<ResolvedEngineOptions, 'audioBuffer'> & { cacheBytes: number; packetQueueBytes: number }
 > = {
-  desktop: { audioBuffer: { targetMs: 150, refillMs: 75, capacityMs: 400 }, cacheBytes: 128 * MiB },
-  android: { audioBuffer: { targetMs: 250, refillMs: 125, capacityMs: 600 }, cacheBytes: 64 * MiB },
-  ios: { audioBuffer: { targetMs: 300, refillMs: 150, capacityMs: 750 }, cacheBytes: 64 * MiB },
+  desktop: {
+    audioBuffer: { targetMs: 150, refillMs: 75, capacityMs: 400 },
+    cacheBytes: 128 * MiB,
+    packetQueueBytes: 64 * MiB,
+  },
+  android: {
+    audioBuffer: { targetMs: 250, refillMs: 125, capacityMs: 600 },
+    cacheBytes: 64 * MiB,
+    packetQueueBytes: 32 * MiB,
+  },
+  ios: {
+    audioBuffer: { targetMs: 300, refillMs: 150, capacityMs: 750 },
+    cacheBytes: 64 * MiB,
+    packetQueueBytes: 32 * MiB,
+  },
 };
 
 /**
@@ -63,6 +78,7 @@ export function resolveEngineOptions(
     limits: {
       cacheBytes: positive('limits.cacheBytes', o.limits?.cacheBytes ?? defaults.cacheBytes),
       readaheadSeconds: positive('limits.readaheadSeconds', o.limits?.readaheadSeconds ?? 60),
+      packetQueueBytes: defaults.packetQueueBytes,
     },
     retry: {
       attempts: nonNegativeInteger('retry.attempts', o.retry?.attempts ?? 3),
@@ -78,7 +94,7 @@ export function resolveEngineOptions(
     audioBuffer,
     audioFadeMs: inRange('audioFadeMs', o.audioFadeMs ?? 10, 0, 100),
     log: o.log ?? null,
-    logLevel: o.logLevel ?? 'warn',
+    logLevel: logLevel(o.logLevel ?? 'warn'),
   };
 }
 
@@ -111,6 +127,11 @@ function inRange(name: string, value: number, min: number, max: number): number 
   return value;
 }
 
-function outOfRange(name: string, value: number, expected: string): RangeError {
+function logLevel(value: LogLevel): LogLevel {
+  if (!isLogLevel(value)) throw outOfRange('logLevel', value, "'debug'、'info'、'warn' 或 'error'");
+  return value;
+}
+
+function outOfRange(name: string, value: unknown, expected: string): RangeError {
   return new RangeError(`${name} 必須是 ${expected}，收到 ${String(value)}`);
 }

@@ -1,6 +1,6 @@
 // Engine 的指令、狀態與佇列：以假 media Worker 與假音訊輸出驅動 createEngineWith()。
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createFakeDeps, type FakeEngineDeps } from '../../test/fakes/engine-deps.js';
 import { audioMedia } from '../../test/fakes/media-worker.js';
 import { createEngineWith } from './engine.js';
@@ -44,6 +44,7 @@ describe('load', () => {
     const init = await worker.next('init');
     expect(init.sampleRate).toBe(48_000);
     expect(init.module).toBeInstanceOf(WebAssembly.Module);
+    expect(init.retry).toEqual({ attempts: 3, baseDelayMs: 500 });
     expect((await worker.next('load')).source).toEqual({ kind: 'http', url: source.url });
 
     await worker.probe(audioMedia());
@@ -75,6 +76,42 @@ describe('load', () => {
       'trackschange',
       'statechange:ready',
     ]);
+  });
+
+  it('init 帶著補上預設值的 retry，http 來源的 credentials、headers、size 原樣送到 Worker', async () => {
+    const deps = createFakeDeps();
+    const engine = createEngineWith(deps, { retry: { attempts: 1 } });
+    void engine.load({
+      kind: 'http',
+      url: new URL('https://example.test/a.m4a'),
+      credentials: 'include',
+      headers: { Authorization: 'Bearer t' },
+      size: 1234,
+    });
+    const worker = deps.workers.last;
+    expect((await worker.next('init')).retry).toEqual({ attempts: 1, baseDelayMs: 500 });
+    expect((await worker.next('load')).source).toEqual({
+      kind: 'http',
+      url: 'https://example.test/a.m4a',
+      credentials: 'include',
+      headers: { Authorization: 'Bearer t' },
+      size: 1234,
+    });
+  });
+
+  it('http 的相對 URL 以 document 的 base URL 解析後才送到 Worker', async () => {
+    vi.stubGlobal('document', { baseURI: 'https://app.test/player/index.html' });
+    try {
+      const deps = createFakeDeps();
+      const engine = createEngineWith(deps);
+      void engine.load({ kind: 'http', url: '../media/a.m4a?id=1' });
+      expect((await deps.workers.last.next('load')).source).toEqual({
+        kind: 'http',
+        url: 'https://app.test/media/a.m4a?id=1',
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
@@ -269,7 +306,14 @@ describe('過期的 epoch', () => {
     const { engine, deps } = await loaded({ paused: false });
     const oldEpoch = deps.audio.epoch;
     const seeking = engine.seek(2);
-    deps.audio.reply({ type: 'clock', epoch: oldEpoch, position: 9 });
+    deps.audio.reply({
+      type: 'clock',
+      epoch: oldEpoch,
+      position: 9,
+      frame: 0,
+      buffered: 0,
+      underruns: 0,
+    });
     deps.audio.reply({ type: 'ended', epoch: oldEpoch });
     expect(engine.currentTime).toBe(2);
 
@@ -331,10 +375,40 @@ describe('destroy', () => {
   });
 });
 
+describe('播放中的讀取錯誤', () => {
+  it('fatal：state 進入 error，error 帶 code、detail 與發生時的 position', async () => {
+    const { engine, deps, worker } = await loaded({ paused: false });
+    deps.audio.reply({ type: 'clock', position: 3.25, frame: 0, buffered: 0, underruns: 0 });
+    const errors: unknown[] = [];
+    engine.addEventListener('error', (event) => errors.push(event.error));
+
+    worker.reply({
+      type: 'error',
+      epoch: deps.audio.epoch,
+      error: {
+        code: 'SOURCE_UNAUTHORIZED',
+        fatal: true,
+        message: 'HTTP 401',
+        detail: { status: 401, url: 'https://example.test/a.m4a' },
+      },
+    });
+
+    expect(engine.state).toBe('error');
+    expect(engine.error).toMatchObject({
+      name: 'EngineError',
+      code: 'SOURCE_UNAUTHORIZED',
+      fatal: true,
+      position: 3.25,
+      detail: { status: 401, url: 'https://example.test/a.m4a' },
+    });
+    expect(errors).toEqual([engine.error]);
+  });
+});
+
 describe('Worker 崩潰', () => {
   it('播放中 onerror：state 進入 error，回報帶 position 的 fatal INTERNAL，不自動 reload', async () => {
     const { engine, deps, worker } = await loaded({ paused: false });
-    deps.audio.reply({ type: 'clock', position: 4.5 });
+    deps.audio.reply({ type: 'clock', position: 4.5, frame: 0, buffered: 0, underruns: 0 });
     const errors: unknown[] = [];
     engine.addEventListener('error', (event) => errors.push(event.error));
     const pausing = engine.pause();
@@ -402,6 +476,8 @@ describe('播放意圖', () => {
     expect(changes).toMatchObject([
       { state: 'ready', previous: 'ready', paused: false, reason: 'command' },
     ]);
+    // AudioContext 開始之後才叫 worklet 播放。
+    await flush();
     expect(deps.audio.received.at(-1)).toEqual({ type: 'play', epoch: deps.audio.epoch });
 
     deps.audio.reply({ type: 'playing' });
@@ -428,7 +504,9 @@ describe('播放意圖', () => {
     await expect(rejection(playing)).resolves.toEqual(abortError);
     await pausing;
     expect(engine.state).toBe('ready');
-    expect(deps.audio.received.slice(-2).map((m) => m.type)).toEqual(['play', 'pause']);
+    // AudioContext 開始時播放意圖已經是暫停：worklet 不曾被叫去播放。
+    expect(deps.audio.received.map((m) => m.type)).not.toContain('play');
+    expect(deps.audio.intent).toBe('pause');
 
     const playingAgain = engine.play();
     const pausingAgain = engine.pause();
@@ -465,9 +543,10 @@ describe('播放意圖', () => {
     await expect(engine.pause()).resolves.toBeUndefined();
   });
 
-  it('worklet starved 時進入 buffering，補回後回到 playing', async () => {
+  it('worklet starved 超過 250 ms 時進入 buffering，補回後回到 playing', async () => {
     const { engine, deps } = await loaded({ paused: false });
     deps.audio.reply({ type: 'starved' });
+    await new Promise((resolve) => setTimeout(resolve, 260));
     expect(engine.state).toBe('buffering');
     deps.audio.reply({ type: 'playing' });
     expect(engine.state).toBe('playing');
@@ -660,7 +739,8 @@ describe('同步事件 listener 內的重入', () => {
     await expect(rejection(outer)).resolves.toEqual(abortError);
     await expect(inner).resolves.toBeUndefined();
     expect(engine.paused).toBe(true);
-    expect(deps.audio.received.slice(-2).map((m) => m.type)).toEqual(['play', 'pause']);
+    expect(deps.audio.received.map((m) => m.type)).not.toContain('play');
+    expect(deps.audio.intent).toBe('pause');
   });
 
   it('pause() 的 statechange listener 內 play()：較新的 play 取代 pause', async () => {
@@ -725,5 +805,36 @@ describe('同步事件 listener 內的重入', () => {
     expect(errors).toEqual([]);
     expect(engine.state).toBe('loading');
     expect(engine.error).toBeNull();
+  });
+});
+
+describe('音訊輸出', () => {
+  it('以補上預設值的 audioBuffer 與 workletUrl 建立', async () => {
+    const deps = createFakeDeps();
+    const engine = createEngineWith(deps, {
+      audioBuffer: { targetMs: 200 },
+      assets: { workletUrl: '/worklet.js' },
+    });
+    void engine.load(source);
+    await deps.workers.last.next('load');
+    expect(deps.audio.config).toEqual({
+      audioBuffer: { targetMs: 200, refillMs: 75, capacityMs: 400 },
+      audioFadeMs: 10,
+      workletUrl: '/worklet.js',
+      logLevel: null,
+    });
+  });
+
+  it('probe 之後、start 之前把 duration 告訴 worklet', async () => {
+    const { engine, deps } = setup();
+    void engine.load(source, { startTime: 30 });
+    const worker = deps.workers.last;
+    await worker.probe(audioMedia({ duration: 10 }));
+    const start = await worker.next('start');
+    // 起點被 duration 夾住而換了 epoch：duration 帶新的 epoch，排在 flush 之後。
+    expect(deps.audio.received.slice(-2)).toEqual([
+      { type: 'flush', epoch: start.epoch, position: 10 },
+      { type: 'duration', epoch: start.epoch, duration: 10 },
+    ]);
   });
 });

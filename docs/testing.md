@@ -19,11 +19,11 @@
 
 ### browser mode
 
-- seek 的起點精準度在這層比對解碼後的 PCM（preroll 依 [ADR-0003](adr/0003-decode-paths.md)）：0 sample；經重採樣的路線 ≤ 1 sample。
+- seek 的起點精準度在這層比對解碼後的 PCM（preroll 依 [ADR-0003](adr/0003-decode-paths.md)）：0 sample；經重採樣的路線 ≤ 1 sample。Matroska／WebM 的時間戳以 ms 為單位，容器本身就有 ±0.5 ms 的捨入，容許 1 ms。
 
 ### E2E
 
-- 對 Demo 頁執行。Demo 頁沿用 spike 的事件 log，並提供公開 API 的操作。
+- 對 Demo 頁執行。Demo 頁沿用 spike 的事件 log，並提供公開 API 的操作。Demo 頁預設 attach 背景播放模組；只測 Engine 本身的 spec 以 `/demo/?background=0` 開啟。
 - **自動同步斷言**：用 Playwright init script 包住 `AudioNode.prototype.connect`，在接到 `destination` 的地方旁接錄音 worklet 偵測 beep 起點，並讀 canvas pixel 偵測白框。錄音點在 `destination` 之前，比對時要扣掉 Engine 回報的輸出延遲。公開 API 不為此改變。
 
   | 斷言 | 容差 |
@@ -32,12 +32,15 @@
   | 白框對 beep | ≤ 1 個影片 frame + 1 個 rAF（30 fps 約 50 ms） |
   | 音軌 offset ±500 ms | 方向正確，誤差 ≤ 20 ms |
   | `atempo` 1.25x 的 beep 間隔 | 0.8 s ± 10 ms |
+  | 變速（經過 `atempo`）時 beep 起點對 `currentTime` | ≤ 40 ms（見下方說明） |
+
+  變速時的容差較寬：`atempo`（WSOLA）在完全靜音之後找不到波形對齊的依據，會把 beep 的音頭提早（實測 12–24 ms）。這是演算法的特性，不是時鐘誤差；time map 另以 beep 間隔驗證。40 ms 低於 ITU-R BT.1359 對聲音領先的可察覺門檻（約 45 ms）。
 
   容差寫成常數集中在 `test/e2e/` 的一個檔案，flaky 時只調那裡。
 - **leak 測試**：連續 load 100 次，混入被取代的 load、播放中 destroy、外掛音軌，使用 CI 組的短檔。斷言：
   - 以 CDP 數 Worker target，並在 GC 後量 JS heap。
   - `getStats().resources = { workers, libavInstances, openVideoFrames }`：destroy 後全為 0；換檔後 `workers` 為 1、`libavInstances` 等於來源數。
-  - `network.inflight` 為空。
+  - destroy 後 `network.inflight` 為空；換檔後進行中的請求都屬於目前的媒體（預讀）。
 
 ## 瀏覽器
 
@@ -67,8 +70,20 @@
 
 `test/server/` 的 Vite middleware 供 browser mode 與 Demo 頁共用：
 
-- `/media/*` 提供 `test/media/out/` 的檔案，支援 Range。
-- 故障由 query 參數控制，例如 `?fault=503@2`、`stall@1MB`、`drop@500KB`、`delay=200`；401 也由它模擬。
+- `/media/*` 提供 `test/media/out/` 的檔案，支援 Range；`/media/index.json` 列出 CI 組媒體的路徑，Demo 頁以它列出可選的媒體。browser mode 的測試媒體也走 `/media/*`：Vitest 自己的靜態檔案不正確處理 Range。
+- `/src/wasm/*` 原樣提供 `wasm/dist/` 的檔案，讓 Engine 預設的 wasm 與 glue 位置在 dev 與測試中也能用（見[架構規則「平台與部署」](architecture.md#平台與部署)）。
+- `/media/*` 的故障由 query 參數控制（實作與完整說明在 `test/server/faults.ts`），Demo 頁可以選擇：
+
+  | 參數 | 效果 |
+  |---|---|
+  | `fault=<status>@<n>` | 第 n 個請求回應 `<status>`，例如 `503@2`、`401@4`；`200` 表示忽略 Range、回應整個檔案 |
+  | `fault=stall@<位置>` | 第一個涵蓋該檔案位置的回應送到那裡就停住，連線保持開著，例如 `stall@1MB` |
+  | `fault=drop@<位置>` | 同上，但在那裡切斷連線，例如 `drop@500KB` |
+  | `delay=<ms>` | 每個回應先等 `<ms>` 毫秒 |
+
+  規則結尾加 `+`（URL 中寫成 `%2B`）表示持續發生，例如 `503@2+`；多個規則以逗號分隔。請求的計數以完整的 URL 區分，測試在 query 加上不重複的 `id` 就互不影響；同一個 URL 的 `reload()` 接著計數。
+
+  預讀會在播放位置之前發出請求，「第 n 個請求」不一定在播放到那裡時才發生。要讓網路跟不上播放，Demo 頁的 query 可以縮短預讀（`/demo/?readahead=0.5`，另有 `cacheMiB`、`stallTimeout`、`stallAttempts`，見 `demo/main.ts`），再加上 `delay`。
 
 不需要 kikoeru 後端。cookie、`.wasm` 的 Content-Type 與壓縮屬於 kikoeru 端的部署驗證。
 
@@ -83,14 +98,25 @@
 
 | 場合 | 指令或 job | 內容 |
 |---|---|---|
-| 本機（agent 必須通過） | `pnpm verify` | lint → typecheck → Node 測試 → browser mode（Chromium）→ E2E（Chromium） |
+| 本機（agent 必須通過） | `pnpm verify` | lint → typecheck → Node 測試 → browser mode（Chromium）→ E2E（Chromium）→ fixture App（Chromium） |
 | 本機重現 CI | `pnpm verify:docker` | 在 Playwright 官方 image 內跑 Chromium 與 Firefox 的完整組合 |
 | CI `ensure-wasm`、`publish-wasm` | | wasm Release 不存在時才 build；發布以 tag 跨 PR 互斥，取得互斥後重新檢查（[ADR-0005](adr/0005-wasm-release-and-engine-package.md)） |
 | CI `check` | 依賴 `ensure-wasm`、`publish-wasm`（lint 與 typecheck 用 wasm Release 的 `libav.types.d.ts`） | lint、typecheck、Node 測試 |
-| CI `browser` | 依賴 `ensure-wasm`、`publish-wasm` 與媒體快取 | Chromium 與 Firefox 的 browser mode 與 E2E（含 leak 測試），以及 Vite fixture App 的驗收 |
+| CI `browser` | 依賴 `ensure-wasm`、`publish-wasm` 與媒體快取 | Chromium 與 Firefox 的 browser mode 與 E2E（含 leak 測試），以及 Vite fixture App 的驗收（`pnpm fixture`） |
+| CI `release` | 只在 `v*` tag 與 `workflow_dispatch`（演練）時，依賴 `check` 與 `browser` | tag 與 `package.json` 的版本一致、wasm Release 已發布，`pnpm pack` 後附在 GitHub Release；演練只上傳成 workflow artifact |
 | CI Safari | macOS runner，排程 | 見上方「瀏覽器」 |
 
 PR 必須 `check` 與 `browser` 都通過。
+
+本機 E2E 的 dev server 預設在 port 5273，非 CI 時會沿用已在跑的 server。多個 worktree 同時跑 `pnpm verify` 時，以環境變數 `E2E_PORT` 給每個 worktree 不同的 port。fixture App 的 `vite preview` 在 `FIXTURE_PORT`，沒有設定時是 `E2E_PORT` 加 1000（預設 6273），不沿用已在跑的 server。
+
+### fixture App 的驗收
+
+`test/fixture-app/` 是以 `pnpm pack` 的 tgz 安裝 Engine 的 Vite App（不加入 workspace，vite 與 Playwright 取自根目錄）。`pnpm fixture`（`test/fixture-app/run.sh`）依序：檢查套件的檔案清單 → 安裝 tgz → 以 App 的角度型別檢查（`tsconfig.app.json`）→ `vite build` → `vite preview` 上跑 `acceptance.spec.ts`：
+
+- 套件內附的 wasm 對應 `wasm/dist/` 的 wasm Release，`thirdPartyNotices` 的原始碼 URL 指向它。
+- build 輸出中 glue 與 `.wasm` 與套件內的複本 bytes 相同，glue 的 license header 完整。
+- `.wasm` 以 `application/wasm` 提供、`compileStreaming` 成功，Worker 與 worklet 載入後能播放 CI 組的檔案。
 
 ## 每張實作 issue 的最低要求
 

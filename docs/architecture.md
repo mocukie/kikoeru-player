@@ -18,7 +18,9 @@
 
 - repo 根目錄就是唯一的套件 `kikoeru-player`，不使用 pnpm workspace。
 - `package.json` 的 `exports` 只有兩個 entry：`.`（Engine）與 `./background`（[背景播放模組](adr/0006-background-playback-module.md)）。內部模組（例如 `createEngineWith`）不放進 `exports`。
-- `files` 只有 `dist/`、`LICENSE`、`NOTICE`、`LICENSES/`。
+- `files` 只有 `dist/`、`LICENSE`、`NOTICE`、`LICENSES/`（pnpm 另外一定會放 `package.json` 與 `README.md`）。`scripts/pack.ts` 檢查 `pnpm pack` 的檔案清單，不得含 LGPL 原始碼（`sources.tar`）。
+- `imports` 的 `#libav` 在 repo 內指向 `wasm/dist/` 的 frontend；`publishConfig.imports` 讓打包後的 `package.json` 改指向 `dist/wasm/` 的複本。
+- `prepack` 執行 `pnpm build`，`pnpm pack` 一定以最新的 build 打包。
 - `test/fixture-app/` 有自己的 `package.json`，但**不加入 workspace**：它要以 `pnpm pack` 產生的 tgz 安裝，才能驗證真正發出去的套件。用 link 或 workspace 安裝會繞過打包。
 
 ## 執行緒分工
@@ -41,17 +43,18 @@ src/
   worklet/         AudioWorklet，單一檔案（lib: audioworklet）
   protocol/        執行緒之間的訊息型別，只有 type
   background/      背景播放模組（套件的 "./background" entry，lib: dom）
-demo/              Demo 頁（index.html、main.ts）
+demo/              Demo 頁（index.html、main.ts）；pnpm dev 開在 /demo/
 test/
   media/           測試媒體的產生 script；輸出到 gitignored 的 test/media/out/
-  server/          Vite middleware：/media/* 的 Range 與故障注入
+  server/          Vite middleware：/media/* 的 Range 與故障注入、/src/wasm/* 對應到 wasm/dist/
   fakes/           假 media Worker、假音訊輸出、記憶體 Source
   media-worker-harness.ts  browser mode 測試以協定驅動 media Worker 的 helper（wasm 資產、測試媒體、訊號分析）
-  e2e/             Playwright 測試（*.spec.ts）
+  audio-capture.ts  browser mode 測試錄下送到 destination 的聲音（capture.worklet.ts）
+  e2e/             Playwright 測試（*.spec.ts），對 Demo 頁的 dev server 執行；容差常數在 tolerances.ts
   smoke/           不屬於任何原始碼的 browser mode smoke test，例如 CI 的音訊環境
   docker/          Playwright image 加 PulseAudio，pnpm verify:docker 與 CI browser job 的執行環境
   browser-launch.ts  Vitest browser mode 與 Playwright 共用的瀏覽器啟動設定
-  fixture-app/     Vite fixture App（不加入 workspace）
+  fixture-app/     Vite fixture App（不加入 workspace）：run.sh 以 pack 的 tgz 安裝、Vite build，acceptance.spec.ts 以 Playwright 驗收
   lint/            ESLint 設定的 Node 測試；fixtures/ 模仿套件目錄，固定依賴規則與 Worker 寫法
 scripts/           wasm 下載與 tree hash 檢查、notices 產生等 build 輔助 script
 wasm/              Dockerfile、variant、patch、版本與 sha256 清單、build script；wasm/dist/ 不進 git
@@ -95,7 +98,7 @@ Node 測試（`*.test.ts`）與 browser mode 測試（`*.browser.test.ts`）都�
 - `worker`：`lib: webworker`。
 - `worklet`：`audioworklet` 的全域型別。TypeScript 沒有內建這個 lib，改用 DOM lib generator 發布的 `@types/audioworklet`（`types: ["audioworklet"]`）。
 - `protocol`：被以上三者引用，不使用任何環境的全域型別。
-- 測試、Demo 頁、`scripts/` 各自另有 tsconfig，不輸出到 `dist/`。`scripts` 也涵蓋根目錄的 `*.config.{js,ts}`。測試用的 AudioWorklet（`test/**/*.worklet.ts`）由 `test-worklet` 以 `audioworklet` 的全域型別檢查。
+- 測試、Demo 頁、`scripts/` 各自另有 tsconfig，不輸出到 `dist/`。`scripts` 也涵蓋根目錄的 `*.config.{js,ts}`。測試用的 AudioWorklet（`test/**/*.worklet.ts`）與 `src/worklet/` 的 Node 測試由 `test-worklet` 以 `audioworklet` 的全域型別檢查。
 
 `pnpm build` 只 build `tsconfig.build.json` 引用的四個套件 project。`tsc -b` 不能搭配 `--noEmit` 使用 project references，所以 `pnpm typecheck` 也會輸出到 `dist/`；發布用的產物一律以 `pnpm build` 重新產生。
 
@@ -105,6 +108,7 @@ Node 測試（`*.test.ts`）與 browser mode 測試（`*.browser.test.ts`）都�
 - 會改變輸出的指令遞增 **epoch**（seek、選軌、外掛音軌與 offset；改速度不遞增，見 [ADR-0004](adr/0004-audio-output.md)）。Worker 送出的 PCM、`VideoFrame`、cue 與狀態都帶著 epoch，收方丟棄過期的資料。
 - 大型資料以 transfer 傳送：PCM 的 `ArrayBuffer`、`VideoFrame`、`MessagePort`。
 - 不能用 libav.js 的回傳值判斷中止（被中止的 seek 仍回傳 0），一律以 epoch 判斷（[ADR-0002](adr/0002-media-worker-per-load.md)）。
+- 診斷 log：主執行緒把 `logLevel` 告訴 Worker（`init`）與 worklet（`processorOptions`），App 沒有設定 hook 時為 null；過濾在送出端做，低於等級的 log 不跨執行緒。Worker 的 `time` 是 `performance.timeOrigin + performance.now()`，worklet 沒有 `performance`，以 context frame 表示，都由主執行緒換算成自己的 `performance.now()`。log 不帶 epoch 過濾：被取代的操作的 log 也轉送。
 
 ## 不變式
 
@@ -115,7 +119,7 @@ Node 測試（`*.test.ts`）與 browser mode 測試（`*.browser.test.ts`）都�
 - **不得要求 COOP/COEP**，不使用 `SharedArrayBuffer`；wasm 與 JS 的銜接只用 Asyncify（[ADR-0001](adr/0001-libavjs-asyncify.md)）。
 - **Worker 的寫法**：只用字面寫法 `new Worker(new URL('./….js', import.meta.url), { type: 'module' })`，讓 App 的 Vite 能辨識並 bundle。路徑是 `./` 或 `../` 開頭、`.js` 結尾的字串字面值，例如主執行緒的 `'../worker/index.js'`。
 - **AudioWorklet**：`addModule(new URL(…))` 只會原樣複製檔案，所以 worklet 是不 import 任何 runtime 程式碼的單一檔案。
-- **wasm 資產**：glue 與 `.wasm` 是原封不動的資產，以 `new URL('./libav-….wasm.mjs', import.meta.url)` 參照，Worker 用 `import(/* @vite-ignore */ glueUrl)` 載入，license header 不經過 bundler（[ADR-0005](adr/0005-wasm-release-and-engine-package.md)）。
+- **wasm 資產**：glue 與 `.wasm` 是原封不動的資產，以 `new URL('./libav-….wasm.mjs', import.meta.url)` 參照，Worker 用 `import(/* @vite-ignore */ glueUrl)` 載入，license header 不經過 bundler（[ADR-0005](adr/0005-wasm-release-and-engine-package.md)）。主執行緒的 `main/wasm.ts` 以 `../wasm/` 參照 `dist/wasm/` 的複本；本 repo 的 dev server 與 browser mode 由 `test/server/` 把 `/src/wasm/` 對應到 `wasm/dist/`。
 - **libav.js 的 frontend**：Worker 只在 `worker/libav.ts` 以 package.json 的 subpath import `#libav` 引用它（runtime 是 frontend 的 `.mjs`，型別是同一個 Release 的 `libav.types.d.ts`），libav.js 的型別不離開這個檔案。
 - **wasm 的修改**：只能改 `wasm/` 再重新 build；對 libav.js 的修改是 `wasm/` 內的 patch，不 fork。不得啟用 FFmpeg 的 GPL 元件。
 
@@ -140,7 +144,7 @@ Node 測試（`*.test.ts`）與 browser mode 測試（`*.browser.test.ts`）都�
 ## Build 產物
 
 - `pnpm build` 依各 tsconfig 以 tsc 輸出到 `dist/`，保留 `src/` 的目錄結構（`dist/index.js`、`dist/main/`、`dist/worker/`、`dist/worklet/`、`dist/background/`）。
-- wasm、glue 與 libav.js frontend 從 `wasm/dist/` 複製到 `dist/wasm/`。
-- `scripts/` 在 build 時產生 `wasm.json`（對應的 wasm Release tag 與 sha256）、`NOTICE`，以及寫入 wasm Release 原始碼 URL 的 `thirdPartyNotices`。
+- wasm、glue 與 libav.js frontend 從 `wasm/dist/` 原封不動複製到 `dist/wasm/`（先以 `SHA256SUMS` 驗證；不含 `libav.types.d.ts`）。
+- `scripts/package.ts` 在 tsc 之後產生：`dist/wasm/wasm.json`（對應的 wasm Release tag、網址與每個複本的 sha256）、根目錄的 `NOTICE` 與 `LICENSES/LGPL-2.1.txt`（gitignored），並把 tsc 輸出的 `dist/main/third-party-notices.js`（佔位的空陣列）換成寫入 wasm Release 原始碼 URL 與 NOTICE 全文的 `thirdPartyNotices`。直接使用原始碼（Demo 頁、測試）時 `thirdPartyNotices` 是空陣列。
 - `dev`、`build`、`test:browser`、`e2e` 開始前先檢查 `wasm/dist/` 是否符合 `wasm/` 的 tree hash，以及 CI 組的測試媒體是否存在；缺少時停下並提示 `pnpm wasm:fetch`、`pnpm media:gen`，不自動下載或產生。
 - CI 與發版流程見 [ADR-0005](adr/0005-wasm-release-and-engine-package.md) 與 [`testing.md`](testing.md#本機與-ci)。

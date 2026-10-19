@@ -64,6 +64,14 @@ _Avoid_: 播放狀態、state（指意圖時）
 Engine 唯一的時鐘，指此刻聽到的聲音在媒體時間軸上的位置；沒有音軌或音訊已結束時，以靜音繼續推進到媒體結尾。影片與字幕都依它對齊。
 _Avoid_: 主時鐘、master clock、系統時間
 
+**變速（Playback rate）**:
+不改變音高的播放速度（time stretch），程式中以 `playbackRate` 表示，沿用 `HTMLMediaElement.playbackRate`。改變時已送出的聲音照舊速度播完（drain），不中斷播放。
+_Avoid_: 倍速、speed、tempo（`tempo` 只指 `atempo` filter 的參數）
+
+**time map**:
+media Worker 送出的音訊與媒體時間軸的對應：輸出依速度分段，每段記下開頭的媒體時間與速度，音訊時鐘依它把播出的 sample 換算成媒體時間。
+_Avoid_: 時間對應表、timeline map
+
 **卡住（Stall）**:
 想播放卻在時限內等不到資料的情況，Engine 會自動嘗試恢復。
 _Avoid_: 凍結、freeze、hang、lag

@@ -1,12 +1,14 @@
 // 真實的 media Worker：以主執行緒的寫法建立，依 src/protocol/ 回覆 probe 結果與 PCM。
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, describe, expect, test } from 'vitest';
 import {
   audioTracks,
+  beepOnsets,
+  faultyMediaUrl,
   importOnlyWasm,
   mediaUrl,
   WorkerDriver,
 } from '../../test/media-worker-harness.js';
-import type { WorkerToMainMessage } from '../protocol/index.js';
+import type { RetryPolicy, WorkerLimits, WorkerToMainMessage } from '../protocol/index.js';
 
 const workers: Worker[] = [];
 
@@ -14,7 +16,11 @@ afterEach(() => {
   for (const worker of workers.splice(0)) worker.terminate();
 });
 
-function spawn(module?: WebAssembly.Module): Promise<WorkerDriver> {
+function spawn(
+  module?: WebAssembly.Module,
+  retry?: RetryPolicy,
+  limits?: Partial<WorkerLimits>,
+): Promise<WorkerDriver> {
   const worker = new Worker(new URL('./index.js', import.meta.url), { type: 'module' });
   workers.push(worker);
   return WorkerDriver.init(
@@ -28,9 +34,20 @@ function spawn(module?: WebAssembly.Module): Promise<WorkerDriver> {
         };
       },
     },
-    { module },
+    { module, retry, ...(limits && { limits }) },
   );
 }
+
+test('script 執行完畢就送出 ready，在任何其他訊息之前', async () => {
+  const worker = new Worker(new URL('./index.js', import.meta.url), { type: 'module' });
+  workers.push(worker);
+  const first = await new Promise<WorkerToMainMessage>((resolve) => {
+    worker.onmessage = ({ data }: MessageEvent<WorkerToMainMessage>) => {
+      resolve(data);
+    };
+  });
+  expect(first).toEqual({ type: 'ready' });
+});
 
 test('http 來源：回覆 probe 結果與帶 epoch 的 PCM，直到 EOF', async () => {
   const driver = await spawn();
@@ -43,7 +60,23 @@ test('http 來源：回覆 probe 結果與帶 epoch 的 PCM，直到 EOF', async
   expect(pcm.chunks.every((c) => c.epoch === 4)).toBe(true);
   expect(pcm.left.length).toBe(10 * 48_000);
   expect(driver.worklet.at(-1)).toEqual({ type: 'eof', epoch: 4 });
-  expect(await driver.stats()).toEqual({ libavInstances: 1 });
+  expect(await driver.stats()).toMatchObject({ libavInstances: 1 });
+});
+
+test('http 來源：連續 seek 時中止讀取，最後一個 seek 從落點輸出到結尾', async () => {
+  const driver = await spawn();
+  await driver.load({ kind: 'http', url: mediaUrl('audio/pcm-s16.wav') });
+  await driver.decode(0, { frames: 4096 });
+  for (let epoch = 2; epoch < 32; epoch++) {
+    driver.post({ type: 'seek', epoch, time: (epoch * 1.37) % 9.5 });
+    driver.need(epoch, 48_000);
+    if (epoch % 4 === 0) await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  const pcm = await driver.seek(7.25, 32);
+  expect(pcm.time).toBe(7.25);
+  expect(pcm.chunks.every((c) => c.epoch === 32)).toBe(true);
+  expect(pcm.left.length).toBe(2.75 * 48_000);
+  expect(driver.messages.filter((m) => m.type === 'error' || m.type === 'crash')).toEqual([]);
 });
 
 test('bytes 來源以 transfer 傳入；每個聲道的 PCM 各自一個 transfer 過來的 buffer', async () => {
@@ -65,7 +98,7 @@ test('無法辨識的格式回覆 FORMAT_UNSUPPORTED，instance 被丟棄', asyn
   await expect(driver.load({ kind: 'bytes', data: garbage })).rejects.toMatchObject({
     code: 'FORMAT_UNSUPPORTED',
   });
-  expect(await driver.stats()).toEqual({ libavInstances: 0 });
+  expect(await driver.stats()).toMatchObject({ libavInstances: 0 });
 });
 
 test('http 404 回覆 SOURCE_NOT_FOUND', async () => {
@@ -73,7 +106,7 @@ test('http 404 回覆 SOURCE_NOT_FOUND', async () => {
   await expect(
     driver.load({ kind: 'http', url: mediaUrl('audio/does-not-exist.flac') }),
   ).rejects.toMatchObject({ code: 'SOURCE_NOT_FOUND', fatal: true });
-  expect(await driver.stats()).toEqual({ libavInstances: 0 });
+  expect(await driver.stats()).toMatchObject({ libavInstances: 0 });
 });
 
 test('wasm 與 glue 的 imports 不符：load 回覆 ASSET_LOAD_FAILED，instance 被丟棄', async () => {
@@ -84,5 +117,152 @@ test('wasm 與 glue 的 imports 不符：load 回覆 ASSET_LOAD_FAILED，instanc
     code: 'ASSET_LOAD_FAILED',
     fatal: true,
   });
-  expect(await driver.stats()).toEqual({ libavInstances: 0 });
+  expect(await driver.stats()).toMatchObject({ libavInstances: 0 });
+});
+
+describe('http 的故障（test/server 的故障注入）', () => {
+  const retry: RetryPolicy = { attempts: 2, baseDelayMs: 10 };
+  /** 10 秒、48 kHz stereo s16 的 WAV（約 1.8 MiB）：Worker 每次讀 256 KiB，播放中會發出多個請求。 */
+  const WAV = 'audio/pcm-s16.wav';
+  const FRAMES = 10 * 48_000;
+
+  test.each([
+    ['401@1', 'SOURCE_UNAUTHORIZED', 401],
+    ['403@1', 'SOURCE_FORBIDDEN', 403],
+    ['410@1', 'SOURCE_NOT_FOUND', 410],
+    ['200@1', 'SOURCE_RANGE_UNSUPPORTED', 200],
+    ['503@1%2B', 'SOURCE_SERVER', 503],
+  ])('開檔時 %s 回報 %s，帶 status 與 url', async (fault, code, status) => {
+    const driver = await spawn(undefined, retry);
+    const url = faultyMediaUrl('audio/flac.flac', `fault=${fault}`);
+    await expect(driver.load({ kind: 'http', url })).rejects.toMatchObject({
+      code,
+      fatal: true,
+      detail: { status, url },
+    });
+    expect(await driver.stats()).toMatchObject({ libavInstances: 0 });
+  });
+
+  test('503@2：重試後恢復，解出完整的音訊', async () => {
+    const driver = await spawn(undefined, retry);
+    const url = faultyMediaUrl('audio/flac.flac', 'fault=503@2');
+    await driver.load({ kind: 'http', url });
+    const pcm = await driver.decode(0);
+    expect(pcm.left.length).toBe(FRAMES);
+  });
+
+  test('delay=200：回應變慢仍然完成', async () => {
+    const driver = await spawn(undefined, retry);
+    const url = faultyMediaUrl('audio/flac.flac', 'delay=200');
+    await driver.load({ kind: 'http', url });
+    expect((await driver.decode(0)).left.length).toBe(FRAMES);
+  });
+
+  test('drop@500KB：播放中斷線，重試後恢復，解出完整的音訊', async () => {
+    const driver = await spawn(undefined, retry);
+    await driver.load({ kind: 'http', url: faultyMediaUrl(WAV, 'fault=drop@500KB') });
+    expect((await driver.decode(0)).left.length).toBe(FRAMES);
+  });
+
+  test('drop@500KB+：重試用完，播放中回報 SOURCE_NETWORK', async () => {
+    const driver = await spawn(undefined, retry);
+    const url = faultyMediaUrl(WAV, 'fault=drop@500KB%2B');
+    await driver.load({ kind: 'http', url });
+    await expect(driver.decode(0, { epoch: 2 })).rejects.toMatchObject({
+      type: 'error',
+      epoch: 2,
+      error: { code: 'SOURCE_NETWORK', fatal: true, detail: { url } },
+    });
+  });
+
+  test('播放中 401 不重試，回報 SOURCE_UNAUTHORIZED', async () => {
+    // 第 1 個請求探測大小，第 2 個是開檔，之後是預讀：預讀 1 秒（不到 1 個區塊），每個請求 1 個區塊。
+    // 預讀遇到 401 之後，播放讀到那裡才回報。
+    const driver = await spawn(
+      undefined,
+      { attempts: 3, baseDelayMs: 2000 },
+      { readaheadSeconds: 1 },
+    );
+    const url = faultyMediaUrl(WAV, 'fault=401@4');
+    await driver.load({ kind: 'http', url });
+    const started = performance.now();
+    await expect(driver.decode(0, { epoch: 2 })).rejects.toMatchObject({
+      type: 'error',
+      epoch: 2,
+      error: { code: 'SOURCE_UNAUTHORIZED', fatal: true, detail: { status: 401, url } },
+    });
+    // 有重試的話至少要等一次 2 秒的退避。
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+
+  test('stall@0：開檔的讀取停住，被新的 load 取代後新的 load 照常完成', async () => {
+    const driver = await spawn(undefined, retry);
+    driver.post({
+      type: 'load',
+      epoch: 1,
+      source: { kind: 'http', url: faultyMediaUrl('audio/flac.flac', 'fault=stall@0') },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(driver.messages.filter((m) => m.type !== 'stats' && m.type !== 'ready')).toEqual([]);
+
+    const media = await driver.load({ kind: 'http', url: mediaUrl('audio/flac.flac') }, 2);
+    expect(audioTracks(media)).toHaveLength(1);
+    expect(await driver.stats()).toMatchObject({ libavInstances: 1 });
+    expect(driver.messages.filter((m) => 'epoch' in m && m.epoch === 1)).toEqual([]);
+  });
+});
+
+describe('Range 快取與預讀', () => {
+  /** 等到預讀停下（抓到目標或檔尾）、沒有進行中的請求。 */
+  async function settled(driver: WorkerDriver) {
+    for (;;) {
+      const stats = await driver.stats();
+      if (!stats.cache.fetching && stats.network.inflight.length === 0) return stats;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  }
+
+  test('往前 seek 落在預讀範圍內時命中快取，不發出新的請求', async () => {
+    const driver = await spawn();
+    await driver.load({ kind: 'http', url: mediaUrl('audio/pcm-s16.wav') });
+    await driver.decode(0, { epoch: 2, frames: 48_000 });
+    const before = await settled(driver);
+    expect(before.cache.aheadBytes).toBeGreaterThan(0);
+
+    const pcm = await driver.seek(6, 3, 48_000);
+    expect(pcm.time).toBe(6);
+    const after = await driver.stats();
+    expect(after.cache.hits).toBeGreaterThan(before.cache.hits);
+    expect(after.cache.misses).toBe(before.cache.misses);
+    expect(after.network.bytesLoaded).toBe(before.network.bytesLoaded);
+  });
+
+  test('交錯不良的檔案（音訊在 5 秒的影片之後）照常播放', async () => {
+    const driver = await spawn();
+    const media = await driver.load({ kind: 'http', url: mediaUrl('video/bad-interleave.mp4') });
+    const [track] = audioTracks(media);
+    const pcm = await driver.decode(track?.streamIndex ?? -1, { epoch: 2 });
+    // AAC 結尾多出的 sample 由 worklet 依 duration 截掉。
+    expect(pcm.left.length).toBeGreaterThanOrEqual(10 * 48_000);
+    // 沒有 edit list 的 fragmented MP4：影片的 composition offset（2 個 frame）讓整條時間軸後移約 67 ms，
+    // 這是容器的時間戳，不是 demux 的問題；只檢查 10 個 beep 都在、間隔 1 秒。
+    const onsets = beepOnsets(pcm.left, 48_000);
+    expect(onsets).toHaveLength(10);
+    const [first = NaN] = onsets;
+    expect(first).toBeLessThan(0.1);
+    onsets.forEach((onset, i) => {
+      expect(onset - first).toBeCloseTo(i, 3);
+    });
+  });
+
+  test('封包佇列超過硬上限時回報 fatal 的 MEMORY_LIMIT', async () => {
+    // 以很小的硬上限模擬：一批 demux 出的封包就超過。只播音訊時要有兩條選用中的軌才會真的超過（影片的 issue）。
+    const driver = await spawn(undefined, undefined, { packetQueueBytes: 1024 });
+    await driver.load({ kind: 'http', url: mediaUrl('audio/pcm-s16.wav') });
+    await expect(driver.decode(0, { epoch: 2 })).rejects.toMatchObject({
+      type: 'error',
+      epoch: 2,
+      error: { code: 'MEMORY_LIMIT', fatal: true },
+    });
+  });
 });
