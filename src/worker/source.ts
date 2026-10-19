@@ -12,6 +12,26 @@ export interface ByteSource {
   readonly size: number;
   /** 讀取 `[offset, offset + length)`，超出結尾的部分截掉；被 `signal` 中止時以 AbortError reject。 */
   read(offset: number, length: number, signal: AbortSignal): Promise<Uint8Array>;
+  /** 中止所有進行中的請求（含預讀），之後的讀取照常；seek 時呼叫。沒有背景請求的來源省略。 */
+  abort?(): void;
+  /** 來源被丟棄：中止請求、釋放它佔用的快取。沒有東西要釋放的來源省略。 */
+  close?(): void;
+  /** 預讀與網路的統計（`WorkerStats` 的 cache、network）；不經過 Range 快取的來源省略。 */
+  stats?(): SourceStats;
+}
+
+/** 一個來源的預讀與網路統計。 */
+export interface SourceStats {
+  /** 從播放位置起連續在快取中的 bytes。 */
+  aheadBytes: number;
+  /** 實際生效的預讀目標（bytes）。 */
+  readaheadTarget: number;
+  /** 是否處於預讀的抓取階段。 */
+  fetching: boolean;
+  /** 累計讀取的 bytes。 */
+  bytesLoaded: number;
+  /** 進行中的請求。 */
+  inflight: InflightRequest[];
 }
 
 export interface SourceDeps {

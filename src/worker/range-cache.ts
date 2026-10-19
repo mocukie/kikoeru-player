@@ -5,7 +5,7 @@
 
 import type { WorkerError } from './errors.js';
 import { silentLogger, type Logger } from './log.js';
-import { retryable, type ByteSource, type RangeClient } from './source.js';
+import { retryable, type ByteSource, type RangeClient, type SourceStats } from './source.js';
 
 /** 區塊大小：LRU 與對齊的單位。 */
 export const BLOCK_BYTES = 256 * 1024;
@@ -222,6 +222,16 @@ export class CachedSource implements ByteSource {
     this.#closed = true;
     this.abort();
     this.#cache.drop(this.#id);
+  }
+
+  stats(): SourceStats {
+    return {
+      aheadBytes: this.aheadBytes,
+      readaheadTarget: this.readaheadTarget,
+      fetching: this.fetching,
+      bytesLoaded: this.client.bytesLoaded,
+      inflight: this.client.inflight(),
+    };
   }
 
   /** 等到 `[first, last]` 的區塊都在快取中；沒有在請求中的區塊由這個讀取發出請求。 */
