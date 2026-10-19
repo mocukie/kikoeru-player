@@ -14,6 +14,18 @@ export const STRETCHED_BEEP_ONSET_TOLERANCE = 0.03;
 /** `atempo` 1.25x 時相鄰兩個 beep 被聽到的間隔，與 0.8 秒的差（秒）。 */
 export const STRETCHED_BEEP_INTERVAL_TOLERANCE = 0.01;
 
+/**
+ * 播放中 `reload()`：按下 reload 之前讀到的 `currentTime` 與 reload 完成、回到 playing 之後讀到的差的上限（秒）。
+ * 包括按下到 Engine 收到指令之間、以及回到 playing 到讀取之間仍在播放的時間。
+ */
+export const RELOAD_RESUME_SLACK = 1;
+
+/**
+ * error 之後 `reload()`：回到 playing 之後讀到的 `currentTime` 比 `EngineError.position` 晚的上限（秒），即回到 playing
+ * 到讀取之間播放的時間。
+ */
+export const ERROR_RELOAD_RESUME_SLACK = 0.5;
+
 /** bufferedchange 的間隔可以比 `timeUpdateInterval` 短多少（ms）：timer 的觸發時間與頁面取時間的誤差。 */
 export const THROTTLE_SLACK_MS = 20;
 
@@ -22,3 +34,12 @@ export const THROTTLE_SLACK_MS = 20;
  * 本身會增長（每次換檔十幾行），所以不是 0。
  */
 export const LEAK_HEAP_GROWTH_BYTES = 4 * 1024 * 1024;
+
+/** 改變 volume／muted 之後，等 GainNode（time constant 約 10 ms）趨近新值再開始錄音的時間（ms）。 */
+export const GAIN_SETTLE_MS = 100;
+
+/** volume 0.5 時錄到的峰值與 volume 1 的比，和 0.5 的差。 */
+export const VOLUME_RATIO_TOLERANCE = 0.05;
+
+/** muted 時錄到的峰值上限。 */
+export const MUTED_PEAK_MAX = 1e-3;

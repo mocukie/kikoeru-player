@@ -27,14 +27,16 @@ export interface BackgroundPlayback {
  *
  * - audioSession：有 `navigator.audioSession` 時，在每次 `beforeaudiostart` 設定 `type = "playback"`。
  * - 靜音 anchor：模組自己產生 5 秒、8 kHz、mono 的靜音 WAV（blob URL），`loop`、`volume = 0.0001`，不掛進 DOM。
- *   - 跟著播放意圖 `paused` 走，不看 `state`：`paused === false` 時播放（含 loading、seeking、buffering、ended），
- *     `paused === true`、error、idle 時停止。
+ *   - 跟著播放意圖 `paused` 走：`paused === false` 時播放（含 loading、seeking、buffering、ended），`paused === true`
+ *     時停止。唯一看 `state` 的例外是沒有媒體可播的 error 與 idle：即使 `paused === false` 也停止，離開之後
+ *     （`load()`、`reload()`）再開始。
  *   - 第一次在 `beforeaudiostart` 內同步 `play()` 以取得 gesture 授權；觸發它的 `unlockAudio()`／`play()` 呼叫結束後
  *     （microtask）`paused` 仍為 true 時隨即 `pause()`。
  *   - 不是模組自己觸發的 pause／play（Android 來電、audio focus 被搶、沒有 Media Session handler 時的
  *     通知與鎖屏按鍵）鏡像為 `engine.pause()`／`engine.play()`，`statechange.reason` 為 `'command'`，不另外通知 App。
  *     沒有媒體（idle、error）時外部的 play 不鏡像，anchor 停回去。
- *   - anchor 的 `play()` 被拒不算 Engine 的錯誤、不影響播放；下一次 `beforeaudiostart` 或 `paused` 變成 false 時再試。
+ *   - anchor 的 `play()` 被拒不算 Engine 的錯誤、不影響播放；下一次 `beforeaudiostart`，或 `paused` 變成 false
+ *     （含離開 error、idle）時再試，`paused` 維持 false 的其他 state 轉換不重試。
  *
  * App 的 CSP 若限制 `media-src`，要允許 `blob:`。Media Session 的 handler、metadata 與 position 仍由 App 負責。
  */

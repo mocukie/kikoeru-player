@@ -16,10 +16,12 @@
 ## Consequences
 
 - 「現在聽到的位置」以 `getOutputTimestamp()` 換算為主，取不到時依序用 `currentTime − outputLatency`、`currentTime − baseLatency`。WebKit 與 Firefox 的 `contextTime` 是否已經扣掉裝置延遲，要靠實機驗證；如果沒有扣，就在該瀏覽器上自己扣。v1 不提供裝置層級的延遲補償。
+- worklet 向 Worker 供料是事件驅動的：每個 render quantum 檢查 ring 的水位（加上已要求、還沒收到的 frame），低於 `refillMs`（flush 或 starved 之後是 `targetMs`）時送出增量的 `need`，要求補到 `targetMs`。#35 原本寫的「約每 50 ms 回報消耗量與水位」沒有採用：Worker 只需要知道還要送多少，定期回報在水位充足時全是多餘的訊息，而以增量要求加上「已要求」的計數，不會因為回報與供料的時間差而重複要求。給主執行緒的水位與 underrun 次數改由約每 250 ms 一次的 clock（以及每次狀態回報之前的 clock）帶著，供 `getStats().audio` 使用。
 - underrun 時 worklet 淡出，進入 starved，等 ring 補回目標水位才淡入。starved 超過約 250 ms 才進入 `buffering`；更短的只計入 `getStats().audio.underruns`。
 - media Worker 維護 time map：輸出依速度分段，PCM chunk 帶第一個 frame 的媒體時間與速度（不跨段），worklet 以它推進時鐘並在速度改變的那個 frame 送出 clock，`currentTime` 以 clock 的速度內插。沒有 PCM（`eof` 之後的靜音）時，worklet 以主執行緒告訴它的速度推進。`atempo` 的輸出以 window 為單位疊接，聲音相對 time map 有最多約一個 window 的偏移（靜音之後的起點尤其明顯），E2E 的容差另外訂定。
 - ring buffer 的水位是 `EngineOptions.audioBuffer`，依 iOS／Android／桌面各有預設值；淡入淡出的長度是 `EngineOptions.audioFadeMs`。1.0x bypass 的 crossfade 不能設定。
 - `suspend()`、`resume()`、`close()` 一律經 Engine 自己的串行佇列，不看 `state`，每個呼叫有 2 秒的 timeout。
+  - 唯一讀取 state 的地方是錯誤分類：`resume()` 逾時時，若 `statechange` 最後帶來的 state 是 `interrupted`（系統中斷中），回報 `AUDIO_OUTPUT`，否則回報 `AUDIO_LOCKED`（實作於 #41）。這是硬性約束 4 允許的例外：要不要 `resume()`、何時重試與 Engine 的 state 轉換都不依賴它，它只決定 reject 的錯誤碼，讓 App 分辨「等中斷結束」與「需要 user gesture」。
 - context 停住時的 watchdog：Engine 處於 `playing`，worklet 回報的 frame 卻超過 1 秒沒有前進時，依序執行：
   1. 先 `suspend()` 再 `resume()`。
   2. 重建 `AudioContext`：重新 `addModule`，給 Worker 新的 `MessageChannel`，並遞增 epoch。新的 context 因為沒有 user gesture 而沒有啟動時，送出非致命的 `AUDIO_LOCKED`。

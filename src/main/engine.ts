@@ -194,6 +194,10 @@ class EngineImpl extends EventTarget implements Engine {
   /** 這份媒體是否播放過；seek 結束時決定回到 `'ready'` 或 `'paused'`。 */
   #played = false;
   #worker: MediaWorker | null = null;
+  /** 0.1.0 不解碼影片：有影片軌也還沒有畫面，一律為 null。#50 接上影片之後改為選用中影片軌畫出的 frame 的尺寸。 */
+  readonly videoSize: VideoSize | null = null;
+  /** 建立後還沒 terminate 的 media Worker 數（`getStats().resources.workers`）。 */
+  #liveWorkers = 0;
   /** AudioContext 與 worklet；`suspend()`、`resume()`、`close()` 都經它的串行佇列。 */
   readonly #context: AudioContextLifecycle;
   /** 最後一次告訴 worklet 的播放意圖；null 表示這個音訊輸出還沒收到過。 */
@@ -311,9 +315,6 @@ class EngineImpl extends EventTarget implements Engine {
   }
   get error(): EngineError | null {
     return this.#error;
-  }
-  get videoSize(): VideoSize | null {
-    return notImplemented('videoSize');
   }
   get audioUnlocked(): boolean {
     return this.#context.unlocked;
@@ -508,7 +509,7 @@ class EngineImpl extends EventTarget implements Engine {
       network: worker?.network ?? { bytesLoaded: 0, inflight: [] },
       wasmHeapBytes: worker?.wasmHeapBytes ?? 0,
       resources: {
-        workers: this.#worker ? 1 : 0,
+        workers: this.#liveWorkers,
         libavInstances: worker?.libavInstances ?? 0,
         openVideoFrames: 0,
       },
@@ -602,11 +603,7 @@ class EngineImpl extends EventTarget implements Engine {
       load.seek?.reject(abortReason(signal));
       if (this.#loadContext === load) this.#loadContext = null;
     });
-    this.#played = false;
-    this.#error = null;
-    this.#watchdogStep = 0;
-    this.#buffer = null;
-    this.#lastReadError = null;
+    this.#resetMediaState();
     this.#currentTime = startTime;
     if (!reloadOf) this.#publishMedia(null, noSelection);
     signal.throwIfAborted();
@@ -768,16 +765,21 @@ class EngineImpl extends EventTarget implements Engine {
     this.#terminateWorker();
     this.#loadContext = null;
     this.#lastLoad = null;
-    this.#played = false;
-    this.#error = null;
-    this.#watchdogStep = 0;
-    this.#buffer = null;
-    this.#lastReadError = null;
+    this.#resetMediaState();
     const epoch = ++this.#epoch;
     this.#flushAudio(0);
     this.#publishMedia(null, noSelection);
     if (this.#epoch !== epoch) return;
     this.#setState('idle', 'command', true);
+  }
+
+  /** 換成新的媒體（load）或結束媒體時，清掉屬於上一份媒體的播放紀錄、錯誤、watchdog 的進度與緩衝資訊。 */
+  #resetMediaState(): void {
+    this.#played = false;
+    this.#error = null;
+    this.#watchdogStep = 0;
+    this.#buffer = null;
+    this.#lastReadError = null;
   }
 
   // ───────────────────────────── 訊息 ─────────────────────────────
@@ -845,6 +847,7 @@ class EngineImpl extends EventTarget implements Engine {
       },
     });
     this.#worker = worker;
+    this.#liveWorkers++;
     return worker;
   }
 
@@ -1153,13 +1156,9 @@ class EngineImpl extends EventTarget implements Engine {
     this.dispatchEvent(new StateChangeEvent({ state, previous, paused, reason }));
     if (stall && stall.attempts > 0 && state === 'playing' && this.#epoch === epoch) {
       const { since, attempts } = stall;
-      this.#log.log('info', 'io', '卡住後恢復播放', {
-        stalledMs: performance.now() - since,
-        attempts,
-      });
-      this.dispatchEvent(
-        new StallRecoveredEvent({ stalledMs: performance.now() - since, attempts }),
-      );
+      const stalledMs = performance.now() - since;
+      this.#log.log('info', 'io', '卡住後恢復播放', { stalledMs, attempts });
+      this.dispatchEvent(new StallRecoveredEvent({ stalledMs, attempts }));
     }
     this.#notify();
   }
@@ -1414,8 +1413,11 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   #terminateWorker(): void {
-    if (this.#worker) this.#log.log('debug', 'worker', 'terminate media Worker');
-    this.#worker?.terminate();
+    if (this.#worker) {
+      this.#log.log('debug', 'worker', 'terminate media Worker');
+      this.#worker.terminate();
+      this.#liveWorkers--;
+    }
     this.#worker = null;
     for (const resolve of this.#statsRequests.values()) resolve(null);
     this.#statsRequests.clear();

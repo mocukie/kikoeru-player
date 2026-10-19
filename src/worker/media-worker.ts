@@ -23,7 +23,7 @@ import { LibavMedia, type Instantiate, type LibavAssets } from './libav.js';
 import { createWorkerLogger, silentLogger, type Logger } from './log.js';
 import { NORMAL_QUEUE_BYTES, NORMAL_QUEUE_SECONDS } from './packet-queue.js';
 import { hasPlayableTrack, toProbedMedia } from './probe.js';
-import { CachedSource, RangeCache } from './range-cache.js';
+import { RangeCache } from './range-cache.js';
 import { openSource, type ByteSource } from './source.js';
 
 export interface MediaWorkerDeps {
@@ -70,7 +70,7 @@ interface Load {
   controller: AbortController;
   /** 開檔完成後才有。 */
   media: LibavMedia | null;
-  /** 開好的來源；http 時是 `CachedSource`。 */
+  /** 開好的來源；http 時經過 Range 快取（`CachedSource`）。 */
   source: ByteSource | null;
   /** probe 之後才有。 */
   tracker: BufferTracker | null;
@@ -240,7 +240,7 @@ export class MediaWorker {
           }));
       const opened = await open(wire, signal, env.retry);
       if (signal.aborted) {
-        if (opened instanceof CachedSource) opened.close();
+        opened.close?.();
         signal.throwIfAborted();
       }
       load.source = opened;
@@ -308,7 +308,7 @@ export class MediaWorker {
     load.media?.abortReads();
     // seek 時進行中的網路請求（含預讀）一起中止：卡住的請求要換新的才能恢復。開檔後的第一次輸出不 seek，
     // demuxer 接著讀，不必中止。
-    if (message.seek && load.source instanceof CachedSource) load.source.abort();
+    if (message.seek) load.source?.abort?.();
     const output = new AbortController();
     this.#output = output;
     this.#demand.setEpoch(message.epoch);
@@ -383,7 +383,7 @@ export class MediaWorker {
     if (load.disposed) return;
     load.disposed = true;
     load.controller.abort();
-    if (load.source instanceof CachedSource) load.source.close();
+    load.source?.close?.();
     load.media = null;
     if (load.hasInstance) this.#libavInstances--;
     if (this.#load === load) this.#load = null;
@@ -391,23 +391,22 @@ export class MediaWorker {
 
   #stats(): WorkerStats {
     const env = this.#env;
-    const source = this.#load?.source;
-    const cached = source instanceof CachedSource ? source : null;
+    const source = this.#load?.source?.stats?.();
     const pipeline = this.#pipeline;
     return {
       libavInstances: this.#libavInstances,
       cache: {
         bytes: env?.cache.bytes ?? 0,
         limitBytes: env?.cache.limitBytes ?? 0,
-        aheadBytes: cached?.aheadBytes ?? 0,
-        readaheadTarget: cached?.readaheadTarget ?? 0,
-        fetching: cached?.fetching ?? false,
+        aheadBytes: source?.aheadBytes ?? 0,
+        readaheadTarget: source?.readaheadTarget ?? 0,
+        fetching: source?.fetching ?? false,
         hits: env?.cache.hits ?? 0,
         misses: env?.cache.misses ?? 0,
       },
       network: {
-        bytesLoaded: cached?.client.bytesLoaded ?? 0,
-        inflight: cached?.client.inflight() ?? [],
+        bytesLoaded: source?.bytesLoaded ?? 0,
+        inflight: source?.inflight ?? [],
       },
       packetQueue: {
         audioSeconds: pipeline?.queuedSeconds ?? 0,

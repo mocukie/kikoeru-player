@@ -1,5 +1,6 @@
 // createEngine() 的選項驗證與預設值。
 
+import type { AudioBufferWatermarks } from '../protocol/index.js';
 import { isLogLevel } from './log.js';
 import type { Platform } from './platform.js';
 import type { EngineOptions, LogHook, LogLevel } from './types.js';
@@ -18,7 +19,7 @@ export interface ResolvedEngineOptions {
   stallAttempts: number;
   preferredLanguages: { audio: readonly string[]; subtitle: readonly string[] };
   suspendVideoWhenHidden: boolean;
-  audioBuffer: { targetMs: number; refillMs: number; capacityMs: number };
+  audioBuffer: AudioBufferWatermarks;
   audioFadeMs: number;
   log: LogHook | null;
   logLevel: LogLevel;

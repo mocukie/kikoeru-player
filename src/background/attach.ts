@@ -1,7 +1,8 @@
 // 背景播放模組的實作：靜音 anchor 跟著 Engine 的播放意圖、外部操作的鏡像、audioSession 的設定與還原。
 // anchor 元素與 audioSession 由 `BackgroundEnv` 注入，Node 測試以假物件驅動；公開的 entry 在 index.ts。
 
-import { isAbortError, type Engine, type LogEntry, type LogHook } from '../index.js';
+import { isAbortError, type Engine, type LogEntry } from '../index.js';
+import type { BackgroundPlaybackOptions } from './index.js';
 
 /** anchor 用到的 `HTMLAudioElement` 成員。 */
 export interface AnchorElement extends EventTarget {
@@ -27,13 +28,6 @@ export interface BackgroundEnv {
   audioSession: AudioSessionLike | undefined;
 }
 
-/** `attachWith()` 的選項，同 `BackgroundPlaybackOptions`。 */
-export interface AttachOptions {
-  audioSession?: boolean;
-  anchor?: boolean;
-  log?: LogHook;
-}
-
 const ANCHOR_SECONDS = 5;
 const ANCHOR_SAMPLE_RATE = 8000;
 const ANCHOR_VOLUME = 0.0001;
@@ -43,7 +37,7 @@ const attached = new WeakSet<Engine>();
 
 export function attachWith(
   engine: Engine,
-  options: AttachOptions,
+  options: BackgroundPlaybackOptions,
   env: BackgroundEnv,
 ): { detach(): void } {
   if (attached.has(engine)) {
@@ -76,15 +70,25 @@ export function attachWith(
   /** anchor 該不該播：跟著播放意圖，error 與 idle 時沒有媒體可播。 */
   const wanted = () => !engine.paused && engine.state !== 'error' && engine.state !== 'idle';
 
+  // 模組自己發出、還沒有結果的 play()：期間不再 play()；模組自己 pause() 時清掉（那個 play() 會以 AbortError 結束）。
+  let starting: object | null = null;
+
   const start = (anchor: AnchorElement) => {
+    const attempt = {};
+    starting = attempt;
+    const settled = () => {
+      if (starting === attempt) starting = null;
+    };
     anchor.play().then(
       () => {
+        settled();
         granted = true;
       },
       (error: unknown) => {
+        settled();
         if (detached) return;
         // 被之後的 pause() 中斷：播放本身是允許的。
-        if (error instanceof DOMException && error.name === 'AbortError') {
+        if (isAbortError(error)) {
           granted = true;
           return;
         }
@@ -96,13 +100,24 @@ export function attachWith(
     );
   };
 
+  const stop = (anchor: AnchorElement) => {
+    starting = null;
+    if (!anchor.paused) anchor.pause();
+  };
+
+  // 上一次 statechange 時的 wanted()：anchor 只在它由 false 變成 true 時開始播放，被拒的 play() 不會在之後每次
+  // state 轉換都重試。
+  let wasWanted = false;
+
   const sync = () => {
     if (detached || !anchor) return;
-    if (wanted()) {
-      if (anchor.paused) start(anchor);
-    } else if (!anchor.paused) {
-      anchor.pause();
+    const now = wanted();
+    if (now && !wasWanted) {
+      if (anchor.paused && starting === null) start(anchor);
+    } else if (!now) {
+      stop(anchor);
     }
+    wasWanted = now;
   };
 
   const detach = () => {
@@ -127,8 +142,10 @@ export function attachWith(
       if (!anchor) return;
       // 在 gesture 的同步段內 play() 取得授權；play() 呼叫內的 beforeaudiostart 之後 paused 才變為 false，
       // 所以是否要停下來等這個呼叫結束再決定。
-      if (anchor.paused && (!granted || wanted())) start(anchor);
-      queueMicrotask(sync);
+      if (anchor.paused && starting === null && (!granted || wanted())) start(anchor);
+      queueMicrotask(() => {
+        if (!detached && !wanted()) stop(anchor);
+      });
     },
     { signal },
   );
@@ -155,7 +172,7 @@ export function attachWith(
         if (anchor.paused || wanted()) return;
         if (engine.state === 'idle' || engine.state === 'error') {
           // 沒有媒體可播：anchor 停回去。
-          sync();
+          stop(anchor);
           return;
         }
         log('info', '靜音 anchor 被外部播放，播放 Engine');

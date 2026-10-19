@@ -5,10 +5,17 @@ import type { HostTypes, WireLogEntry, WireLogLevel } from './media.js';
 /** `registerProcessor()` 與 `AudioWorkletNode` 共用的 processor 名稱；兩邊各自以這個型別寫出字面值。 */
 export type WorkletProcessorName = 'kikoeru-player-output';
 
+/** ring buffer 的水位（ms），即 `EngineOptions.audioBuffer` 補上預設值之後。 */
+export interface AudioBufferWatermarks {
+  targetMs: number;
+  refillMs: number;
+  capacityMs: number;
+}
+
 /** `AudioWorkletNode` 的 `processorOptions`。 */
 export interface WorkletProcessorOptions {
   /** ring buffer 的水位（ms），即 `EngineOptions.audioBuffer` 補上預設值之後。 */
-  audioBuffer: { targetMs: number; refillMs: number; capacityMs: number };
+  audioBuffer: AudioBufferWatermarks;
   /** 淡入淡出的長度（ms），即 `EngineOptions.audioFadeMs`；0 為硬切。 */
   audioFadeMs: number;
   /** 送出 `log` 的最低等級；null 表示 App 沒有設定 log hook，worklet 不送任何 log。 */

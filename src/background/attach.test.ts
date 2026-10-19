@@ -297,6 +297,28 @@ describe('play() 被拒', () => {
     expect(anchor().paused).toBe(false);
   });
 
+  it('paused 維持 false 的 state 轉換（buffering、seeking、恢復播放）不再試', async () => {
+    const { engine, deps } = await loaded();
+    attach(engine);
+    anchor().allowed = false;
+
+    await play(engine, deps);
+    expect(anchor().calls).toEqual(['play']);
+    const warnings = logs.filter((l) => l.level === 'warn').length;
+
+    deps.audio.reply({ type: 'starved' });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(engine.state).toBe('buffering');
+    void engine.seek(5);
+    expect(engine.state).toBe('seeking');
+    deps.audio.reply({ type: 'playing' });
+    await settle();
+    expect(engine.state).toBe('playing');
+
+    expect(anchor().calls).toEqual(['play']);
+    expect(logs.filter((l) => l.level === 'warn')).toHaveLength(warnings);
+  });
+
   it('下一次 beforeaudiostart 時再試，即使 paused 仍為 true', async () => {
     const deps = createFakeDeps();
     const engine = createEngineWith(deps);

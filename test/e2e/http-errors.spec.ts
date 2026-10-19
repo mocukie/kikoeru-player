@@ -1,5 +1,6 @@
 // Demo 頁的 http 錯誤（#38）：以 Demo 頁的故障注入選項讓 test/server 在播放中回應錯誤或斷線。
 import { expect, test, type Page } from '@playwright/test';
+import { ERROR_RELOAD_RESUME_SLACK } from './tolerances.js';
 
 /** 頁面上的 Engine 只用到的部分（Demo 頁以 `engine` 放在 globalThis）。 */
 interface PageEngine {
@@ -75,7 +76,7 @@ test('播放中 401：error 事件帶 SOURCE_UNAUTHORIZED 與 position，reload(
   await expect(page.locator('#state')).toHaveText('playing');
   const resumed = await currentTime(page);
   expect(resumed).toBeGreaterThanOrEqual(position);
-  expect(resumed).toBeLessThan(position + 0.5);
+  expect(resumed).toBeLessThan(position + ERROR_RELOAD_RESUME_SLACK);
   await expect.poll(() => currentTime(page), { timeout: 5000 }).toBeGreaterThan(position + 1);
   expect(await page.evaluate(() => (window as unknown as E2EWindow).engine.error)).toBeNull();
   await expect.poll(() => page.workers().length).toBe(1);

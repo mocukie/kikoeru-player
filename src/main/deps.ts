@@ -1,6 +1,7 @@
 // Engine 對外部資源的依賴（createEngineWith 的 deps）。真實實作由 createEngine() 提供，Node 測試注入 test/fakes/。
 
 import type {
+  AudioBufferWatermarks,
   MainToWorkerMessage,
   MainToWorkletMessage,
   WireLogEntry,
@@ -62,7 +63,7 @@ export interface AudioOutputHandlers {
 /** 音訊輸出的設定，取自 `EngineOptions`。 */
 export interface AudioOutputConfig {
   /** ring buffer 的水位（ms），補上預設值之後。 */
-  audioBuffer: { targetMs: number; refillMs: number; capacityMs: number };
+  audioBuffer: AudioBufferWatermarks;
   /** 淡入淡出的長度（ms），即 `EngineOptions.audioFadeMs`；0 為硬切。 */
   audioFadeMs: number;
   /** `EngineOptions.assets.workletUrl`；沒給時用套件內的 worklet。 */
