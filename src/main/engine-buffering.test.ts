@@ -135,6 +135,16 @@ describe('因網路不足進入 buffering 之後的恢復', () => {
     expect(deps.audio.intent).toBe('pause');
   });
 
+  it('等待中 seek()：worklet 恢復播放，落點後進入 playing', async () => {
+    const { engine, deps } = await buffering();
+    expect(deps.audio.intent).toBe('pause');
+    void engine.seek(20);
+    expect(deps.audio.intent).toBe('play');
+    deps.audio.reply({ type: 'playing' });
+    expect(engine.state).toBe('playing');
+    expect(engine.paused).toBe(false);
+  });
+
   it('等待中 pause()：進入 paused', async () => {
     const { engine, deps } = await buffering();
     deps.audio.reply({ type: 'paused' });

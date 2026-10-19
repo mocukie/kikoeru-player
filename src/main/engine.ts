@@ -1165,14 +1165,17 @@ class EngineImpl extends EventTarget implements Engine {
 
   /**
    * 進入新的 state：播放中依 `timeUpdateInterval` 發出 timeupdate，離開 playing 就停。buffering 開始卡住偵測；
-   * 離開 buffering 就不再等 bufferAhead。
+   * 離開 buffering 就不再等 bufferAhead，worklet 被要求的停住也要依播放意圖重新同步（例如等待中 seek）。
    */
   #onStateEntered(state: EngineState): void {
     if (state === 'playing') this.#armWatchdog();
     else this.#stopWatchdog();
     if (state !== 'playing') this.#clearStarveTimer();
     if (state === 'buffering') this.#beginStall();
-    else this.#holding = false;
+    else if (this.#holding) {
+      this.#holding = false;
+      this.#syncWorklet();
+    }
     if (state !== 'playing') {
       if (this.#timeUpdateTimer !== null) clearInterval(this.#timeUpdateTimer);
       this.#timeUpdateTimer = null;
