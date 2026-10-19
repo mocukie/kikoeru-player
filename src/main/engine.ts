@@ -194,6 +194,8 @@ class EngineImpl extends EventTarget implements Engine {
   /** 這份媒體是否播放過；seek 結束時決定回到 `'ready'` 或 `'paused'`。 */
   #played = false;
   #worker: MediaWorker | null = null;
+  /** 0.1.0 不解碼影片：有影片軌也還沒有畫面，一律為 null。#50 接上影片之後改為選用中影片軌畫出的 frame 的尺寸。 */
+  readonly videoSize: VideoSize | null = null;
   /** 建立後還沒 terminate 的 media Worker 數（`getStats().resources.workers`）。 */
   #liveWorkers = 0;
   /** AudioContext 與 worklet；`suspend()`、`resume()`、`close()` 都經它的串行佇列。 */
@@ -313,9 +315,6 @@ class EngineImpl extends EventTarget implements Engine {
   }
   get error(): EngineError | null {
     return this.#error;
-  }
-  get videoSize(): VideoSize | null {
-    return notImplemented('videoSize');
   }
   get audioUnlocked(): boolean {
     return this.#context.unlocked;

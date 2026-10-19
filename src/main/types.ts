@@ -179,7 +179,10 @@ export interface Engine extends EventTarget {
   readonly selectedTracks: Readonly<TrackSelection>;
   /** state 為 `'error'` 時的錯誤，其他狀態為 null。 */
   readonly error: EngineError | null;
-  /** 影片的顯示尺寸（已套用旋轉與 SAR）；沒有影片軌時為 null。 */
+  /**
+   * 影片的顯示尺寸（已套用旋轉與 SAR）；沒有選用影片軌，或選用的影片軌還沒畫出第一張 frame 時為 null。
+   * 0.1.0 還不解碼影片，一律為 null。
+   */
   readonly videoSize: VideoSize | null;
 
   // ── 同步設定（即時生效、最後一次勝出，不經過指令佇列） ──

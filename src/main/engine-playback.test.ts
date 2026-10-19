@@ -138,6 +138,45 @@ describe('timeupdate', () => {
   });
 });
 
+describe('videoSize', () => {
+  it('idle 與純音訊時為 null', async () => {
+    expect(createEngineWith(createFakeDeps()).videoSize).toBeNull();
+    const { engine } = await loaded();
+    expect(engine.videoSize).toBeNull();
+  });
+
+  it('有影片軌但還沒有畫出影片（0.1.0 不解碼影片）時為 null，不丟錯', async () => {
+    const deps = createFakeDeps();
+    const engine = createEngineWith(deps);
+    const loading = engine.load(source);
+    const worker = deps.workers.last;
+    const audio = audioMedia().tracks;
+    await worker.probe(
+      audioMedia({
+        tracks: [
+          ...audio,
+          {
+            kind: 'video',
+            streamIndex: 1,
+            codec: 'h264',
+            supported: true,
+            default: true,
+            forced: false,
+            codedWidth: 1920,
+            codedHeight: 1080,
+            display: { width: 1920, height: 1080, rotation: 0 },
+          },
+        ],
+      }),
+    );
+    await worker.next('start');
+    deps.audio.reply({ type: 'paused' });
+    await loading;
+    expect(engine.tracks.some((t) => t.kind === 'video')).toBe(true);
+    expect(engine.videoSize).toBeNull();
+  });
+});
+
 describe('getStats', () => {
   it('resources：換檔後 workers 為 1、libavInstances 取自 Worker；destroy 後全為 0', async () => {
     const { engine, deps, worker } = await loaded();
