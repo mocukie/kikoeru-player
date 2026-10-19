@@ -2,7 +2,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/demo/');
+  await page.goto('/demo/?background=0');
   await expect(page.locator('#media option')).not.toHaveCount(0);
 });
 

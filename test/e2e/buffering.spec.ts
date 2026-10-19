@@ -28,8 +28,9 @@ interface E2EWindow {
 /** 10 秒、48 kHz stereo s16 的 WAV（約 1.8 MiB，每秒約 188 KiB）。 */
 const WAV = 'audio/pcm-s16.wav';
 
+/** 以 Demo 頁的 query（不含 `?`）開啟；背景播放模組一律關閉。 */
 async function open(page: Page, query: string): Promise<void> {
-  await page.goto(`/demo/${query}`);
+  await page.goto(`/demo/?background=0&${query}`);
   await expect(page.locator('#media option')).not.toHaveCount(0);
   await page.evaluate(() => {
     const w = window as unknown as E2EWindow;
@@ -59,7 +60,7 @@ async function loadAndPlay(page: Page, faults: string): Promise<void> {
 test('網路比位元率慢：進入 buffering，補足之後回到 playing', async ({ page }) => {
   // 預讀 0.5 秒：同時最多兩三個 1 個區塊（約 1.4 秒的音訊）的請求，每個回應慢 4 秒，網路跟不上播放。
   test.setTimeout(90_000);
-  await open(page, '?readahead=0.5&stallTimeout=60000');
+  await open(page, 'readahead=0.5&stallTimeout=60000');
   await loadAndPlay(page, 'delay=4000');
 
   await expect
@@ -80,7 +81,7 @@ test('bufferedchange：終點變動 ≥ 0.5 秒才發出，相鄰兩次至少隔
   page,
 }) => {
   // 預讀 2 秒、每個回應慢 300 ms：終點以每次一兩個區塊往後跳，變動比 timeUpdateInterval（250 ms）頻繁。
-  await open(page, '?readahead=2');
+  await open(page, 'readahead=2');
   await loadAndPlay(page, 'delay=300');
   await expect
     .poll(() => page.evaluate(() => (window as unknown as E2EWindow).engine.currentTime), {

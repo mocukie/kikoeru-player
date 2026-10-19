@@ -1,7 +1,7 @@
 // 背景播放模組（套件的 "./background" entry）。只能 import 公開 API（src/index.ts），證明 core 提供的 hook 足夠；
 // 實作在 attach.ts，這裡接上真實的 `<audio>` 與 `navigator.audioSession`。
 
-import type { Engine, LogHook } from '../index.js';
+import type { Engine, LogHook, LogLevel } from '../index.js';
 import { attachWith, type AudioSessionLike } from './attach.js';
 
 /** `attachBackgroundPlayback()` 的選項。 */
@@ -12,6 +12,11 @@ export interface BackgroundPlaybackOptions {
   anchor?: boolean;
   /** anchor 啟動失敗等診斷訊息，scope 為 `'background'`；與 `createEngine()` 的 `log` 同型別。 */
   log?: LogHook;
+  /**
+   * 送進 `log` 的最低等級，預設 `'warn'`；不是 `LogLevel` 的值時 `attachBackgroundPlayback()` 丟 `RangeError`。
+   * 與 `createEngine()` 的 `logLevel` 相同語意，但彼此獨立：要看模組的 `info` 時兩邊都要設定。
+   */
+  logLevel?: LogLevel;
 }
 
 /** `attachBackgroundPlayback()` 的回傳值。 */
@@ -22,7 +27,8 @@ export interface BackgroundPlayback {
 
 /**
  * 讓 OS 把 App 當成正在播放的媒體播放器，使播放能在背景、鎖屏與系統媒體控制下持續。
- * 所有平台都啟用，不偵測 UA。同一個 Engine 重複 attach 時丟錯（`detach()` 之後可以再 attach）；
+ * 所有平台都啟用，不偵測 UA。同一個 Engine 重複 attach 時丟錯（`detach()` 之後可以再 attach），`logLevel` 不合法時丟
+ * `RangeError`；
  * `engine.destroy()` 時（`destroy` 事件）自動 detach。attach 時 `paused` 已經是 false 就立即啟動 anchor。
  *
  * - audioSession：有 `navigator.audioSession` 時，在每次 `beforeaudiostart` 設定 `type = "playback"`。

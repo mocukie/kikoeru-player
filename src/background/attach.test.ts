@@ -7,6 +7,7 @@ import { audioMedia } from '../../test/fakes/media-worker.js';
 import { createEngineWith } from '../main/engine.js';
 import type { Engine, LogEntry, Source } from '../index.js';
 import { attachWith, type AnchorElement, type AudioSessionLike } from './attach.js';
+import type { BackgroundPlaybackOptions } from './index.js';
 
 const source: Source = { kind: 'http', url: 'https://example.test/a.flac' };
 
@@ -91,7 +92,7 @@ async function settle(): Promise<void> {
   await vi.advanceTimersByTimeAsync(0);
 }
 
-function attach(engine: Engine, options: { audioSession?: boolean; anchor?: boolean } = {}) {
+function attach(engine: Engine, options: Omit<BackgroundPlaybackOptions, 'log'> = {}) {
   return attachWith(
     engine,
     { ...options, log: (entry) => logs.push(entry) },
@@ -437,6 +438,42 @@ describe('audioSession', () => {
     engine.unlockAudio();
     expect(session?.type).toBe('auto');
   });
+});
+
+describe('logLevel', () => {
+  /** 播放中外部暫停 anchor：產生一筆 info 的 log（鏡像為 engine.pause()）。 */
+  async function mirrorPause(options: Omit<BackgroundPlaybackOptions, 'log'>) {
+    const { engine, deps } = await loaded();
+    attach(engine, options);
+    await play(engine, deps);
+    anchor().pause();
+    await settle();
+    expect(engine.paused).toBe(true);
+  }
+
+  it('預設 warn：低於 warn 的 log 不送進 hook', async () => {
+    await mirrorPause({});
+    expect(logs).toEqual([]);
+  });
+
+  it('logLevel 以下的 log 不送，以上的照送', async () => {
+    await mirrorPause({ logLevel: 'info' });
+    expect(logs).toEqual([expect.objectContaining({ level: 'info', scope: 'background' })]);
+  });
+
+  it.each(['verbose', 'WARN', '', 'toString', 2])(
+    '不是 LogLevel 的值（%j）丟 RangeError，不 attach',
+    (logLevel) => {
+      const engine = createEngineWith(createFakeDeps());
+      expect(() =>
+        attach(engine, { logLevel: logLevel as unknown as BackgroundPlaybackOptions['logLevel'] }),
+      ).toThrow(RangeError);
+      expect(anchors).toEqual([]);
+      expect(() => {
+        attach(engine).detach();
+      }).not.toThrow();
+    },
+  );
 });
 
 describe('生命週期', () => {

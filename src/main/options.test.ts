@@ -41,10 +41,10 @@ describe('resolveEngineOptions：預設值', () => {
 
   it('保留 App 給的值', () => {
     const log = () => undefined;
-    const workerUrl = new URL('https://example.test/worker.js');
+    const wasmUrl = new URL('https://example.test/libav.wasm');
     const resolved = resolveEngineOptions(
       {
-        assets: { workerUrl, glueUrl: '/libav.wasm.mjs' },
+        assets: { wasmUrl, glueUrl: '/libav.wasm.mjs' },
         timeUpdateInterval: 100,
         limits: { cacheBytes: 32 * MiB, readaheadSeconds: 30 },
         retry: { attempts: 0, baseDelayMs: 0 },
@@ -62,7 +62,7 @@ describe('resolveEngineOptions：預設值', () => {
 
     expect(resolved).toEqual({
       platform: 'android',
-      assets: { workerUrl, glueUrl: '/libav.wasm.mjs' },
+      assets: { wasmUrl, glueUrl: '/libav.wasm.mjs' },
       canvas: null,
       timeUpdateInterval: 100,
       limits: { cacheBytes: 32 * MiB, readaheadSeconds: 30, packetQueueBytes: 32 * MiB },

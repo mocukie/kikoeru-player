@@ -1,7 +1,7 @@
 // 背景播放模組的實作：靜音 anchor 跟著 Engine 的播放意圖、外部操作的鏡像、audioSession 的設定與還原。
 // anchor 元素與 audioSession 由 `BackgroundEnv` 注入，Node 測試以假物件驅動；公開的 entry 在 index.ts。
 
-import { isAbortError, type Engine, type LogEntry } from '../index.js';
+import { isAbortError, type Engine, type LogLevel } from '../index.js';
 import type { BackgroundPlaybackOptions } from './index.js';
 
 /** anchor 用到的 `HTMLAudioElement` 成員。 */
@@ -32,6 +32,8 @@ const ANCHOR_SECONDS = 5;
 const ANCHOR_SAMPLE_RATE = 8000;
 const ANCHOR_VOLUME = 0.0001;
 
+const LOG_RANK: Readonly<Record<LogLevel, number>> = { debug: 0, info: 1, warn: 2, error: 3 };
+
 /** 已 attach 的 Engine：重複 attach 丟錯。 */
 const attached = new WeakSet<Engine>();
 
@@ -40,6 +42,7 @@ export function attachWith(
   options: BackgroundPlaybackOptions,
   env: BackgroundEnv,
 ): { detach(): void } {
+  const minLevel = logLevel(options.logLevel ?? 'warn');
   if (attached.has(engine)) {
     throw new Error(
       'kikoeru-player/background：這個 Engine 已經 attach 過背景播放模組，先 detach()',
@@ -49,7 +52,8 @@ export function attachWith(
 
   const listening = new AbortController();
   const { signal } = listening;
-  const log = (level: LogEntry['level'], message: string, data?: Record<string, unknown>) => {
+  const log = (level: LogLevel, message: string, data?: Record<string, unknown>) => {
+    if (LOG_RANK[level] < LOG_RANK[minLevel]) return;
     options.log?.({
       level,
       scope: 'background',
@@ -193,6 +197,16 @@ export function attachWith(
 
   sync();
   return { detach };
+}
+
+/** 檢查 `logLevel`：與 `createEngine()` 相同，不是 `LogLevel` 的值時丟 `RangeError`。 */
+function logLevel(value: unknown): LogLevel {
+  if (typeof value !== 'string' || !Object.hasOwn(LOG_RANK, value)) {
+    throw new RangeError(
+      `logLevel 必須是 'debug'、'info'、'warn' 或 'error'，收到 ${String(value)}`,
+    );
+  }
+  return value as LogLevel;
 }
 
 function createAnchor(env: BackgroundEnv): AnchorElement {

@@ -25,7 +25,7 @@ test.beforeEach(async ({ page }) => {
       m.captureDestination(),
     );
   });
-  await page.goto('/demo/');
+  await page.goto('/demo/?background=0');
   await page.evaluate(async () => {
     await (window as unknown as E2EWindow).e2eCapture;
   });

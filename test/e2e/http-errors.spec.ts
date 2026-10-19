@@ -20,7 +20,7 @@ interface E2EWindow {
 const WAV = 'audio/pcm-s16.wav';
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/demo/');
+  await page.goto('/demo/?background=0');
   await expect(page.locator('#media option')).not.toHaveCount(0);
   await page.evaluate(() => {
     const w = window as unknown as E2EWindow;

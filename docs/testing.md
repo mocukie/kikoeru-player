@@ -23,7 +23,7 @@
 
 ### E2E
 
-- 對 Demo 頁執行。Demo 頁沿用 spike 的事件 log，並提供公開 API 的操作。
+- 對 Demo 頁執行。Demo 頁沿用 spike 的事件 log，並提供公開 API 的操作。Demo 頁預設 attach 背景播放模組；只測 Engine 本身的 spec 以 `/demo/?background=0` 開啟。
 - **自動同步斷言**：用 Playwright init script 包住 `AudioNode.prototype.connect`，在接到 `destination` 的地方旁接錄音 worklet 偵測 beep 起點，並讀 canvas pixel 偵測白框。錄音點在 `destination` 之前，比對時要扣掉 Engine 回報的輸出延遲。公開 API 不為此改變。
 
   | 斷言 | 容差 |
@@ -32,7 +32,9 @@
   | 白框對 beep | ≤ 1 個影片 frame + 1 個 rAF（30 fps 約 50 ms） |
   | 音軌 offset ±500 ms | 方向正確，誤差 ≤ 20 ms |
   | `atempo` 1.25x 的 beep 間隔 | 0.8 s ± 10 ms |
-  | 變速（經過 `atempo`）時 beep 起點對 `currentTime` | ≤ 30 ms（`atempo` 在靜音之後把起點提早，見 `tolerances.ts`） |
+  | 變速（經過 `atempo`）時 beep 起點對 `currentTime` | ≤ 40 ms（見下方說明） |
+
+  變速時的容差較寬：`atempo`（WSOLA）在完全靜音之後找不到波形對齊的依據，會把 beep 的音頭提早（實測 12–24 ms）。這是演算法的特性，不是時鐘誤差；time map 另以 beep 間隔驗證。40 ms 低於 ITU-R BT.1359 對聲音領先的可察覺門檻（約 45 ms）。
 
   容差寫成常數集中在 `test/e2e/` 的一個檔案，flaky 時只調那裡。
 - **leak 測試**：連續 load 100 次，混入被取代的 load、播放中 destroy、外掛音軌，使用 CI 組的短檔。斷言：

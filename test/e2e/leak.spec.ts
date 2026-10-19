@@ -143,7 +143,7 @@ test('Demo 的 unload：播放中回到 idle、terminate Worker；之後的 load
   page,
   browserName,
 }) => {
-  await page.goto('/demo/');
+  await page.goto('/demo/?background=0');
   await expect(page.locator('#media option')).not.toHaveCount(0);
   await page.locator('#autoplay').check();
   await page.locator('#load').click();
@@ -168,7 +168,7 @@ test('連續 load 100 次：resources 與 Worker 不累積，destroy 後全為 0
   browserName,
 }) => {
   test.setTimeout(240_000);
-  await page.goto('/demo/');
+  await page.goto('/demo/?background=0');
   await expect(page.locator('#media option')).not.toHaveCount(0);
 
   const one = { workers: 1, libavInstances: 1, openVideoFrames: 0 };

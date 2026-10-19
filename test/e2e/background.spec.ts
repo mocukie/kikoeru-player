@@ -1,4 +1,4 @@
-// Demo 頁的背景播放模組（#44，`/demo/?background=1`）：開關模組、anchor 跟著播放意圖、外部操作 anchor 的鏡像、destroy 時自動 detach。
+// Demo 頁的背景播放模組（#44，預設 attach，`/demo/?background=0` 時不 attach）：開關模組、anchor 跟著播放意圖、外部操作 anchor 的鏡像、destroy 時自動 detach。
 //
 // anchor 不掛進 DOM：init script 包住 `window.Audio`，把模組建立的 `<audio>` 記在 `e2eAnchors`。
 import { expect, test, type Page } from '@playwright/test';
@@ -40,8 +40,8 @@ async function anchorPaused(page: Page): Promise<boolean | undefined> {
   return (await anchor(page))?.paused;
 }
 
-test('沒有 query 時預設不 attach，勾選後才建立 anchor', async ({ page }) => {
-  await open(page, '/demo/');
+test('query background=0 時不 attach，勾選後才建立 anchor', async ({ page }) => {
+  await open(page, '/demo/?background=0');
   await expect(page.locator('#background')).not.toBeChecked();
   await expect(page.locator('#background-state')).toHaveText('detached');
   expect(await anchor(page)).toBeNull();
@@ -51,10 +51,8 @@ test('沒有 query 時預設不 attach，勾選後才建立 anchor', async ({ pa
   expect(await anchor(page)).toMatchObject({ paused: true });
 });
 
-test('query background=1 時一開始就 attach：anchor 跟著 play／pause 播放與停止', async ({
-  page,
-}) => {
-  await open(page, '/demo/?background=1');
+test('沒有 query 時預設 attach：anchor 跟著 play／pause 播放與停止', async ({ page }) => {
+  await open(page, '/demo/');
   await expect(page.locator('#background')).toBeChecked();
   await expect(page.locator('#background-state')).toHaveText('attached');
   await page.locator('#load').click();
@@ -74,7 +72,7 @@ test('query background=1 時一開始就 attach：anchor 跟著 play／pause 播
 test('外部暫停 anchor：Engine 跟著暫停（reason command）；外部播放：Engine 跟著播放', async ({
   page,
 }) => {
-  await open(page, '/demo/?background=1');
+  await open(page, '/demo/');
   await page.locator('#autoplay').check();
   await page.locator('#load').click();
   await expect(page.locator('#state')).toHaveText('playing');
@@ -93,7 +91,7 @@ test('外部暫停 anchor：Engine 跟著暫停（reason command）；外部播�
 });
 
 test('關掉模組：detach，anchor 停止且不再跟著；重新打開再 attach', async ({ page }) => {
-  await open(page, '/demo/?background=1');
+  await open(page, '/demo/');
   await page.locator('#autoplay').check();
   await page.locator('#load').click();
   await expect(page.locator('#state')).toHaveText('playing');
@@ -117,7 +115,7 @@ test('關掉模組：detach，anchor 停止且不再跟著；重新打開再 att
 });
 
 test('destroy：模組自動 detach；建立新的 Engine 時重新 attach', async ({ page }) => {
-  await open(page, '/demo/?background=1');
+  await open(page, '/demo/');
   await page.locator('#autoplay').check();
   await page.locator('#load').click();
   await expect.poll(() => anchorPaused(page)).toBe(false);
