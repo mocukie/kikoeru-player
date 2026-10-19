@@ -70,7 +70,7 @@ Safari 不跑 E2E，共同項目都要做。
 
 ## 背景與鎖屏
 
-使用背景播放模組（`kikoeru-player/background`）：Demo 頁預設勾選「背景播放模組」（`/demo/?background=0` 時不勾選）。底稿來自 kikoeru 的行動瀏覽器背景播放 research；Android 只在使用靜音 anchor 時才有背景播放（[ADR-0006](adr/0006-background-playback-module.md)）。Demo 頁沒有設定 Media Session 的 handler 與 metadata（App 負責），以下項目記下的是沒有 handler 時的行為；Media Session 的上一首、下一首、seek、metadata、artwork 與進度條在 kikoeru 驗證。模組的 log 以 `[background]` 開頭出現在事件 log。
+使用背景播放模組（`kikoeru-player/background`）：Demo 頁預設勾選「背景播放模組」（`/demo/?background=0` 時不勾選）。底稿來自 kikoeru 的行動瀏覽器背景播放 research；Android 只在使用靜音 anchor 時才有背景播放（[ADR-0006](adr/0006-background-playback-module.md)）。Demo 頁沒有設定 Media Session 的 handler 與 metadata（App 負責），以下項目記下的是沒有 handler 時的行為；Media Session 的上一首、下一首、seek、metadata、artwork 與進度條在 kikoeru 驗證。模組的 log 以 `[background]` 開頭出現在事件 log，等級與 Engine 共用頁面的 log 選單（外部暫停、播放的鏡像是 `info`）。
 
 ### 共同（iOS Safari、Android Chrome）
 

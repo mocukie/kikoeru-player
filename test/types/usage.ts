@@ -120,7 +120,7 @@ engine.addEventListener(
 );
 
 // 背景與鎖屏播放：audioSession 與靜音 anchor 交給背景播放模組。Media Session 仍由 App 負責。
-const background = attachBackgroundPlayback(engine, { log: engineLog });
+const background = attachBackgroundPlayback(engine, { log: engineLog, logLevel: 'info' });
 
 // ─── 2. 開檔並播放（使用者點了一首曲目，是 user gesture） ───
 
@@ -312,6 +312,8 @@ function misuse(e: Engine) {
   thirdPartyNotices[0] = { name: '', license: '', sourceUrl: '', noticeText: '' };
   // @ts-expect-error audioBuffer 的欄位是 targetMs，不是 target
   createEngine({ audioBuffer: { target: 200 } });
+  // @ts-expect-error 背景播放模組的 logLevel 也只接受 LogLevel
+  attachBackgroundPlayback(e, { logLevel: 'verbose' });
   // @ts-expect-error Worker 由套件以字面寫法建立，位置不能指定
   createEngine({ assets: { workerUrl: '/worker.js' } });
 }

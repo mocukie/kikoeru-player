@@ -73,7 +73,11 @@ import { attachBackgroundPlayback } from 'kikoeru-player/background';
 
 const engine = createEngine();
 // 建立 Engine 之後、第一次 play() 之前 attach：設定 audioSession，並讓靜音 anchor 跟著 paused 播放與停止。
-const background = attachBackgroundPlayback(engine, { log: (entry) => console.debug(entry) });
+// 模組的 log 與 Engine 一樣預設只送 warn 以上；logLevel 'info' 時也記下外部暫停／播放的鏡像。
+const background = attachBackgroundPlayback(engine, {
+  log: (entry) => console.debug(entry),
+  logLevel: 'info',
+});
 
 // Media Session 由 App 自己設定。
 navigator.mediaSession.setActionHandler('play', () => void engine.play());

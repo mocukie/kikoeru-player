@@ -124,8 +124,8 @@ function logEntry(entry: LogEntry): void {
   log(`[${entry.scope}] ${entry.level} ${entry.message}${data}`);
 }
 
-/** 選單的 log 等級；`off` 時不設定 hook（Engine 不輸出任何 log）。 */
-function logOptions(): EngineOptions {
+/** 選單的 log 等級；`off` 時不設定 hook（不輸出任何 log）。Engine 與背景播放模組共用。 */
+function logOptions(): Pick<EngineOptions, 'log' | 'logLevel'> {
   const level = logLevelSelect.value;
   return level === 'off' ? {} : { log: logEntry, logLevel: level as LogLevel };
 }
@@ -186,7 +186,7 @@ function setupEngine(): void {
 let background: BackgroundPlayback | null = null;
 
 function attachBackground(): void {
-  background = attachBackgroundPlayback(engine, { log: logEntry });
+  background = attachBackgroundPlayback(engine, logOptions());
   log('背景播放模組 attach');
 }
 
