@@ -734,7 +734,7 @@ export interface EngineStats {
   wasmHeapBytes: number;
   /**
    * 存活中的資源數，用於診斷 leak：`destroy()` 後全為 0；換檔後 `workers` 為 1、
-   * `libavInstances` 等於來源數（主來源加外掛音軌）。
+   * `libavInstances` 等於來源數（主來源加外掛音軌）。`workers` 是建立之後還沒 terminate 的 media Worker 數。
    */
   resources: { workers: number; libavInstances: number; openVideoFrames: number };
 }

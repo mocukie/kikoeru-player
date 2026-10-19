@@ -194,6 +194,8 @@ class EngineImpl extends EventTarget implements Engine {
   /** 這份媒體是否播放過；seek 結束時決定回到 `'ready'` 或 `'paused'`。 */
   #played = false;
   #worker: MediaWorker | null = null;
+  /** 建立後還沒 terminate 的 media Worker 數（`getStats().resources.workers`）。 */
+  #liveWorkers = 0;
   /** AudioContext 與 worklet；`suspend()`、`resume()`、`close()` 都經它的串行佇列。 */
   readonly #context: AudioContextLifecycle;
   /** 最後一次告訴 worklet 的播放意圖；null 表示這個音訊輸出還沒收到過。 */
@@ -508,7 +510,7 @@ class EngineImpl extends EventTarget implements Engine {
       network: worker?.network ?? { bytesLoaded: 0, inflight: [] },
       wasmHeapBytes: worker?.wasmHeapBytes ?? 0,
       resources: {
-        workers: this.#worker ? 1 : 0,
+        workers: this.#liveWorkers,
         libavInstances: worker?.libavInstances ?? 0,
         openVideoFrames: 0,
       },
@@ -845,6 +847,7 @@ class EngineImpl extends EventTarget implements Engine {
       },
     });
     this.#worker = worker;
+    this.#liveWorkers++;
     return worker;
   }
 
@@ -1414,8 +1417,11 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   #terminateWorker(): void {
-    if (this.#worker) this.#log.log('debug', 'worker', 'terminate media Worker');
-    this.#worker?.terminate();
+    if (this.#worker) {
+      this.#log.log('debug', 'worker', 'terminate media Worker');
+      this.#worker.terminate();
+      this.#liveWorkers--;
+    }
     this.#worker = null;
     for (const resolve of this.#statsRequests.values()) resolve(null);
     this.#statsRequests.clear();

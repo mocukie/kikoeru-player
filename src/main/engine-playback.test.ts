@@ -162,6 +162,15 @@ describe('getStats', () => {
     });
   });
 
+  it('resources.workers 數的是建立後還沒 terminate 的 Worker：連續取代的 load 之後為 1', async () => {
+    const { engine, deps } = await loaded();
+    for (let i = 0; i < 3; i++) void engine.load(source).catch(() => undefined);
+    expect(deps.workers.created.filter((w) => !w.terminated)).toHaveLength(1);
+    const stats = engine.getStats();
+    await deps.workers.last.stats(1);
+    expect((await stats).resources.workers).toBe(1);
+  });
+
   it('等待 Worker 回覆時 Worker 被 terminate：以 0 個 instance 回報', async () => {
     const { engine } = await loaded();
     const stats = engine.getStats();
