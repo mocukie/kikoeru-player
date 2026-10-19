@@ -14,9 +14,9 @@
 ## Consequences
 
 - `audioSession.type` 只在 `navigator.audioSession` 存在時、於每次 `beforeaudiostart` 設定（一定在 context 出聲之前）；detach 時還原成 attach 前的值。
-- anchor 跟著播放意圖 `paused` 走，不看 `state`：loading、seeking、buffering 與曲目之間都持續播放，避免 Android 通知閃爍、iOS 的 Now Playing 被搶走，背景接下一首時也不需要 gesture。第一次 `play()` 在 `beforeaudiostart` 內同步呼叫以取得 gesture 授權；`paused` 仍為 true 時取得授權後立刻 `pause()`。
+- anchor 跟著播放意圖 `paused` 走，不看 `state`：loading、seeking、buffering 與曲目之間都持續播放，避免 Android 通知閃爍、iOS 的 Now Playing 被搶走，背景接下一首時也不需要 gesture。唯一的例外是沒有媒體可播的 `error` 與 `idle`：即使 `paused` 仍為 false 也停止 anchor，離開之後（`load()`、`reload()`）再開始。這時恢復播放要 App 重新載入，繼續播 anchor 只會讓 OS 顯示一個 Engine 沒有在播的 Now Playing，外部的 play 也沒有媒體可以鏡像。第一次 `play()` 在 `beforeaudiostart` 內同步呼叫以取得 gesture 授權；`paused` 仍為 true 時取得授權後立刻 `pause()`。
 - 不是模組自己觸發的 anchor `pause`／`play`（Android 來電、audio focus 被搶、沒有 handler 時的通知與鎖屏按鍵）雙向鏡像為 `engine.pause()`／`engine.play()`，不另外通知 App，`statechange.reason` 為 `'command'`。
-- anchor 啟動失敗不是 Engine 的錯誤，也不影響播放；下一次 `beforeaudiostart` 或 `paused` 變成 false 時再試，經 `options.log`（scope `'background'`）記錄。
+- anchor 啟動失敗不是 Engine 的錯誤，也不影響播放；下一次 `beforeaudiostart` 或 `paused` 變成 false（含離開 `error`、`idle`）時再試，`paused` 維持 false 的其他 state 轉換不重試，經 `options.log`（scope `'background'`）記錄。
 - core 的 API 約定因此新增兩條：`ended` 時 `paused` 維持 false；`play()`／`pause()` 改變 `paused` 時，在呼叫內同步發出 `statechange`。
 - 「`engine.destroy()` 時自動 detach」需要知道 Engine 被 destroy，但 destroy 時 state 可能沒有改變（沒有 `statechange`），所以 core 另外提供 `destroy` 事件（#44 實作時補上）。
 - App 的 CSP 若限制 `media-src`，要允許 `blob:`。Media Session 的 handler、metadata 與 position 仍由 App 負責。
