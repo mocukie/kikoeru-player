@@ -1,6 +1,6 @@
 // AudioWorklet 與主執行緒、media Worker 之間的訊息。會影響輸出的訊息都帶 epoch，收方丟棄過期的 epoch。
 
-import type { HostTypes } from './media.js';
+import type { HostTypes, WireLogEntry, WireLogLevel } from './media.js';
 
 /** `registerProcessor()` 與 `AudioWorkletNode` 共用的 processor 名稱；兩邊各自以這個型別寫出字面值。 */
 export type WorkletProcessorName = 'kikoeru-player-output';
@@ -11,6 +11,8 @@ export interface WorkletProcessorOptions {
   audioBuffer: { targetMs: number; refillMs: number; capacityMs: number };
   /** 淡入淡出的長度（ms），即 `EngineOptions.audioFadeMs`；0 為硬切。 */
   audioFadeMs: number;
+  /** 送出 `log` 的最低等級；null 表示 App 沒有設定 log hook，worklet 不送任何 log。 */
+  logLevel: WireLogLevel | null;
 }
 
 /** 主執行緒送給 AudioWorklet 的訊息（經 `AudioWorkletNode.port`）。 */
@@ -75,7 +77,20 @@ export type WorkletToMainMessage =
   | { type: 'paused'; epoch: number }
   | { type: 'starved'; epoch: number }
   | { type: 'ended'; epoch: number }
-  | WorkletClockMessage;
+  | WorkletClockMessage
+  | WorkletLogMessage;
+
+/**
+ * 一筆診斷 log，等級不低於 `processorOptions.logLevel`。AudioWorkletGlobalScope 沒有 `performance`，所以以事件發生的
+ * render quantum 的 context frame（`frame`）表示時間，主執行緒的音訊輸出換算成 `performance.now()` 的時基。
+ * 主執行緒不以 epoch 丟棄 log。
+ */
+export interface WorkletLogMessage {
+  type: 'log';
+  epoch: number;
+  entry: Omit<WireLogEntry, 'time'>;
+  frame: number;
+}
 
 /**
  * 音訊時鐘。時鐘前進時約每 250 ms 一次；`playing`、`paused`、`starved`、`ended` 之前也各送一次。

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { WorkerError } from './errors.js';
+import type { Logger } from './log.js';
 import { openSource } from './source.js';
 
 const never = new AbortController().signal;
@@ -177,6 +178,38 @@ describe('http 的重試', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect((await reading).length).toBe(4);
     expect(calls).toEqual([0, 100]);
+  });
+
+  test('請求、失敗與重試都有 io 的 log', async () => {
+    vi.useFakeTimers({ now: 0 });
+    const { fetch } = scripted(() => status(503), ok);
+    const entries: { level: string; scope: string; data?: Record<string, unknown> }[] = [];
+    const log: Logger = {
+      enabled: () => true,
+      log: (level, scope, _message, data) => entries.push({ level, scope, ...(data && { data }) }),
+    };
+    const source = await openSource({ kind: 'http', url: 'https://x/a.wav', size: 100 }, never, {
+      fetch,
+      retry: { attempts: 3, baseDelayMs: 100 },
+      log,
+    });
+    const reading = source.read(0, 4, never);
+    await vi.advanceTimersByTimeAsync(100);
+    await reading;
+    expect(entries).toEqual([
+      { level: 'debug', scope: 'io', data: { url: 'https://x/a.wav', start: 0, end: 3 } },
+      {
+        level: 'warn',
+        scope: 'io',
+        data: expect.objectContaining({
+          code: 'SOURCE_SERVER',
+          status: 503,
+          attempt: 1,
+        }) as unknown,
+      },
+      { level: 'info', scope: 'io', data: { url: 'https://x/a.wav', retry: 1, delayMs: 100 } },
+      { level: 'debug', scope: 'io', data: { url: 'https://x/a.wav', start: 0, end: 3 } },
+    ]);
   });
 
   test('每次退避加倍；用完重試次數就回報最後一次的錯誤', async () => {

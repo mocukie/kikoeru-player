@@ -1,6 +1,11 @@
 // 假音訊輸出：記錄送給 AudioWorklet 的訊息與對 AudioContext 的呼叫，worklet 的回報與 context 的結果由測試腳本控制。
 
-import type { MainToWorkletMessage, WorkletToMainMessage } from '../../src/protocol/index.js';
+import type {
+  MainToWorkletMessage,
+  WireLogEntry,
+  WireLogLevel,
+  WorkletToMainMessage,
+} from '../../src/protocol/index.js';
 
 /** 省略 epoch 的 worklet 訊息（逐一套用到 union 的每個成員）。 */
 type WithOptionalEpoch<T> = T extends unknown ? Omit<T, 'epoch'> & { epoch?: number } : never;
@@ -10,12 +15,14 @@ export interface FakeAudioOutputConfig {
   audioBuffer: { targetMs: number; refillMs: number; capacityMs: number };
   audioFadeMs: number;
   workletUrl?: string | URL;
+  logLevel: WireLogLevel | null;
 }
 
 /** Engine 建立音訊輸出時給的回呼（同 `AudioOutputHandlers`）。 */
 export interface FakeAudioOutputHandlers {
   message(message: WorkletToMainMessage): void;
   statechange(state: AudioContextState): void;
+  log(entry: WireLogEntry): void;
 }
 
 /** `resume()`／`suspend()`／`close()` 的結果：立即 resolve、立即 reject，或永遠不 settle。 */
@@ -116,6 +123,11 @@ export class FakeAudioOutput {
   /** 以 worklet 的身分回報；省略 epoch 時用目前的 epoch。 */
   reply(message: WithOptionalEpoch<WorkletToMainMessage>): void {
     this.#handlers.message({ ...message, epoch: message.epoch ?? this.epoch });
+  }
+
+  /** 以音訊輸出的身分轉送 worklet 的 log（`time` 已換算成主執行緒的時基）。 */
+  emitLog(entry: WireLogEntry): void {
+    this.#handlers.log(entry);
   }
 
   /** 以 AudioContext 的身分發出 `statechange`。 */

@@ -108,6 +108,7 @@ Node 測試（`*.test.ts`）與 browser mode 測試（`*.browser.test.ts`）都�
 - 會改變輸出的指令遞增 **epoch**（seek、選軌、外掛音軌與 offset；改速度不遞增，見 [ADR-0004](adr/0004-audio-output.md)）。Worker 送出的 PCM、`VideoFrame`、cue 與狀態都帶著 epoch，收方丟棄過期的資料。
 - 大型資料以 transfer 傳送：PCM 的 `ArrayBuffer`、`VideoFrame`、`MessagePort`。
 - 不能用 libav.js 的回傳值判斷中止（被中止的 seek 仍回傳 0），一律以 epoch 判斷（[ADR-0002](adr/0002-media-worker-per-load.md)）。
+- 診斷 log：主執行緒把 `logLevel` 告訴 Worker（`init`）與 worklet（`processorOptions`），App 沒有設定 hook 時為 null；過濾在送出端做，低於等級的 log 不跨執行緒。Worker 的 `time` 是 `performance.timeOrigin + performance.now()`，worklet 沒有 `performance`，以 context frame 表示，都由主執行緒換算成自己的 `performance.now()`。log 不帶 epoch 過濾：被取代的操作的 log 也轉送。
 
 ## 不變式
 

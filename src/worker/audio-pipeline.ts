@@ -4,6 +4,7 @@
 
 import type { WorkerToWorkletMessage } from '../protocol/index.js';
 import { crashReason, WorkerError } from './errors.js';
+import type { Logger } from './log.js';
 import {
   NORMAL_QUEUE_BYTES,
   NORMAL_QUEUE_SECONDS,
@@ -254,6 +255,8 @@ export interface AudioPipelineOptions<P> {
   queueLimits?: PacketQueueLimits;
   /** demux 進度：已 demux 的封包到媒體時間 `end`（秒）；`eof` 表示 demux 到了結尾。 */
   onDemux?: (end: number, eof: boolean) => void;
+  /** demux 結尾、demux 失敗與壞封包的 log；省略時不記錄。 */
+  log?: Logger;
 }
 
 /** 省略 `queueLimits` 時的上限（桌面的硬上限）。 */
@@ -343,12 +346,22 @@ export class AudioPipeline<P> {
         this.#packets.push(LANE, packets);
         this.#options.onDemux?.(this.#demuxEnd, eof);
         if (eof) {
+          this.#options.log?.log('debug', 'demux', 'demux 到結尾', {
+            epoch: this.#options.epoch,
+            end: this.#demuxEnd,
+          });
           this.#packets.end();
           return;
         }
       }
     } catch (error) {
       if (stop.aborted) return;
+      this.#options.log?.log(
+        'warn',
+        'demux',
+        `demux 失敗：${error instanceof Error ? error.message : String(error)}`,
+        { epoch: this.#options.epoch, end: this.#demuxEnd },
+      );
       // demux 失敗：佇列中的封包照常解完、播完才回報（錯誤的位置接近實際播放到的地方）；
       // 封包佇列超過硬上限則立即結束供料。
       this.#packets.fail(error);
@@ -419,6 +432,12 @@ export class AudioPipeline<P> {
           ? Math.round(duration * sampleRate)
           : this.#lastPacketFrames || Math.round(FALLBACK_PACKET_SECONDS * sampleRate);
       this.#failedFrames += frames;
+      this.#options.log?.log('warn', 'audio', '封包解碼失敗，以等長的靜音補上', {
+        epoch: this.#options.epoch,
+        frames,
+        failedFrames: this.#failedFrames,
+        error: error instanceof Error ? error.message : String(error),
+      });
       if (this.#failedFrames >= MAX_FAILED_SECONDS * sampleRate) {
         throw new WorkerError('DECODE_FAILED', '音訊連續 1 秒無法解碼', { cause: error });
       }

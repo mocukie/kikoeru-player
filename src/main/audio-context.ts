@@ -1,7 +1,7 @@
 // AudioContext 的生命週期（ADR-0004、硬性約束第 4 條）：串行佇列、解鎖、長時間暫停的 suspend、重建，
 // 以及分辨 Engine 以外的變化（系統中斷、外部的 suspend／resume）。播放意圖與狀態機留在 Engine。
 
-import type { WorkletToMainMessage } from '../protocol/index.js';
+import type { WireLogEntry, WorkletToMainMessage } from '../protocol/index.js';
 import type { AudioOutput, AudioOutputConfig, EngineDeps } from './deps.js';
 
 /** `suspend()`、`resume()`、`close()` 各自的 timeout（ms）。 */
@@ -85,6 +85,8 @@ export interface AudioContextHooks {
   changed(change: ContextChange): void;
   /** `running` 改變；Engine 依它與播放意圖決定 worklet 播或停。 */
   runningChanged(): void;
+  /** 任何一個音訊輸出（包括被重建取代的）轉送的 worklet log。 */
+  log(entry: WireLogEntry): void;
 }
 
 /**
@@ -255,6 +257,9 @@ export class AudioContextLifecycle {
         },
         statechange: (state) => {
           if (this.#slot === slot) this.#observe(slot, state);
+        },
+        log: (entry) => {
+          this.#hooks.log(entry);
         },
       },
       this.#config,
