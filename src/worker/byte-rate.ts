@@ -6,9 +6,9 @@ const FALLBACK_BYTE_RATE = 256 * 1024;
 const MIN_SPAN_SECONDS = 2;
 
 /**
- * 初始估計：容器的 bit_rate 優先。libav.js 沒有 `AVFormatContext.bit_rate` 的 accessor，而 FFmpeg 在容器沒有記錄時
- * 也是以各軌的 bit_rate 合計估它，所以這裡用所有音訊與影片軌的 bit_rate 合計（有一條沒有就不用）；
- * 沒有時用「檔案大小 ÷ duration」，兩者都沒有時用保守的預設值。
+ * 初始估計（ADR-0007）：libav.js 沒有 `AVFormatContext.bit_rate` 的 accessor，而 FFmpeg 在容器沒有記錄時
+ * 也是以各軌的 bit_rate 合計估它，所以這裡用所有音訊與影片軌的 bit_rate 合計（有一條沒有就不用）；少算的容器
+ * overhead 由播放中的 `ByteRate` 修正。沒有時用「檔案大小 ÷ duration」，兩者都沒有時用保守的預設值。
  */
 export function initialByteRate(media: {
   size: number;
