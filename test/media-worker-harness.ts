@@ -131,6 +131,8 @@ export class WorkerDriver {
       module?: WebAssembly.Module;
       retry?: RetryPolicy;
       limits?: Partial<WorkerLimits>;
+      /** 播放速度，預設 1。 */
+      rate?: number;
       logLevel?: WireLogLevel | null;
     } = {},
   ): Promise<WorkerDriver> {
@@ -139,6 +141,7 @@ export class WorkerDriver {
       sampleRate = 48_000,
       module = assets.module,
       retry = { attempts: 0, baseDelayMs: 0 },
+      rate = 1,
       logLevel = null,
     } = options;
     const limits: WorkerLimits = { ...desktopLimits, ...options.limits };
@@ -153,6 +156,7 @@ export class WorkerDriver {
         sampleRate,
         retry,
         limits,
+        rate,
         logLevel,
       },
       [channel.port1],

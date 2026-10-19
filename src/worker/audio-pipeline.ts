@@ -4,6 +4,7 @@
 
 import type { WorkerToWorkletMessage } from '../protocol/index.js';
 import { crashReason, WorkerError } from './errors.js';
+import { TempoStage, type Allocate, type CreateStretcher } from './tempo.js';
 import type { Logger } from './log.js';
 import {
   NORMAL_QUEUE_BYTES,
@@ -210,18 +211,13 @@ class PcmQueue {
     this.push([silence, silence], null);
   }
 
-  /** 取出最多 `frames` 個 frame，複製進 pool 的 buffer。 */
-  take(frames: number, pool: BufferPool): { time: number; channels: [Float32Array, Float32Array] } {
-    const head = this.#segments[0];
-    // 時間戳換算的誤差可能讓起點落在 startTime 之前一點點。
-    const time = Math.max(
-      head ? head.time + head.offset / this.#sampleRate : this.#endTime,
-      this.#startTime,
-    );
-    const channels: [Float32Array, Float32Array] = [
-      new Float32Array(pool.acquire(), 0, frames),
-      new Float32Array(pool.acquire(), 0, frames),
-    ];
+  /** 取出最多 `frames` 個 frame，複製進 `allocate` 給的 buffer。 */
+  take(
+    frames: number,
+    allocate: Allocate,
+  ): { time: number; channels: [Float32Array, Float32Array] } {
+    const time = this.#headTime();
+    const channels = allocate(frames);
     let written = 0;
     while (written < frames) {
       const segment = this.#segments[0];
@@ -237,6 +233,36 @@ class PcmQueue {
     this.frames -= written;
     return { time, channels };
   }
+
+  /** 複製接下來最多 `frames` 個 frame，不取出。 */
+  peek(frames: number): { time: number; channels: [Float32Array, Float32Array] } {
+    const time = this.#headTime();
+    const count = Math.min(frames, this.frames);
+    const channels: [Float32Array, Float32Array] = [
+      new Float32Array(count),
+      new Float32Array(count),
+    ];
+    let written = 0;
+    for (const segment of this.#segments) {
+      if (written >= count) break;
+      const [left, right] = segment.planes;
+      const n = Math.min(count - written, left.length - segment.offset);
+      channels[0].set(left.subarray(segment.offset, segment.offset + n), written);
+      channels[1].set(right.subarray(segment.offset, segment.offset + n), written);
+      written += n;
+    }
+    return { time, channels };
+  }
+
+  /** 下一個要取出的 frame 的媒體時間。 */
+  #headTime(): number {
+    const head = this.#segments[0];
+    // 時間戳換算的誤差可能讓起點落在 startTime 之前一點點。
+    return Math.max(
+      head ? head.time + head.offset / this.#sampleRate : this.#endTime,
+      this.#startTime,
+    );
+  }
 }
 
 export interface AudioPipelineOptions<P> {
@@ -246,6 +272,10 @@ export interface AudioPipelineOptions<P> {
   sampleRate: number;
   /** 從這個媒體時間（秒）開始輸出，之前的 sample 丟掉。 */
   startTime: number;
+  /** 開始時的播放速度（不變調）；之後以 `setRate()` 改變。 */
+  rate: number;
+  /** 速度不是 1 時建立 stretcher。 */
+  createStretcher: CreateStretcher;
   epoch: number;
   demand: Demand;
   pool: BufferPool;
@@ -270,6 +300,7 @@ const DEFAULT_QUEUE_LIMITS: PacketQueueLimits = {
 export class AudioPipeline<P> {
   readonly #options: AudioPipelineOptions<P>;
   readonly #queue: PcmQueue;
+  readonly #tempo: TempoStage;
   readonly #packets: PacketQueue<P>;
   /** 已 demux 的封包的結尾（媒體時間）。 */
   #demuxEnd: number;
@@ -283,7 +314,29 @@ export class AudioPipeline<P> {
 
   constructor(options: AudioPipelineOptions<P>) {
     this.#options = options;
-    this.#queue = new PcmQueue(options.sampleRate, options.startTime);
+    const queue = new PcmQueue(options.sampleRate, options.startTime);
+    this.#queue = queue;
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- getter 內的 this 是 input 物件。
+    const pipeline = this;
+    this.#tempo = new TempoStage({
+      input: {
+        get frames() {
+          return queue.frames;
+        },
+        get ended() {
+          return pipeline.#ended;
+        },
+        more: async () => {
+          await this.#decodeMore();
+          this.#inner.signal.throwIfAborted();
+        },
+        take: (frames, allocate) => queue.take(frames, allocate),
+        peek: (frames) => queue.peek(frames),
+      },
+      sampleRate: options.sampleRate,
+      rate: options.rate,
+      createStretcher: options.createStretcher,
+    });
     this.#demuxEnd = options.startTime;
     this.#packets = new PacketQueue<P>(
       [LANE],
@@ -291,6 +344,11 @@ export class AudioPipeline<P> {
       (p) => this.#measure(p).bytes,
       (p) => this.#measure(p),
     );
+  }
+
+  /** 改變播放速度：已經產生的輸出照舊速度送出，之後的輸入用新的速度（tempo.ts）。 */
+  setRate(rate: number): void {
+    this.#tempo.setRate(rate);
   }
 
   /** 封包佇列中的秒數。 */
@@ -325,6 +383,7 @@ export class AudioPipeline<P> {
     } finally {
       outer.removeEventListener('abort', onAbort);
       stop.abort();
+      await this.#tempo.close();
       // 正常結束與中止時等 demux 停下（中止時它的讀取已被中止）；失敗時不等：它可能卡在讀取，
       // 之後由 seek 中止讀取或 Worker 被 terminate。
       if (!failed) await demuxing;
@@ -384,21 +443,22 @@ export class AudioPipeline<P> {
     const signal = this.#inner.signal;
     for (;;) {
       // 資料送完就立即送出 EOF，不等 worklet 的下一個要求。
-      if (this.#ended && this.#queue.frames === 0) {
+      if (this.#tempo.done) {
         post({ type: 'eof', epoch }, []);
         return;
       }
       await demand.wait(epoch, signal);
       const want = Math.min(Math.max(demand.credit(epoch), MIN_CHUNK_FRAMES), MAX_CHUNK_FRAMES);
-      while (this.#queue.frames < want && !this.#ended) {
-        await this.#decodeMore();
-        signal.throwIfAborted();
-      }
-      if (this.#queue.frames === 0) continue;
-      const { time, channels } = this.#queue.take(Math.min(want, this.#queue.frames), pool);
+      const chunk = await this.#tempo.take(want, (frames) => [
+        new Float32Array(pool.acquire(), 0, frames),
+        new Float32Array(pool.acquire(), 0, frames),
+      ]);
+      signal.throwIfAborted();
+      if (!chunk) continue;
+      const { time, rate, channels } = chunk;
       // transfer 之後 view 被 detach，長度要在送出前記下。
       const frames = channels[0].length;
-      post({ type: 'pcm', epoch, time, channels }, [channels[0].buffer, channels[1].buffer]);
+      post({ type: 'pcm', epoch, time, rate, channels }, [channels[0].buffer, channels[1].buffer]);
       demand.consume(epoch, frames);
     }
   }

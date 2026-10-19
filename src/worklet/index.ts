@@ -58,8 +58,8 @@ export function framesToRequest(marks: Watermarks, level: number, filling: boole
 }
 
 /**
- * 固定容量的 stereo ring buffer。收到的 chunk 複製進來（buffer 立即還給 Worker），並記下每段的媒體時間，
- * 讀出時換算下一個 frame 的媒體時間。
+ * 固定容量的 stereo ring buffer。收到的 chunk 複製進來（buffer 立即還給 Worker），並記下每段的媒體時間與速度，
+ * 讀出時換算下一個 frame 的媒體時間：段內第 i 個 frame 是 `time + i × rate / sampleRate`。
  */
 export class PcmRing {
   readonly #channels: [Float32Array, Float32Array];
@@ -67,8 +67,8 @@ export class PcmRing {
   /** 累計讀出與寫入的 frame 數；位置取 capacity 的餘數。 */
   #read = 0;
   #write = 0;
-  /** 每段的起點（以 `#write` 計）與媒體時間；讀過的段只保留最後一段。 */
-  #segments: { start: number; time: number }[] = [];
+  /** 每段的起點（以 `#write` 計）、媒體時間與速度；讀過的段只保留最後一段。 */
+  #segments: { start: number; time: number; rate: number }[] = [];
 
   constructor(capacity: number, sampleRate: number) {
     this.#channels = [new Float32Array(capacity), new Float32Array(capacity)];
@@ -85,19 +85,34 @@ export class PcmRing {
 
   /** 下一個要讀出的 frame 的媒體時間；空的時候是最後寫入的 frame 之後；從沒寫入過時為 null。 */
   get time(): number | null {
-    const segment = this.#segments.findLast((s) => s.start <= this.#read) ?? this.#segments[0];
+    const segment = this.#current();
     if (!segment) return null;
-    return segment.time + (this.#read - segment.start) / this.#sampleRate;
+    return segment.time + ((this.#read - segment.start) * segment.rate) / this.#sampleRate;
+  }
+
+  /** 下一個要讀出的 frame 的速度；從沒寫入過時為 1。 */
+  get rate(): number {
+    return this.#current()?.rate ?? 1;
+  }
+
+  /** 從下一個要讀出的 frame 到下一段開始（速度可能改變）之前的 frame 數；沒有下一段時是 `buffered`。 */
+  get framesInSegment(): number {
+    const next = this.#segments.find((s) => s.start > this.#read);
+    return next ? next.start - this.#read : this.buffered;
+  }
+
+  #current(): { start: number; time: number; rate: number } | undefined {
+    return this.#segments.findLast((s) => s.start <= this.#read) ?? this.#segments[0];
   }
 
   /** 寫入一段 PCM（mono 時複製到兩個聲道）；放不下的部分丟掉。回傳寫入的 frame 數。 */
-  write(time: number, channels: readonly Float32Array[]): number {
+  write(time: number, channels: readonly Float32Array[], rate = 1): number {
     const left = channels[0];
     if (!left) return 0;
     const right = channels[1] ?? left;
     const frames = Math.min(left.length, this.capacity - this.buffered);
     if (frames <= 0) return 0;
-    this.#segments.push({ start: this.#write, time });
+    this.#segments.push({ start: this.#write, time, rate });
     this.#copy(left, right, frames);
     this.#write += frames;
     return frames;
@@ -213,6 +228,10 @@ export class OutputCore {
   #position = 0;
   #duration = NaN;
   #playIntent = false;
+  /** 主執行緒的播放速度：沒有 PCM（`eof` 之後）時以靜音推進時鐘的速度。 */
+  #rate = 1;
+  /** 最後一個 clock 帶的速度。 */
+  #clockRate = 1;
   /** flush 之後已補滿（回報過 playing／paused）。 */
   #filled = false;
   /** 播放中 ring 用完，等補回 target。 */
@@ -261,6 +280,10 @@ export class OutputCore {
   }
 
   handle(message: MainToWorkletMessage): void {
+    if (message.type === 'rate') {
+      this.#setRate(message.rate);
+      return;
+    }
     if (message.epoch < this.#epoch) return;
     switch (message.type) {
       case 'flush':
@@ -311,6 +334,14 @@ export class OutputCore {
     this.#request();
   }
 
+  /** 主執行緒改了速度：正在以靜音推進時，從當下的位置換算並立即送出 clock。 */
+  #setRate(rate: number): void {
+    if (rate === this.#rate) return;
+    this.#rate = rate;
+    if (this.#silence) this.#silence = { from: this.#position, frames: 0 };
+    if (this.#outputting && this.#ring.buffered === 0 && this.#eof) this.#clock();
+  }
+
   #flush(epoch: number, position: number): void {
     if (this.#outputting && this.#fadeFrames > 0 && this.#gain > 0) this.#captureTail();
     this.#log('debug', `flush 到 epoch ${String(epoch)}`, {
@@ -338,7 +369,7 @@ export class OutputCore {
       case 'pcm': {
         if (message.epoch === this.#epoch && !this.#ended) {
           const frames = message.channels[0]?.length ?? 0;
-          this.#ring.write(message.time, message.channels);
+          this.#ring.write(message.time, message.channels, message.rate);
           this.#pending = Math.max(0, this.#pending - frames);
         }
         // 已經複製進 ring（或過期而丟掉）：buffer 立即還給 Worker。
@@ -396,11 +427,20 @@ export class OutputCore {
       }
       if (ringTime !== null) {
         const available = this.#ring.buffered;
-        const count = Math.min(frames - written, available, remaining, this.#framesUntilSilent());
+        const count = Math.min(
+          frames - written,
+          this.#ring.framesInSegment,
+          remaining,
+          this.#framesUntilSilent(),
+        );
         this.#ring.read(output, written, count);
         this.#envelope(output, written, count, available);
         written += count;
         this.#position = this.#ring.time ?? this.#position;
+        // 換到不同速度的一段（drain 的接點）：從這個 frame 起依新的速度內插。
+        if (this.#ring.buffered > 0 && this.#ring.rate !== this.#clockRate) {
+          this.#clock(this.#quantumStart + written);
+        }
       } else if (this.#eof) {
         if (!Number.isFinite(remaining)) {
           // duration 未知：音訊播完就結束。
@@ -408,12 +448,15 @@ export class OutputCore {
           return;
         }
         // 沒有音訊（或音訊比媒體短）：以靜音推進到 duration。以 frame 數換算，避免逐次累加的誤差。
+        // 音訊的最後一段與主執行緒的速度不同（drain 中播完）時，從這裡起依主執行緒的速度內插。
+        if (this.#rate !== this.#clockRate) this.#clock(this.#quantumStart + written);
         const count = Math.min(frames - written, remaining, this.#framesUntilSilent());
         this.#envelope(output, written, count, Infinity);
         written += count;
         this.#silence ??= { from: this.#position, frames: 0 };
         this.#silence.frames += count;
-        this.#position = this.#silence.from + this.#silence.frames / this.#sampleRate;
+        this.#position =
+          this.#silence.from + (this.#silence.frames * this.#rate) / this.#sampleRate;
       } else {
         this.#outputting = false;
         this.#starved = true;
@@ -512,10 +555,17 @@ export class OutputCore {
     if (tail.offset >= tail.channels[0].length) this.#tail = null;
   }
 
-  /** 從媒體時間 `time` 到 `duration` 還有幾個 frame；duration 未知時為 Infinity。 */
+  /**
+   * 從媒體時間 `time` 到 `duration` 還有幾個 frame（依目前的速度：ring 內的那一段，沒有資料時是主執行緒的速度）；
+   * duration 未知時為 Infinity。
+   */
   #framesUntilEnd(time: number): number {
     if (Number.isNaN(this.#duration)) return Infinity;
-    return Math.round((this.#duration - time) * this.#sampleRate);
+    return Math.round(((this.#duration - time) * this.#sampleRate) / this.#currentRate());
+  }
+
+  #currentRate(): number {
+    return this.#ring.buffered > 0 ? this.#ring.rate : this.#rate;
   }
 
   #end(written: number): void {
@@ -558,11 +608,13 @@ export class OutputCore {
 
   #clock(frame = this.#frame): void {
     this.#lastClockFrame = frame;
+    this.#clockRate = this.#currentRate();
     this.#report({
       type: 'clock',
       epoch: this.#epoch,
       position: this.#position,
       frame,
+      rate: this.#clockRate,
       buffered: this.#ring.buffered,
       underruns: this.#underruns,
     });

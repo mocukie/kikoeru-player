@@ -7,8 +7,12 @@ import type {
   WorkletToMainMessage,
 } from '../../src/protocol/index.js';
 
-/** 省略 epoch 的 worklet 訊息（逐一套用到 union 的每個成員）。 */
-type WithOptionalEpoch<T> = T extends unknown ? Omit<T, 'epoch'> & { epoch?: number } : never;
+/** 測試回報 worklet 訊息時可以省略的欄位（逐一套用到 union 的每個成員）：epoch（目前的 epoch）與 clock 的 rate（1）。 */
+type WithOptionalEpoch<T> = T extends unknown
+  ? Omit<T, 'epoch' | 'rate'> & { epoch?: number } & ('rate' extends keyof T
+        ? { rate?: number }
+        : unknown)
+  : never;
 
 /** Engine 建立音訊輸出時給的設定（同 `AudioOutputConfig`）。 */
 export interface FakeAudioOutputConfig {
@@ -120,9 +124,14 @@ export class FakeAudioOutput {
     return this.received.findLast((m) => m.type === 'play' || m.type === 'pause')?.type ?? null;
   }
 
-  /** 以 worklet 的身分回報；省略 epoch 時用目前的 epoch。 */
+  /** 以 worklet 的身分回報；省略 epoch 時用目前的 epoch，省略 clock 的 rate 時為 1。 */
   reply(message: WithOptionalEpoch<WorkletToMainMessage>): void {
-    this.#handlers.message({ ...message, epoch: message.epoch ?? this.epoch });
+    const epoch = message.epoch ?? this.epoch;
+    this.#handlers.message(
+      message.type === 'clock'
+        ? { ...message, epoch, rate: 'rate' in message ? (message.rate ?? 1) : 1 }
+        : { ...message, epoch },
+    );
   }
 
   /** 以音訊輸出的身分轉送 worklet 的 log（`time` 已換算成主執行緒的時基）。 */

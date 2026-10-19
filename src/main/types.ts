@@ -191,7 +191,13 @@ export interface Engine extends EventTarget {
   volume: number;
   /** 靜音，預設 false；不影響音訊時鐘（`currentTime` 照常前進），也不改變 `volume`。 */
   muted: boolean;
-  /** 不變調的播放速度，0.5–2；超出範圍丟 `RangeError`。 */
+  /**
+   * 不變調的播放速度，0.5–2，預設 1。不是 0.5–2 之間的數（包括 NaN）時丟 `RangeError`，值不變。
+   *
+   * 設定後 getter 立即是新值，聲音約 0.2 秒後（已經送進輸出緩衝的舊速度資料播完）才換成新的速度；不中斷播放、
+   * 不改變 `state`，也不發出事件。`currentTime`、`timeupdate` 與 `ended` 依實際播出的速度換算，仍在媒體時間軸上。
+   * 值沿用到之後的 `load()`、`reload()` 與 seek，沒有媒體時也可以設定。1 時不經過 time stretch，輸出是原本的聲音。
+   */
   playbackRate: number;
 
   // ── 音訊解鎖 ──

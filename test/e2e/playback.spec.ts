@@ -7,7 +7,11 @@ import { expect, test, type Page } from '@playwright/test';
 import type * as AudioCaptureModule from '../audio-capture.js';
 import type { DestinationCapture } from '../audio-capture.js';
 import type * as HarnessModule from '../media-worker-harness.js';
-import { BEEP_ONSET_TOLERANCE } from './tolerances.js';
+import {
+  BEEP_ONSET_TOLERANCE,
+  STRETCHED_BEEP_INTERVAL_TOLERANCE,
+  STRETCHED_BEEP_ONSET_TOLERANCE,
+} from './tolerances.js';
 
 /** 頁面內的一筆取樣（rAF）。 */
 interface Sample {
@@ -123,11 +127,15 @@ function heardBeeps(page: Page, since = 0): Promise<HeardBeep[]> {
  * 最先聽到的幾個 beep 依序在 `expected` 秒，被聽到時 `currentTime` 與 beep 的位置相差不超過容差。
  * 之後聽到的不比（取樣到讀取結果之間播放仍在繼續）。
  */
-function expectBeepsOnTime(beeps: HeardBeep[], expected: number[]): void {
+function expectBeepsOnTime(
+  beeps: HeardBeep[],
+  expected: number[],
+  tolerance = BEEP_ONSET_TOLERANCE,
+): void {
   const first = beeps.slice(0, expected.length);
   expect(first.map((b) => Math.round(b.time))).toEqual(expected);
   for (const { time } of first) {
-    expect(Math.abs(time - Math.round(time))).toBeLessThanOrEqual(BEEP_ONSET_TOLERANCE);
+    expect(Math.abs(time - Math.round(time))).toBeLessThanOrEqual(tolerance);
   }
 }
 
@@ -253,6 +261,68 @@ test('播放中 reload：從原本的位置接續播放，舊的 Worker 被 term
   const stats = await page.evaluate(() => (window as unknown as E2EWindow).engine.getStats());
   expect(stats.resources.workers).toBe(1);
   await expect.poll(() => page.workers().length).toBe(1);
+});
+
+/** 以 Demo 頁的速度滑桿設定 playbackRate（設定值並發出 input 與 change）。 */
+async function rateBar(page: Page, rate: number): Promise<void> {
+  await page.locator('#rate').evaluate((input: HTMLInputElement, rate) => {
+    input.value = String(rate);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, rate);
+  await expect(
+    page.locator('#log li').filter({ hasText: `playbackRate = ${rate.toFixed(2)}` }),
+  ).not.toHaveCount(0);
+}
+
+test('atempo 1.25x：beep 的間隔為 0.8 s ± 10 ms，currentTime 依 1.25 倍前進', async ({ page }) => {
+  await load(page, 'audio/flac.flac');
+  await rateBar(page, 1.25);
+  const before = await now(page);
+  await page.locator('#play').click();
+  await expect(page.locator('#state')).toHaveText('playing');
+  await expect.poll(() => currentTime(page), { timeout: 5000 }).toBeGreaterThan(5.3);
+
+  const beeps = (await heardBeeps(page, before)).filter((b) => b.time > 0.5).slice(0, 4);
+  expect(beeps.map((b) => Math.round(b.time))).toEqual([1, 2, 3, 4]);
+  for (let i = 1; i < beeps.length; i++) {
+    const interval = ((beeps[i]?.perf ?? NaN) - (beeps[i - 1]?.perf ?? NaN)) / 1000;
+    expect(Math.abs(interval - 0.8)).toBeLessThanOrEqual(STRETCHED_BEEP_INTERVAL_TOLERANCE);
+  }
+});
+
+test('變速中 seek：beep 起點對 currentTime 在變速的容差內', async ({ page }) => {
+  await load(page, 'audio/flac.flac');
+  await rateBar(page, 1.25);
+  await page.locator('#play').click();
+  // 1 秒的 beep 聽完之後才 seek：beepOnsets 以 0.5 秒的靜音分開 beep，太接近會與落點之後的 beep 併在一起。
+  await expect.poll(() => currentTime(page)).toBeGreaterThan(1.5);
+
+  const before = await now(page);
+  await seekBar(page, 4.5);
+  await expect(page.locator('#log li').filter({ hasText: /seeked 4\.500$/ })).toHaveCount(1);
+  await expect(page.locator('#state')).toHaveText('playing');
+  await expect.poll(() => currentTime(page), { timeout: 5000 }).toBeGreaterThan(7.3);
+
+  expectBeepsOnTime(await heardBeeps(page, before), [5, 6, 7], STRETCHED_BEEP_ONSET_TOLERANCE);
+});
+
+test('播放中改速度再回到 1.0x：beep 起點對 currentTime ≤ 20 ms', async ({ page }) => {
+  await load(page, 'audio/flac.flac');
+  await page.locator('#play').click();
+  await expect.poll(() => currentTime(page)).toBeGreaterThan(0.3);
+  await rateBar(page, 1.5);
+  await expect.poll(() => currentTime(page), { timeout: 5000 }).toBeGreaterThan(3.3);
+  await page.locator('#rate-reset').click();
+  const reset = await currentTime(page);
+
+  const before = await now(page);
+  const next = firstBeepAfter(reset + 0.3);
+  await expect.poll(() => currentTime(page), { timeout: 5000 }).toBeGreaterThan(next + 1.3);
+  expectBeepsOnTime(
+    (await heardBeeps(page, before)).filter((b) => b.time > next - 0.5),
+    [next, next + 1],
+  );
 });
 
 test('CI 組的純音訊檔都能播放與暫停，並輸出聲音', async ({ page, request }) => {

@@ -17,7 +17,11 @@ export interface WorkletProcessorOptions {
 
 /** 主執行緒送給 AudioWorklet 的訊息（經 `AudioWorkletNode.port`）。 */
 export type MainToWorkletMessage =
-  WorkletFlushMessage | WorkletPlayMessage | WorkletPauseMessage | WorkletDurationMessage;
+  | WorkletFlushMessage
+  | WorkletPlayMessage
+  | WorkletPauseMessage
+  | WorkletDurationMessage
+  | WorkletRateMessage;
 
 /**
  * 換成新的 epoch：丟掉 ring 內與之後收到的舊 epoch 資料，時鐘停在 `position`（秒），等新 epoch 的資料
@@ -63,6 +67,15 @@ export interface WorkletDurationMessage {
 }
 
 /**
+ * 播放速度（`Engine.playbackRate`），沿用到下一個 `rate`，不受 flush 影響、不帶 epoch。只用於沒有 PCM 的時候：
+ * `eof` 之後以靜音推進時鐘的速度。有 PCM 時依 PCM 自己帶的 `rate`。
+ */
+export interface WorkletRateMessage {
+  type: 'rate';
+  rate: number;
+}
+
+/**
  * 主執行緒的音訊輸出送給 AudioWorklet：接上新的 media Worker 的 `MessageChannel` 一端（以 transfer 傳送）。
  * 之前的 port 關閉，從它收到、還沒用到的訊息丟掉。不帶 epoch，與其他訊息依送出順序處理。
  */
@@ -102,9 +115,14 @@ export interface WorkletClockMessage {
   position: number;
   /**
    * `position` 的 sample 進入 audio graph 的 context frame（`currentFrame`）。時鐘前進時，context 時間
-   * `t` 秒進入 graph 的媒體位置為 `position + (t × sampleRate − frame) / sampleRate`（尚未扣掉輸出延遲）。
+   * `t` 秒進入 graph 的媒體位置為 `position + (t × sampleRate − frame) × rate / sampleRate`（尚未扣掉輸出延遲）。
    */
   frame: number;
+  /**
+   * `position` 之後的播放速度：每個輸出的 frame 推進 `rate / sampleRate` 秒的媒體時間。速度改變的那個 frame
+   * 也送出一個 clock，所以兩個 clock 之間的速度固定。
+   */
+  rate: number;
   /** ring 內目前的 frame 數。 */
   buffered: number;
   /** ring 用完（starved）的累計次數。 */
@@ -115,14 +133,19 @@ export interface WorkletClockMessage {
 export type WorkerToWorkletMessage = WorkletPcmMessage | WorkletEofMessage;
 
 /**
- * 一段 PCM，長 2048–4096 frame（`eof` 前的最後一段可以更短）；`channels` 的 buffer 以 transfer 傳送，
- * 用完後以 `release` 送回 Worker 重用。
+ * 一段 PCM，長 2048–4096 frame（`eof` 前的最後一段與速度改變之前的最後一段可以更短）；`channels` 的 buffer 以
+ * transfer 傳送，用完後以 `release` 送回 Worker 重用。
  */
 export interface WorkletPcmMessage {
   type: 'pcm';
   epoch: number;
   /** 第一個 frame 在媒體時間軸上的位置（秒）。 */
   time: number;
+  /**
+   * 這段 PCM 的播放速度（不變調）：第 `i` 個 frame 的媒體時間是 `time + i × rate / sampleRate`。1 表示沒有經過
+   * stretcher。一段 PCM 內速度固定。
+   */
+  rate: number;
   /** 一律 stereo、`ctx.sampleRate` 的 float planar；兩個聲道的 view 各自擁有一個 `ArrayBuffer`。 */
   channels: readonly Float32Array[];
 }

@@ -275,6 +275,7 @@ function recreateEngine(reason: string): void {
   setupEngine();
   engine.volume = Number(volumeInput.value);
   engine.muted = mutedInput.checked;
+  engine.playbackRate = Number(rateInput.value);
   log(`建立新的 Engine（${reason}）`);
 }
 
@@ -313,6 +314,22 @@ volumeInput.addEventListener('change', () => {
 mutedInput.addEventListener('change', () => {
   engine.muted = mutedInput.checked;
   log(`muted = ${String(engine.muted)}`);
+});
+// 播放速度（不變調）：拖曳中即時套用，放開時記進 log；ring 內舊速度的資料播完（約 0.2 秒）才聽到新的速度。
+const rateInput = element('rate', HTMLInputElement);
+const rateValue = element('rate-value', HTMLOutputElement);
+function applyRate(): void {
+  engine.playbackRate = Number(rateInput.value);
+  rateValue.value = engine.playbackRate.toFixed(2);
+}
+rateInput.addEventListener('input', applyRate);
+rateInput.addEventListener('change', () => {
+  log(`playbackRate = ${engine.playbackRate.toFixed(2)}`);
+});
+element('rate-reset', HTMLElement).addEventListener('click', () => {
+  rateInput.value = '1';
+  applyRate();
+  log(`playbackRate = ${engine.playbackRate.toFixed(2)}`);
 });
 
 // 選了本機檔案或填了 URL 之後，清掉另一個，避免不知道用的是哪一個。

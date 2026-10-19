@@ -81,7 +81,7 @@ function feed(
     while ((credit.get(data.epoch) ?? 0) > 0 && offset < total) {
       const want = Math.min(Math.max(credit.get(data.epoch) ?? 0, 2048), 4096, total - offset);
       const channels = source.map((c) => c.slice(offset, offset + want));
-      post({ type: 'pcm', epoch: data.epoch, time: offset / sampleRate, channels }, [
+      post({ type: 'pcm', epoch: data.epoch, time: offset / sampleRate, rate: 1, channels }, [
         ...channels.map((c) => c.buffer),
       ]);
       offset += want;

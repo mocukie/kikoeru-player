@@ -487,6 +487,7 @@ describe('watchdog', () => {
     const fresh = deps.audio;
     expect(fresh.epoch).toBeGreaterThan(oldEpoch);
     expect(fresh.received).toEqual([
+      { type: 'rate', rate: 1 },
       { type: 'flush', epoch: fresh.epoch, position: 2 },
       { type: 'duration', epoch: fresh.epoch, duration: 10 },
       { type: 'pause', epoch: fresh.epoch, immediate: true },

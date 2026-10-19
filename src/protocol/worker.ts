@@ -17,6 +17,7 @@ export type MainToWorkerMessage<H extends HostTypes> =
   | WorkerStartMessage
   | WorkerSeekMessage
   | WorkerPortMessage<H>
+  | WorkerRateMessage
   | WorkerStatsRequestMessage;
 
 /** Worker 建立後的第一個訊息；`workletPort` 以 transfer 傳送。 */
@@ -34,6 +35,8 @@ export interface WorkerInitMessage<H extends HostTypes> {
   retry: RetryPolicy;
   /** 記憶體與預讀的上限（ADR-0007）。 */
   limits: WorkerLimits;
+  /** 目前的播放速度（`Engine.playbackRate`），之後以 `rate` 改變。 */
+  rate: number;
   /**
    * 送出 `log` 的最低等級（`EngineOptions.logLevel`）；低於它的 log 在 Worker 內就丟掉，不跨執行緒傳送。
    * null 表示 App 沒有設定 log hook，Worker 不送任何 log。
@@ -94,6 +97,16 @@ export interface WorkerPortMessage<H extends HostTypes> {
   port: H['messagePort'];
   epoch: number;
   time: number;
+}
+
+/**
+ * 改變播放速度（不變調，ADR-0004）。不遞增 epoch：已經送出的 PCM（含 worklet 的 ring）照舊速度播完，之後的輸出
+ * 才是新的速度。速度沿用到之後的 `start`、`seek`、`port`。
+ */
+export interface WorkerRateMessage {
+  type: 'rate';
+  /** 0.5–2；1 時不經過 stretcher。 */
+  rate: number;
 }
 
 /** 要求 Worker 回報它持有的資源；以 `stats` 回覆同一個 `id`。 */

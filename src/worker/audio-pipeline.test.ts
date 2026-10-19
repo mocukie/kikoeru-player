@@ -11,6 +11,7 @@ import {
 import { WorkerError } from './errors.js';
 import type { Logger } from './log.js';
 import type { PacketQueueLimits } from './packet-queue.js';
+import type { Stereo, Stretcher } from './tempo.js';
 
 const RATE = 48_000;
 
@@ -83,8 +84,60 @@ class FakeDecoder implements AudioDecoder<FakePacket> {
   }
 }
 
+/**
+ * 假 stretcher：輸出的第 k 個 frame 是輸入的第 round(k × rate) 個（值是 FakeDecoder 的 frame 序號，可以看出來源），
+ * 輸出比輸入晚 `latency` 個輸入 frame，drain 時排出剩下的。
+ */
+class FakeStretcher implements Stretcher {
+  readonly input: number[] = [];
+  out = 0;
+  drained = false;
+  freed = false;
+  constructor(
+    readonly rate: number,
+    readonly latency = 300,
+  ) {}
+  push(input: Stereo): Promise<Stereo[]> {
+    if (this.drained) throw new Error('drain 之後不能再 push');
+    this.input.push(...input[0]);
+    return Promise.resolve(this.#emit(Math.floor((this.input.length - this.latency) / this.rate)));
+  }
+  drain(): Promise<Stereo[]> {
+    this.drained = true;
+    return Promise.resolve(this.#emit(Math.floor(this.input.length / this.rate)));
+  }
+  free(): Promise<void> {
+    this.freed = true;
+    return Promise.resolve();
+  }
+  #emit(until: number): Stereo[] {
+    if (until <= this.out) return [];
+    const left = Float32Array.from({ length: until - this.out }, (_, i) => {
+      const k = this.out + i;
+      return this.input[Math.min(this.input.length - 1, Math.round(k * this.rate))] ?? 0;
+    });
+    this.out = until;
+    return [[left, left.map((x) => -x)]];
+  }
+}
+
+/** 記錄建立過的假 stretcher。 */
+function stretchers() {
+  const created: FakeStretcher[] = [];
+  return {
+    created,
+    create: (rate: number) => {
+      const stretcher = new FakeStretcher(rate);
+      created.push(stretcher);
+      return Promise.resolve(stretcher);
+    },
+  };
+}
+
 function setup(
   options: {
+    rate?: number;
+    stretchers?: ReturnType<typeof stretchers>;
     batches?: FakePacket[][];
     decoder?: FakeDecoder;
     startTime?: number;
@@ -94,6 +147,7 @@ function setup(
     log?: Logger;
   } = {},
 ) {
+  const stretch = options.stretchers ?? stretchers();
   const posted: { message: WorkerToWorkletMessage; transfer: Transferable[] }[] = [];
   const reader = new FakeReader(
     options.batches ?? Array.from({ length: 10 }, () => [{ frames: 1024 }, { frames: 1024 }]),
@@ -108,6 +162,8 @@ function setup(
     decoder: options.decoder ?? new FakeDecoder(),
     sampleRate: RATE,
     startTime: options.startTime ?? 0,
+    rate: options.rate ?? 1,
+    createStretcher: stretch.create,
     epoch,
     demand,
     pool,
@@ -121,13 +177,23 @@ function setup(
   const running = pipeline.run();
   const pcm = () =>
     posted.map((p) => p.message).filter((m): m is WorkletPcmMessage => m.type === 'pcm');
-  return { pipeline, running, posted, pcm, demand, pool, reader, controller, epoch };
+  return { pipeline, running, posted, pcm, demand, pool, reader, controller, epoch, stretch };
 }
 
 /** 讓 pipeline 處理完目前能處理的工作。 */
 async function settle() {
   for (let i = 0; i < 50; i++) await Promise.resolve();
   await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function concatLeft(messages: WorkletPcmMessage[]): Float32Array {
+  const out = new Float32Array(frames(messages));
+  let at = 0;
+  for (const m of messages) {
+    out.set(m.channels[0] ?? new Float32Array(), at);
+    at += m.channels[0]?.length ?? 0;
+  }
+  return out;
 }
 
 function frames(messages: WorkletPcmMessage[]): number {
@@ -251,6 +317,132 @@ describe('供料', () => {
     demand.need(epoch, 4096);
     await expect(running).rejects.toMatchObject({ name: 'AbortError' });
     expect(posted).toEqual([]);
+  });
+});
+
+describe('變速', () => {
+  test('1.0x 不經過 stretcher：chunk 的 rate 為 1', async () => {
+    const { demand, pcm, epoch, stretch } = setup();
+    demand.need(epoch, 10_000);
+    await settle();
+    expect(pcm().every((c) => c.rate === 1)).toBe(true);
+    expect(stretch.created).toEqual([]);
+  });
+
+  test('從變速開始：chunk 帶 rate，媒體時間依輸出的 frame 數 × rate 推算，輸出長度為輸入 ÷ rate', async () => {
+    const { demand, pcm, running, epoch, stretch } = setup({
+      rate: 1.25,
+      startTime: 0.5,
+      batches: Array.from({ length: 10 }, () => [{ frames: 4800 }]),
+    });
+    demand.need(epoch, 1e9);
+    await running;
+    const chunks = pcm();
+    expect(stretch.created.map((s) => s.rate)).toEqual([1.25]);
+    // 起點 0.5 秒之前的 24000 frame 丟掉，送進 stretcher 的是之後的 24000 frame。
+    expect(stretch.created[0]?.input.length).toBe(24_000);
+    expect(frames(chunks)).toBe(24_000 / 1.25);
+    let out = 0;
+    for (const chunk of chunks) {
+      expect(chunk.rate).toBe(1.25);
+      expect(chunk.time).toBeCloseTo(0.5 + (out * 1.25) / RATE, 9);
+      // 輸出的第 k 個 frame 來自輸入的第 round(k × 1.25) 個（媒體 frame 24000 起）。
+      expect(chunk.channels[0]?.[0]).toBe(24_000 + Math.round(out * 1.25));
+      out += chunk.channels[0]?.length ?? 0;
+    }
+    expect(stretch.created[0]?.drained).toBe(true);
+    expect(stretch.created[0]?.freed).toBe(true);
+  });
+
+  /** 交叉淡化的長度：5 ms。 */
+  const FADE = 240;
+
+  test('1.0x → 1.25x：已送出的照舊；從接點起換成 1.25，time map 接在接點的媒體時間，開頭與 bypass 交叉淡化', async () => {
+    const { pipeline, demand, pcm, epoch, stretch } = setup();
+    demand.need(epoch, 8192);
+    await settle();
+    const before = frames(pcm());
+    pipeline.setRate(1.25);
+    demand.need(epoch, 20_000);
+    await settle();
+    const after = pcm().slice(pcm().findIndex((c) => c.rate !== 1));
+    expect(
+      pcm()
+        .slice(0, pcm().length - after.length)
+        .every((c) => c.rate === 1),
+    ).toBe(true);
+    expect(frames(pcm()) - frames(after)).toBe(before);
+    const [stretcher] = stretch.created;
+    // 接點之後的輸入從媒體 frame `before` 開始送進 stretcher。
+    expect(stretcher?.rate).toBe(1.25);
+    expect(stretcher?.input[0]).toBe(before);
+    let out = 0;
+    for (const chunk of after) {
+      expect(chunk.rate).toBe(1.25);
+      expect(chunk.time).toBeCloseTo((before + out * 1.25) / RATE, 9);
+      out += chunk.channels[0]?.length ?? 0;
+    }
+    const left = concatLeft(after);
+    // 交叉淡化之後是 stretcher 的輸出；之中是 bypass 的同一段輸入（before + k）與 stretcher 輸出的加權。
+    expect(left[FADE + 10]).toBe(before + Math.round((FADE + 10) * 1.25));
+    const k = 100;
+    const w = (k + 1) / (FADE + 1);
+    expect(left[k]).toBeCloseTo((before + Math.round(k * 1.25)) * w + (before + k) * (1 - w), 2);
+  });
+
+  test('1.25x → 1.0x：舊的 stretcher 排空後釋放，剩下的輸出照 1.25 送出；bypass 從接點的媒體時間起輸出原樣的輸入', async () => {
+    const { pipeline, demand, pcm, epoch, stretch } = setup({ rate: 1.25 });
+    demand.need(epoch, 8192);
+    await settle();
+    const [old] = stretch.created;
+    // 接點：還沒送進 stretcher 的下一個輸入 frame。
+    const boundary = old?.input.length ?? NaN;
+    pipeline.setRate(1);
+    demand.need(epoch, 20_000);
+    await settle();
+    expect(old?.drained).toBe(true);
+    expect(old?.freed).toBe(true);
+    expect(stretch.created).toHaveLength(1);
+    const chunks = pcm();
+    const first = chunks.findIndex((c) => c.rate === 1);
+    expect(chunks.slice(0, first).every((c) => c.rate === 1.25)).toBe(true);
+    const bypass = chunks.slice(first);
+    expect(bypass[0]?.time).toBeCloseTo(boundary / RATE, 9);
+    const left = concatLeft(bypass);
+    for (const i of [FADE, FADE + 1, 5000]) expect(left[i]).toBe(boundary + i);
+    let at = boundary;
+    for (const chunk of bypass) {
+      expect(chunk.time).toBeCloseTo(at / RATE, 9);
+      at += chunk.channels[0]?.length ?? 0;
+    }
+  });
+
+  test('1.25x → 1.5x：換一個新的 stretcher，新的一段從接點開始', async () => {
+    const { pipeline, demand, pcm, epoch, stretch } = setup({ rate: 1.25 });
+    demand.need(epoch, 8192);
+    await settle();
+    const boundary = stretch.created[0]?.input.length ?? NaN;
+    pipeline.setRate(1.5);
+    demand.need(epoch, 20_000);
+    await settle();
+    expect(stretch.created.map((s) => s.rate)).toEqual([1.25, 1.5]);
+    expect(stretch.created[0]?.freed).toBe(true);
+    expect(stretch.created[1]?.input[0]).toBe(boundary);
+    const chunks = pcm();
+    const first = chunks.findIndex((c) => c.rate === 1.5);
+    expect(chunks[first]?.time).toBeCloseTo(boundary / RATE, 9);
+    expect(concatLeft(chunks.slice(first))[FADE + 10]).toBe(
+      boundary + Math.round((FADE + 10) * 1.5),
+    );
+  });
+
+  test('中止時釋放 stretcher', async () => {
+    const { demand, epoch, stretch, controller, running } = setup({ rate: 1.25 });
+    demand.need(epoch, 8192);
+    await settle();
+    controller.abort();
+    await expect(running).rejects.toThrow();
+    expect(stretch.created[0]?.freed).toBe(true);
   });
 });
 
