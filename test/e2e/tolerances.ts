@@ -22,3 +22,12 @@ export const THROTTLE_SLACK_MS = 20;
  * 本身會增長（每次換檔十幾行），所以不是 0。
  */
 export const LEAK_HEAP_GROWTH_BYTES = 4 * 1024 * 1024;
+
+/** 改變 volume／muted 之後，等 GainNode（time constant 約 10 ms）趨近新值再開始錄音的時間（ms）。 */
+export const GAIN_SETTLE_MS = 100;
+
+/** volume 0.5 時錄到的峰值與 volume 1 的比，和 0.5 的差。 */
+export const VOLUME_RATIO_TOLERANCE = 0.05;
+
+/** muted 時錄到的峰值上限。 */
+export const MUTED_PEAK_MAX = 1e-3;
