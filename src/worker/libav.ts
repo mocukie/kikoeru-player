@@ -131,15 +131,15 @@ export class LibavMedia {
     this.#reads = reads;
   }
 
-  /**
-   * 中止進行中的來源讀取：等待它的 libav 呼叫（demux、seek）以錯誤結束。之後要先經 `startAudio()` 的 seek
-   * 才能繼續讀（中止後直接續讀會讀到錯位的封包）。
-   */
   /** instance 的 wasm heap（linear memory）目前的大小（bytes）。 */
   get heapBytes(): number {
     return this.#memory?.buffer.byteLength ?? 0;
   }
 
+  /**
+   * 中止進行中的來源讀取：等待它的 libav 呼叫（demux、seek）以錯誤結束。之後要先經 `startAudio()` 的 seek
+   * 才能繼續讀（中止後直接續讀會讀到錯位的封包）。
+   */
   abortReads(): void {
     this.#reads.abort();
   }
