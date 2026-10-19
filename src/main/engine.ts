@@ -1379,6 +1379,8 @@ class EngineImpl extends EventTarget implements Engine {
   /** 遞增 epoch，讓 Worker 從 `time` 重新供料、worklet 丟掉舊的資料。 */
   #retarget(time: number): void {
     const epoch = ++this.#epoch;
+    // 卡住時回報的讀取錯誤只看重新讀取之後的請求。
+    this.#lastReadError = null;
     this.#worker?.post({ type: 'seek', epoch, time });
     this.#flushAudio(time);
   }
