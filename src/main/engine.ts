@@ -1554,12 +1554,23 @@ function abortReason(signal: AbortSignal): Error {
   return signal.reason instanceof Error ? signal.reason : abortError();
 }
 
+/** Worker 內的 fetch 以 Worker script 的位置解析相對 URL，所以先以 document 的 base URL 解析。 */
+function resolveUrl(url: string | URL): string {
+  if (typeof document === 'undefined') return String(url);
+  try {
+    return new URL(url, document.baseURI).href;
+  } catch {
+    // 無效的 URL 原樣交給 Worker，由 fetch 失敗回報。
+    return String(url);
+  }
+}
+
 function toWireSource(source: Source): WireSource<MainHost> {
   switch (source.kind) {
     case 'http':
       return {
         kind: 'http',
-        url: String(source.url),
+        url: resolveUrl(source.url),
         ...(source.credentials && { credentials: source.credentials }),
         ...(source.headers && { headers: source.headers }),
         ...(source.size !== undefined && { size: source.size }),

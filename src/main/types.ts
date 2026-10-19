@@ -404,6 +404,7 @@ export type Source = HttpSource | BytesSource | BlobSource;
 /** 以 HTTP Range 分段讀取的來源。 */
 export interface HttpSource {
   kind: 'http';
+  /** 相對 URL 以 `document.baseURI` 解析。 */
   url: string | URL;
   /** 預設 `'same-origin'`：同源請求自動帶 cookie。 */
   credentials?: RequestCredentials;
