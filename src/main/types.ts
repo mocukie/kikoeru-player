@@ -27,14 +27,16 @@ import type {
  */
 export interface EngineOptions {
   /**
-   * wasm、glue、Worker 與 AudioWorklet 資產的位置。預設由套件以 `new URL(..., import.meta.url)` 解析，
+   * wasm、glue 與 AudioWorklet 資產的位置。預設由套件以 `new URL(..., import.meta.url)` 解析，
    * 交給 App 的 bundler 處理。`.wasm` 與 glue 必須與頁面同源，`.wasm` 以 `Content-Type: application/wasm` 提供。
+   *
+   * media Worker 的位置不能指定：套件以字面寫法 `new Worker(new URL('…', import.meta.url), { type: 'module' })`
+   * 建立 Worker，由 App 的 bundler 依這個寫法輸出 Worker 檔案。
    */
   assets?: {
     wasmUrl?: string | URL;
     /** libav.js 的 glue（`libav-….wasm.mjs`），由 media Worker 以動態 import 載入，不經過 bundler。 */
     glueUrl?: string | URL;
-    workerUrl?: string | URL;
     workletUrl?: string | URL;
   };
   /** 繪製影片的 canvas，也可以之後用 `attachCanvas()` 設定。 */

@@ -312,6 +312,8 @@ function misuse(e: Engine) {
   thirdPartyNotices[0] = { name: '', license: '', sourceUrl: '', noticeText: '' };
   // @ts-expect-error audioBuffer 的欄位是 targetMs，不是 target
   createEngine({ audioBuffer: { target: 200 } });
+  // @ts-expect-error Worker 由套件以字面寫法建立，位置不能指定
+  createEngine({ assets: { workerUrl: '/worker.js' } });
 }
 
 // ─── App 端的雜項（stub） ───
