@@ -1,5 +1,6 @@
 // 公開 API 的型別。對外的時間一律在媒體時間軸上，單位是秒：0 是媒體第一個可播放的 sample，已扣掉容器的 start_time。
 
+import type { WireLogLevel, WireLogScope, WorkerStats } from '../protocol/index.js';
 import type { EngineError } from './errors.js';
 import type {
   BeforeAudioStartEvent,
@@ -677,7 +678,7 @@ export type EngineErrorCode =
  * log 的等級，由低到高。`debug`：指令、state 轉換、每個 Range 請求等逐筆的事件；`info`：開檔結果、重試、恢復；
  * `warn`：不致命的異常（請求失敗、ring 用完、卡住、watchdog、AudioContext 無法開始）；`error`：致命錯誤與 Worker 崩潰。
  */
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogLevel = WireLogLevel;
 
 /** 接收 Engine 診斷 log 的 hook。 */
 export type LogHook = (entry: LogEntry) => void;
@@ -686,7 +687,7 @@ export type LogHook = (entry: LogEntry) => void;
 export interface LogEntry {
   level: LogLevel;
   /** 產生 log 的子系統；`'background'` 是背景播放模組。 */
-  scope: 'io' | 'demux' | 'audio' | 'video' | 'subtitle' | 'command' | 'worker' | 'background';
+  scope: WireLogScope;
   message: string;
   /**
    * 事件發生的 `performance.now()` 時間（ms，主執行緒的時基）；media Worker 與 AudioWorklet 的 log 已換算過。
@@ -715,25 +716,14 @@ export interface EngineStats {
     avgDecodeMs: number;
   } | null;
   /** demux 與解碼之間的封包佇列。 */
-  packetQueue: { audioSeconds: number; videoSeconds: number; bytes: number };
+  packetQueue: WorkerStats['packetQueue'];
   /**
    * Range 快取。`bytes`／`limitBytes`：目前用量與上限；`aheadBytes`：選用中來源已預讀、在播放位置之後的 bytes 合計；
    * `readaheadTarget`：預讀目標的 bytes 合計；`fetching`：是否有來源處於抓取階段；`hits`／`misses`：命中與未命中次數。
    */
-  cache: {
-    bytes: number;
-    limitBytes: number;
-    aheadBytes: number;
-    readaheadTarget: number;
-    fetching: boolean;
-    hits: number;
-    misses: number;
-  };
+  cache: WorkerStats['cache'];
   /** 網路。`bytesLoaded`：累計讀取的 bytes；`inflight`：進行中的請求。 */
-  network: {
-    bytesLoaded: number;
-    inflight: { url: string; start: number; end: number; elapsedMs: number }[];
-  };
+  network: WorkerStats['network'];
   /** 所有 wasm instance 的 heap 合計（bytes）。 */
   wasmHeapBytes: number;
   /**

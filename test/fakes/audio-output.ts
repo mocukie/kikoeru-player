@@ -1,6 +1,7 @@
 // 假音訊輸出：記錄送給 AudioWorklet 的訊息與對 AudioContext 的呼叫，worklet 的回報與 context 的結果由測試腳本控制。
 
 import type {
+  AudioBufferWatermarks,
   MainToWorkletMessage,
   WireLogEntry,
   WireLogLevel,
@@ -16,7 +17,7 @@ type WithOptionalEpoch<T> = T extends unknown
 
 /** Engine 建立音訊輸出時給的設定（同 `AudioOutputConfig`）。 */
 export interface FakeAudioOutputConfig {
-  audioBuffer: { targetMs: number; refillMs: number; capacityMs: number };
+  audioBuffer: AudioBufferWatermarks;
   audioFadeMs: number;
   workletUrl?: string | URL;
   logLevel: WireLogLevel | null;

@@ -109,10 +109,10 @@ export interface WireError {
   detail?: { status?: number; url?: string; codec?: string };
 }
 
-/** log 的等級，由低到高；同公開的 `LogLevel`。 */
+/** log 的等級，由低到高；公開的 `LogLevel` 沿用這個型別。 */
 export type WireLogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-/** 產生 log 的子系統；同公開的 `LogEntry.scope`。 */
+/** 產生 log 的子系統；公開的 `LogEntry.scope` 沿用這個型別。 */
 export type WireLogScope =
   'io' | 'demux' | 'audio' | 'video' | 'subtitle' | 'command' | 'worker' | 'background';
 

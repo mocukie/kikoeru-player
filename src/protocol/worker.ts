@@ -200,7 +200,7 @@ export interface WorkerStatsMessage {
 export interface WorkerStats {
   /** 目前存在的 libav instance 數：建立 instance 時加一，被取代或 open／probe 失敗而丟棄時減一。 */
   libavInstances: number;
-  /** Range 快取，欄位同 `EngineStats.cache`；沒有 http 來源時 bytes 等為 0。 */
+  /** Range 快取，公開的 `EngineStats.cache` 沿用這個型別；沒有 http 來源時 bytes 等為 0。 */
   cache: {
     bytes: number;
     limitBytes: number;
@@ -210,12 +210,12 @@ export interface WorkerStats {
     hits: number;
     misses: number;
   };
-  /** 網路，欄位同 `EngineStats.network`。 */
+  /** 網路，公開的 `EngineStats.network` 沿用這個型別。 */
   network: {
     bytesLoaded: number;
     inflight: { url: string; start: number; end: number; elapsedMs: number }[];
   };
-  /** 封包佇列，欄位同 `EngineStats.packetQueue`。 */
+  /** 封包佇列，公開的 `EngineStats.packetQueue` 沿用這個型別。 */
   packetQueue: { audioSeconds: number; videoSeconds: number; bytes: number };
   /** 存在中的 libav instance 的 wasm linear memory 合計（bytes）。 */
   wasmHeapBytes: number;
