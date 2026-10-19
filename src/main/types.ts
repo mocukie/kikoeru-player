@@ -647,9 +647,10 @@ export type StateChangeReason =
  *   AudioContext 停住且重建後仍然停住（致命）。
  * - `ASSET_LOAD_FAILED`：wasm、glue、Worker 或 worklet 載入失敗。
  * - `DESTROYED`：`destroy()` 之後呼叫指令。
- * - `MEMORY_LIMIT`：wasm heap 到達上限，或交錯不良的媒體讓封包佇列超過硬上限（致命），重新載入也無法解決；
- *   建立 wasm instance 時配置不到記憶體（致命），釋放記憶體後重新載入可能恢復；外掛音軌超過 4 條（非致命）。
- * - `INTERNAL`：media Worker 崩潰等 Engine 內部的錯誤。
+ * - `MEMORY_LIMIT`：建立 wasm instance 時配置不到記憶體（致命），釋放記憶體後重新載入可能恢復；交錯不良的媒體讓
+ *   封包佇列超過硬上限（致命），重新載入也無法解決；外掛音軌超過 4 條（非致命）。播放中 wasm heap 用完不是這個，
+ *   而是 media Worker 崩潰的 `INTERNAL`。
+ * - `INTERNAL`：media Worker 崩潰（wasm trap、播放中 wasm heap 用完、Worker 的 `onerror`）等 Engine 內部的錯誤。
  */
 export type EngineErrorCode =
   | 'SOURCE_UNAUTHORIZED'
