@@ -299,7 +299,8 @@ class EngineImpl extends EventTarget implements Engine {
         : [];
     }
     const buffer = this.#buffer;
-    if (!buffer) return [];
+    // seek 之後、新 epoch 的進度到來之前，舊的進度不代表新位置。
+    if (buffer?.epoch !== this.#epoch) return [];
     const start = this.currentTime;
     const end = Number.isNaN(this.#duration) ? buffer.end : Math.min(buffer.end, this.#duration);
     return end > start ? [{ start, end }] : [];

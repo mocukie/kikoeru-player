@@ -180,6 +180,15 @@ describe('buffered 與 bufferedchange', () => {
     expect(changes.at(-1)?.buffered).toEqual([]);
   });
 
+  it('seek 之後、新 epoch 的進度到來之前為空', async () => {
+    const { engine, buffer } = await playing();
+    buffer(30);
+    void engine.seek(5);
+    expect(engine.buffered).toEqual([]);
+    buffer(8);
+    expect(engine.buffered).toEqual([{ start: 5, end: 8 }]);
+  });
+
   it('idle 時為空', () => {
     const engine = createEngineWith(createFakeDeps());
     expect(engine.buffered).toEqual([]);
