@@ -26,9 +26,8 @@ export class RangeCache {
   readonly #blocks = new Map<string, Uint8Array>();
   #bytes = 0;
   #nextSource = 0;
-  /** 讀取時已在快取中的區塊數與需要等網路的區塊數。 */
-  hits = 0;
-  misses = 0;
+  #hits = 0;
+  #misses = 0;
 
   constructor(limitBytes: number) {
     this.limitBytes = limitBytes;
@@ -36,6 +35,22 @@ export class RangeCache {
 
   get bytes(): number {
     return this.#bytes;
+  }
+
+  /** 讀取時已在快取中的區塊數。 */
+  get hits(): number {
+    return this.#hits;
+  }
+
+  /** 讀取時需要等網路的區塊數。 */
+  get misses(): number {
+    return this.#misses;
+  }
+
+  /** 記下一次讀取用到的區塊是否已在快取中（hits／misses）。 */
+  countRead(source: number, index: number): void {
+    if (this.has(source, index)) this.#hits++;
+    else this.#misses++;
   }
 
   /** 給新的來源一個 id。 */
@@ -185,10 +200,7 @@ export class CachedSource implements ByteSource {
     this.#position = end;
     const first = Math.floor(offset / BLOCK_BYTES);
     const lastBlock = Math.floor((end - 1) / BLOCK_BYTES);
-    for (let i = first; i <= lastBlock; i++) {
-      if (this.#cache.has(this.#id, i)) this.#cache.hits++;
-      else this.#cache.misses++;
-    }
+    for (let i = first; i <= lastBlock; i++) this.#cache.countRead(this.#id, i);
     await this.#ensure(first, lastBlock, sequential, signal);
     const out = new Uint8Array(end - offset);
     for (let i = first; i <= lastBlock; i++) {
