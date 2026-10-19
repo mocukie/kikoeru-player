@@ -14,6 +14,18 @@ export const STRETCHED_BEEP_ONSET_TOLERANCE = 0.03;
 /** `atempo` 1.25x 時相鄰兩個 beep 被聽到的間隔，與 0.8 秒的差（秒）。 */
 export const STRETCHED_BEEP_INTERVAL_TOLERANCE = 0.01;
 
+/**
+ * 播放中 `reload()`：按下 reload 之前讀到的 `currentTime` 與 reload 完成、回到 playing 之後讀到的差的上限（秒）。
+ * 包括按下到 Engine 收到指令之間、以及回到 playing 到讀取之間仍在播放的時間。
+ */
+export const RELOAD_RESUME_SLACK = 1;
+
+/**
+ * error 之後 `reload()`：回到 playing 之後讀到的 `currentTime` 比 `EngineError.position` 晚的上限（秒），即回到 playing
+ * 到讀取之間播放的時間。
+ */
+export const ERROR_RELOAD_RESUME_SLACK = 0.5;
+
 /** bufferedchange 的間隔可以比 `timeUpdateInterval` 短多少（ms）：timer 的觸發時間與頁面取時間的誤差。 */
 export const THROTTLE_SLACK_MS = 20;
 

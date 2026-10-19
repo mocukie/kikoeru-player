@@ -9,6 +9,7 @@ import type { DestinationCapture } from '../audio-capture.js';
 import type * as HarnessModule from '../media-worker-harness.js';
 import {
   BEEP_ONSET_TOLERANCE,
+  RELOAD_RESUME_SLACK,
   STRETCHED_BEEP_INTERVAL_TOLERANCE,
   STRETCHED_BEEP_ONSET_TOLERANCE,
 } from './tolerances.js';
@@ -250,7 +251,7 @@ test('播放中 reload：從原本的位置接續播放，舊的 Worker 被 term
   // reload 期間 currentTime 停在按下時的位置附近，之後從那裡接續。
   const resumed = await currentTime(page);
   expect(resumed).toBeGreaterThanOrEqual(position);
-  expect(resumed).toBeLessThan(position + 1);
+  expect(resumed).toBeLessThan(position + RELOAD_RESUME_SLACK);
   const next = firstBeepAfter(resumed);
   await expect.poll(() => currentTime(page), { timeout: 5000 }).toBeGreaterThan(next + 1.3);
 
