@@ -6,10 +6,12 @@ export const BEEP_ONSET_TOLERANCE = 0.02;
 /**
  * 變速（經過 `atempo`）時，beep 被聽到的時刻 `currentTime` 與 beep 的媒體時間的差（秒）。比 `BEEP_ONSET_TOLERANCE`
  * 寬：`atempo`（WSOLA）以 2048 sample 的 window 疊接，完全的靜音之後波形對齊找不到依據，片段會往前跳，beep 的起點
- * 比 time map 早出現（browser mode 實測 1.25x 早 12–20 ms，E2E 再加上量測誤差約 20–24 ms）。不是 time map 的誤差：
- * beep 的間隔仍準確（`STRETCHED_BEEP_INTERVAL_TOLERANCE`）。
+ * 比 time map 早出現（browser mode 實測 1.25x 早 12–20 ms，E2E 再加上量測誤差約 20–24 ms）。這是演算法的特性，
+ * 不是時鐘或 time map 的誤差：beep 的間隔仍準確（`STRETCHED_BEEP_INTERVAL_TOLERANCE`）。
+ *
+ * 40 ms 低於 ITU-R BT.1359 對聲音領先畫面的可察覺門檻（約 45 ms），提早的方向也正是聲音領先。
  */
-export const STRETCHED_BEEP_ONSET_TOLERANCE = 0.03;
+export const STRETCHED_BEEP_ONSET_TOLERANCE = 0.04;
 
 /** `atempo` 1.25x 時相鄰兩個 beep 被聽到的間隔，與 0.8 秒的差（秒）。 */
 export const STRETCHED_BEEP_INTERVAL_TOLERANCE = 0.01;
