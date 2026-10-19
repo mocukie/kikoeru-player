@@ -448,6 +448,8 @@ export class OutputCore {
           return;
         }
         // 沒有音訊（或音訊比媒體短）：以靜音推進到 duration。以 frame 數換算，避免逐次累加的誤差。
+        // 音訊的最後一段與主執行緒的速度不同（drain 中播完）時，從這裡起依主執行緒的速度內插。
+        if (this.#rate !== this.#clockRate) this.#clock(this.#quantumStart + written);
         const count = Math.min(frames - written, remaining, this.#framesUntilSilent());
         this.#envelope(output, written, count, Infinity);
         written += count;

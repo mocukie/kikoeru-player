@@ -589,6 +589,21 @@ describe('變速', () => {
     expect(lastClock()).toMatchObject({ position: 1, frame: 100 });
   });
 
+  it('音訊照舊速度播完、接著以靜音推進時，從靜音的第一個 frame 起依主執行緒的速度', () => {
+    const { worker, send, renderFrames, reports } = setup();
+    send({ type: 'flush', epoch: 1, position: 0 });
+    send({ type: 'duration', epoch: 1, duration: 10 });
+    send({ type: 'play', epoch: 1 });
+    worker.pcm(1, 0, ramp(50), 2);
+    worker.deliver({ type: 'eof', epoch: 1 });
+    renderFrames(100);
+    expect(reports.findLast((r) => r.type === 'clock')).toMatchObject({
+      position: 0.1,
+      frame: 50,
+      rate: 1,
+    });
+  });
+
   it('eof 之後的靜音依主執行緒的 rate 推進；改速度時從當下的位置換算', () => {
     const { worker, send, renderFrames, lastClock } = setup();
     send({ type: 'rate', rate: 1.5 });
