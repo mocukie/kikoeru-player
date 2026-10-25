@@ -62,6 +62,7 @@
 - 產生 script 在 `test/media/`（`gen-media.sh`、`gen-subs.py`），FFmpeg image 釘 digest，輸出放 gitignored 的 `test/media/out/`。
 - **CI 組**（`pnpm media:gen`）：短檔（幾秒到 20 秒），涵蓋全部 codec、多軌、內嵌 SRT／ASS、外掛音軌，以及壞檔（截斷、壞封包、假副檔名）。
 - **手動組**（`pnpm media:gen:manual`）：長檔（45 分鐘 MP3、660 MB WAV、1–2 GB MKV），只在實機或記憶體測試時產生。
+- Demo 頁的「測試媒體」依目錄分組，包含 CI 組與已產生的 `manual` 手動組；手動組不存在時不顯示該分組。兩組共用故障注入控制，「播完接同組下一首」只在目前分組內循環，不跨組。
 - CI 依 script 內容的 hash 快取產物。
 - 測試只依賴媒體內容的特徵（beep 位置、時長、軌道組成），不依賴 byte 一致。
 - 原則上不 commit 二進位檔；script 做不出來而需要 commit 時，**先問過 user**。
@@ -70,7 +71,7 @@
 
 `test/server/` 的 Vite middleware 供 browser mode 與 Demo 頁共用：
 
-- `/media/*` 提供 `test/media/out/` 的檔案，支援 Range；`/media/index.json` 列出 CI 組媒體的路徑，Demo 頁以它列出可選的媒體。browser mode 的測試媒體也走 `/media/*`：Vitest 自己的靜態檔案不正確處理 Range。
+- `/media/*` 提供 `test/media/out/` 的檔案，支援 Range；`/media/index.json` 列出 CI 組與已產生的手動組媒體路徑，Demo 頁以它列出可選的媒體。browser mode 的測試媒體也走 `/media/*`：Vitest 自己的靜態檔案不正確處理 Range。
 - `/src/wasm/*` 原樣提供 `wasm/dist/` 的檔案，讓 Engine 預設的 wasm 與 glue 位置在 dev 與測試中也能用（見[架構規則「平台與部署」](architecture.md#平台與部署)）。
 - `/media/*` 的故障由 query 參數控制（實作與完整說明在 `test/server/faults.ts`），Demo 頁可以選擇：
 
