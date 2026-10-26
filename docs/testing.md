@@ -23,7 +23,7 @@
 
 ### E2E
 
-- 對 Demo 頁執行。Demo 頁沿用 spike 的事件 log，並提供公開 API 的操作。Demo 頁預設 attach 背景播放模組；只測 Engine 本身的 spec 以 `/demo/?background=0` 開啟。
+- 對 Demo 頁執行。Demo 頁沿用 spike 的事件 log，並提供公開 API 的操作。Demo 頁預設 attach 背景播放模組並設定 Media Session（metadata 與 position，不設 handler）；只測 Engine 本身的 spec 以 `/demo/?background=0` 開啟，`mediasession=0` 時不設定 Media Session。
 - **自動同步斷言**：用 Playwright init script 包住 `AudioNode.prototype.connect`，在接到 `destination` 的地方旁接錄音 worklet 偵測 beep 起點，並讀 canvas pixel 偵測白框。錄音點在 `destination` 之前，比對時要扣掉 Engine 回報的輸出延遲。公開 API 不為此改變。
 
   | 斷言 | 容差 |

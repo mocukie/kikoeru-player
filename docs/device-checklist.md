@@ -5,7 +5,7 @@
 ## 執行方式
 
 1. 開發機執行 `pnpm dev`。dev server 開 HTTPS（自簽憑證）並聽所有介面，終端機會列出 LAN 的網址（`https://<LAN IP>:5173/`）。
-2. 實機與開發機在同一個網路，以瀏覽器開啟該網址，接受自簽憑證的警告，進入 Demo 頁（`/demo/`）。Demo 頁預設勾選「背景播放模組」（App 的典型用法）；項目要求不勾選時取消勾選，或開 `/demo/?background=0`。
+2. 實機與開發機在同一個網路，以瀏覽器開啟該網址，接受自簽憑證的警告，進入 Demo 頁（`/demo/`）。Demo 頁預設勾選「背景播放模組」與「Media Session」（App 的典型用法）；項目要求不勾選時取消勾選，或開 `/demo/?background=0`、`/demo/?mediasession=0`（兩者可以並用：`/demo/?background=0&mediasession=0`）。
 3. 依下方對應平台的項目操作。每一項記下結果（通過／失敗／不適用）與觀察；失敗時按事件 log 的「複製」，連同裝置、OS 與瀏覽器版本一起貼上。
 4. 結果整理成一則 issue 留言，標明 Engine 的 commit。
 
@@ -59,7 +59,7 @@ Safari 不跑 E2E，共同項目都要做。
 - [ ] 靜音鍵開啟時的行為：不勾選 Demo 頁的「背景播放模組」時記下有沒有聲音；勾選時應該要有聲音（`audioSession.type = "playback"`）。
 - [ ] 有線耳機、藍牙耳機的拔除與連接：播放不中斷，或依系統行為暫停後能再按 play 恢復。
 - [ ] **系統中斷**：播放中以來電、Siri 或計時器響鈴中斷，事件 log 出現 `paused=true reason=interrupted`；中斷結束後**不會**自動恢復出聲（WebKit 自己 resume `AudioContext` 時 worklet 仍輸出靜音），按 play 出現 `beforeaudiostart cause=resume` 並恢復播放。若中斷尚未結束就按 play，記下是否得到 `AUDIO_OUTPUT`（`play()` 的非致命 reject，`paused` 回到 true）。
-- [ ] **鎖屏控制**：不勾選 Demo 頁的「背景播放模組」（沒有 anchor）時，鎖屏的 Now Playing 是 `AudioContext`；以鎖屏的暫停、播放鍵操作，事件 log 出現 `reason=external`，`paused` 跟著改變。
+- [ ] **鎖屏控制**：不勾選 Demo 頁的「背景播放模組」與「Media Session」（沒有 anchor，開 `/demo/?background=0&mediasession=0`）時，鎖屏的 Now Playing 是 `AudioContext`；以鎖屏的暫停、播放鍵操作，事件 log 出現 `reason=external`，`paused` 跟著改變。
 - [ ] **長時間暫停後的 resume**：暫停 40 秒以上（Engine 已 suspend `AudioContext`）後，分別以頁面的 play、鎖屏的播放鍵恢復，記下哪一種需要 gesture、有沒有聲音。
 - [ ] **記憶體壓力**：以手動組的 `long-40min-s24.wav`（約 660 MB）與 `long-30min-720p.mkv` 播放、往前往後 seek，Demo 頁「cache」一列不超過 64 MiB，分頁不被系統重新載入（`cacheBytes`／`readaheadSeconds` 預設值的實機驗證，「記憶體上限的數值」#23）。
 
@@ -70,7 +70,7 @@ Safari 不跑 E2E，共同項目都要做。
 
 ## 背景與鎖屏
 
-使用背景播放模組（`kikoeru-player/background`）：Demo 頁預設勾選「背景播放模組」（`/demo/?background=0` 時不勾選）。底稿來自 kikoeru 的行動瀏覽器背景播放 research；Android 只在使用靜音 anchor 時才有背景播放（[ADR-0006](adr/0006-background-playback-module.md)）。Demo 頁沒有設定 Media Session 的 handler 與 metadata（App 負責），以下項目記下的是沒有 handler 時的行為；Media Session 的上一首、下一首、seek、metadata、artwork 與進度條在 kikoeru 驗證。模組的 log 以 `[background]` 開頭出現在事件 log，等級與 Engine 共用頁面的 log 選單（外部暫停、播放的鏡像是 `info`）。
+使用背景播放模組（`kikoeru-player/background`）：Demo 頁預設勾選「背景播放模組」（`/demo/?background=0` 時不勾選）。底稿來自 kikoeru 的行動瀏覽器背景播放 research；Android 只在使用靜音 anchor 時才有背景播放（[ADR-0006](adr/0006-background-playback-module.md)）。Media Session 由 App 負責：Demo 頁的「Media Session」勾選框（預設勾選，`/demo/?mediasession=0` 時不勾選）扮演 App 設定 metadata（title 是檔名）、`playbackState` 與 position（`setPositionState()`，在 `statechange`、`durationchange`、`seeked` 與改變 playbackRate 時更新），但不設任何 action handler，以下項目記下的是沒有 handler 時、鎖屏按鍵經 anchor 鏡像的行為；Media Session 的上一首、下一首、seek 與 artwork 仍在 kikoeru 驗證。模組的 log 以 `[background]` 開頭出現在事件 log，等級與 Engine 共用頁面的 log 選單（外部暫停、播放的鏡像是 `info`）。
 
 ### 共同（iOS Safari、Android Chrome）
 
@@ -79,6 +79,7 @@ Safari 不跑 E2E，共同項目都要做。
 - [ ] **buffering 時不被凍結**：故障注入選「delay=200」或「stall@1MB」，在背景中播放到 buffering；恢復後繼續出聲（anchor 在 buffering 時繼續播放，process 沒有被凍結）。
 - [ ] **暫停後從鎖屏恢復**：播放中從頁面按 pause，鎖屏的播放器仍在；從鎖屏按播放能恢復，事件 log 出現 `paused=false reason=command`（anchor 的外部播放鏡像為 `engine.play()`）。另外暫停 40 秒以上（Engine 已 suspend `AudioContext`）再從鎖屏按播放，記下是否出聲、是否得到 `AUDIO_LOCKED`。
 - [ ] **中斷與恢復**：來電、鬧鐘或計時器、拔除耳機；事件 log 的 reason（`interrupted`、`external` 或 anchor 鏡像的 `command`），以及之後按 play 能恢復。
+- [ ] **鎖屏進度條**：勾選「Media Session」時，鎖屏或通知的進度條與 duration 跟 Demo 頁的 `currentTime`、`duration` 一致；分別在播放中、seek 之後、playbackRate 1.5、暫停、背景接下一首時檢查。iOS 另外記下 anchor 是 Now Playing 時，`setPositionState()` 是否蓋過 anchor 的 5 秒循環（蓋不過時 kikoeru 的進度條也會錯，要重新評估 [ADR-0006](adr/0006-background-playback-module.md)）。取消勾選後 metadata 與進度條消失（或回到 anchor 自己的進度）。
 - [ ] **detach**：播放中取消勾選「背景播放模組」，鎖屏的播放器消失或不再控制 Engine；再勾選時立即回來。
 
 ### iOS Safari
