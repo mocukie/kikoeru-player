@@ -73,6 +73,22 @@ test('預設勾選：metadata 是檔名，playbackState 跟著 play／pause', as
   await expect.poll(() => session(page)).toEqual({ title: null, playbackState: 'paused' });
 });
 
+// 檔名不是 UTF-8 的百分比編碼（`%E9`）時 decodeURIComponent 會丟出 URIError；title 保留原始的片段，不影響 load。
+for (const query of ['', '?mediasession=0']) {
+  test(`URL 的檔名無法解碼時仍能 load，title 用原始片段（${query || '預設'}）`, async ({
+    page,
+  }) => {
+    await page.route('**/media/audio/%E9.flac', (route) =>
+      route.continue({ url: new URL('/media/audio/flac.flac', route.request().url()).href }),
+    );
+    await open(page, `/demo/${query}`);
+    await page.locator('#url').fill(new URL('/media/audio/%E9.flac', page.url()).href);
+    await page.locator('#load').click();
+    await expect(page.locator('#state')).toHaveText('ready');
+    expect((await session(page)).title).toBe(query ? null : '%E9.flac');
+  });
+}
+
 test('query mediasession=0 時不勾選；勾選後才設定', async ({ page }) => {
   await open(page, '/demo/?mediasession=0');
   await expect(page.locator('#media-session')).not.toBeChecked();

@@ -279,10 +279,18 @@ setupEngine();
 
 // ───────────────────────────── 操作 ─────────────────────────────
 
-/** URL 路徑的最後一段（解碼後）；沒有時用整個 URL。 */
+/**
+ * URL 路徑的最後一段（解碼後）；沒有時用整個 URL。不是 UTF-8 的百分比編碼（例如 `%E9`）仍是可讀取的 URL，
+ * 解碼失敗時保留原始片段，不讓 Media Session 的 title 擋住 load。
+ */
 function fileName(url: string): string {
   const name = new URL(url, location.href).pathname.split('/').pop();
-  return name ? decodeURIComponent(name) : url;
+  if (!name) return url;
+  try {
+    return decodeURIComponent(name);
+  } catch {
+    return name;
+  }
 }
 
 /** 本機檔案 → URL → 測試媒體，依序取第一個有值的。 */
