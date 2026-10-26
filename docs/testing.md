@@ -92,7 +92,7 @@
 
 - [`device-checklist.md`](device-checklist.md)，桌面（Firefox、Safari）與手機（iOS Safari、Android Chrome）分開列。
 - 桌面部分只留自動化涵蓋不到的項目（真實喇叭與藍牙切換、長時間播放）。
-- Demo 頁的事件 log 有「複製」按鈕；dev server 開 HTTPS（自簽），讓手機以 LAN IP 連線（AudioWorklet 需要 secure context）。
+- Demo 頁的事件 log 有「複製」按鈕；dev server 開 HTTPS（自簽），讓手機以開發機的主機名稱連線（AudioWorklet 需要 secure context；連線方式見實機清單的「執行方式」）。
 - 執行時機：每次發 minor 版本前，以及改到 [ADR-0004](adr/0004-audio-output.md)（音訊輸出）或 [ADR-0006](adr/0006-background-playback-module.md)（背景播放模組）的範圍時。結果貼成 issue 留言。
 
 ## 本機與 CI
