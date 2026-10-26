@@ -201,12 +201,16 @@ backgroundInput.addEventListener('change', () => {
 });
 
 /**
- * 播完後接 CI 組媒體清單的下一個（實機清單的「背景接下一首」）：`ended` 時 `paused` 仍為 false，
+ * 播完後接目前分組的下一個媒體（實機清單的「背景接下一首」）：`ended` 時 `paused` 仍為 false，
  * 以 `load(…, { paused: false })` 接續，anchor 不中斷、不需要 gesture。
  */
 function playNext(): void {
-  const choices = [...mediaSelect.options];
-  const next = choices[(mediaSelect.selectedIndex + 1) % choices.length];
+  const current = mediaSelect.selectedOptions[0];
+  if (!current) return;
+  const group = current.parentElement;
+  if (!(group instanceof HTMLOptGroupElement)) return;
+  const choices = [...group.querySelectorAll('option')];
+  const next = choices[(choices.indexOf(current) + 1) % choices.length];
   if (!next) return;
   mediaSelect.value = next.value;
   const url = mediaUrl();
@@ -219,7 +223,7 @@ setupEngine();
 
 // ───────────────────────────── 操作 ─────────────────────────────
 
-/** 本機檔案 → URL → CI 組媒體，依序取第一個有值的。 */
+/** 本機檔案 → URL → 測試媒體，依序取第一個有值的。 */
 function selectedSource(): { name: string; source: Source } {
   const file = fileInput.files?.[0];
   if (file) return { name: file.name, source: { kind: 'blob', blob: file } };
@@ -230,7 +234,7 @@ function selectedSource(): { name: string; source: Source } {
 let loadSeq = 0;
 
 /**
- * CI 組媒體的 URL，加上選擇的故障參數（test/server/faults.ts）。每次 load 帶一個新的 `id`，故障的請求計數
+ * 測試媒體的 URL，加上選擇的故障參數（test/server/faults.ts）。每次 load 帶一個新的 `id`，故障的請求計數
  * 從頭開始；`reload()` 沿用同一個 URL，所以 `401@4` 這類只發生一次的故障在 reload 後不再出現。
  */
 function mediaUrl(): string {

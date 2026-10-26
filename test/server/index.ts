@@ -1,7 +1,7 @@
 // Vite middleware，供 Demo 頁（vite.config.ts）與 browser mode（vitest.config.ts）共用（docs/testing.md「HTTP 來源與故障注入」）。
 //
 // - `/media/*`：`test/media/out/` 的檔案，支援 Range（由 `send` 處理 206、416、HEAD 與 ETag）。
-// - `/media/index.json`：`test/media/out/` 之下 CI 組媒體的相對路徑清單，Demo 頁以它列出可選的媒體。
+// - `/media/index.json`：CI 組與已產生的手動組媒體相對路徑清單，Demo 頁以它列出可選的媒體。
 // - `/src/wasm/*`：`wasm/dist/` 的檔案原樣提供（`.wasm` 為 `application/wasm`）。套件把 wasm 複製到 `dist/wasm/`，
 //   `src/main/wasm.ts` 以 `../wasm/` 參照；這個對應讓 dev 與測試用同一個寫法找到 wasm 與 glue。
 //
@@ -19,8 +19,8 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const mediaRoot = join(repoRoot, 'test/media/out');
 const wasmRoot = join(repoRoot, 'wasm/dist');
 
-/** CI 組的目錄；手動組（`manual/`）只在實機或記憶體測試時產生，不列入清單。 */
-const CI_MEDIA_DIRS = ['audio', 'video', 'broken'];
+/** 手動組（`manual/`）只在實機或記憶體測試時產生，可以不存在。 */
+const MEDIA_DIRS = ['audio', 'video', 'broken', 'manual'];
 
 export function testServer(): Plugin {
   return {
@@ -89,8 +89,15 @@ const mediaIndex: Connect.NextHandleFunction = (_req, res) => {
 
 async function listMedia(): Promise<string[]> {
   const paths: string[] = [];
-  for (const dir of CI_MEDIA_DIRS) {
-    const entries = await readdir(join(mediaRoot, dir), { recursive: true, withFileTypes: true });
+  for (const dir of MEDIA_DIRS) {
+    const entries = await readdir(join(mediaRoot, dir), {
+      recursive: true,
+      withFileTypes: true,
+    }).catch((error: unknown) => {
+      if (dir === 'manual' && error instanceof Error && 'code' in error && error.code === 'ENOENT')
+        return [];
+      throw error;
+    });
     for (const entry of entries) {
       if (!entry.isFile()) continue;
       paths.push(relative(mediaRoot, join(entry.parentPath, entry.name)).split(sep).join('/'));

@@ -71,11 +71,11 @@
     <fieldset>
       <legend>來源</legend>
       <div class="row">
-        <label for="media">CI 組媒體</label>
+        <label for="media">測試媒體</label>
         <select id="media"></select>
       </div>
       <div class="row">
-        <label for="fault">CI 組媒體的故障注入</label>
+        <label for="fault">測試媒體的故障注入</label>
         <select id="fault">
           <option value="">無</option>
           <option value="fault=401@4">401@4：播放中 session 失效（之後 reload 可接續）</option>
@@ -124,7 +124,7 @@
       <label
         ><input id="background" type="checkbox" /> 背景播放模組（audioSession 與靜音 anchor）</label
       >
-      <label><input id="next-on-ended" type="checkbox" /> 播完接下一首</label>
+      <label><input id="next-on-ended" type="checkbox" /> 播完接同組下一首</label>
     </div>
     <div class="row">
       <label for="seek">seek</label>

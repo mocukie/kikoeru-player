@@ -9,7 +9,7 @@
 3. 依下方對應平台的項目操作。每一項記下結果（通過／失敗／不適用）與觀察；失敗時按事件 log 的「複製」，連同裝置、OS 與瀏覽器版本一起貼上。
 4. 結果整理成一則 issue 留言，標明 Engine 的 commit。
 
-Demo 頁的「CI 組媒體」來自 `pnpm media:gen` 產生的 `test/media/out/`。測試媒體每整秒開始有 0.1 秒的 beep（每 10 秒的那一聲頻率加倍），可以用耳朵對照 `currentTime`，特徵見 [`test/media/README.md`](../test/media/README.md)。
+Demo 頁的「測試媒體」來自 `test/media/out/`：`pnpm media:gen` 產生 CI 組，`pnpm media:gen:manual` 產生長檔後會出現 `manual` 分組，可直接選取，不必貼 URL。測試媒體每整秒開始有 0.1 秒的 beep（每 10 秒的那一聲頻率加倍），可以用耳朵對照 `currentTime`，特徵見 [`test/media/README.md`](../test/media/README.md)。
 
 ## 共同項目
 
@@ -75,7 +75,7 @@ Safari 不跑 E2E，共同項目都要做。
 ### 共同（iOS Safari、Android Chrome）
 
 - [ ] **鎖屏**：播放中鎖屏，連續播放 30 分鐘以上不中斷，並記錄耗電。
-- [ ] **背景接下一首**：勾選「播完接下一首」，播放一個短檔後鎖屏或切到其他 App；播完時自動 load 下一個檔案並出聲（背景中的 fetch、demux 與 decoder 初始化，不需要 gesture），anchor 在換曲之間不中斷。
+- [ ] **背景接下一首**：勾選「播完接同組下一首」，播放一個短檔後鎖屏或切到其他 App；播完時自動 load 同組下一個檔案並出聲（最後一個接回同組第一個，不跨組；背景中的 fetch、demux 與 decoder 初始化，不需要 gesture），anchor 在換曲之間不中斷。
 - [ ] **buffering 時不被凍結**：故障注入選「delay=200」或「stall@1MB」，在背景中播放到 buffering；恢復後繼續出聲（anchor 在 buffering 時繼續播放，process 沒有被凍結）。
 - [ ] **暫停後從鎖屏恢復**：播放中從頁面按 pause，鎖屏的播放器仍在；從鎖屏按播放能恢復，事件 log 出現 `paused=false reason=command`（anchor 的外部播放鏡像為 `engine.play()`）。另外暫停 40 秒以上（Engine 已 suspend `AudioContext`）再從鎖屏按播放，記下是否出聲、是否得到 `AUDIO_LOCKED`。
 - [ ] **中斷與恢復**：來電、鬧鐘或計時器、拔除耳機；事件 log 的 reason（`interrupted`、`external` 或 anchor 鏡像的 `command`），以及之後按 play 能恢復。
@@ -92,6 +92,6 @@ Safari 不跑 E2E，共同項目都要做。
 
 ### Android Chrome
 
-- [ ] **通知**：播放時出現媒體通知；通知的暫停、播放讓 Engine 跟著停止與播放（`reason=command`）。換曲（「播完接下一首」）時通知不閃爍、不消失。
+- [ ] **通知**：播放時出現媒體通知；通知的暫停、播放讓 Engine 跟著停止與播放（`reason=command`）。換曲（「播完接同組下一首」）時通知不閃爍、不消失。
 - [ ] **audio focus**：播放中開啟其他 App 播放音樂，Engine 跟著暫停（anchor 被搶走 focus 的 pause 鏡像為 `engine.pause()`）；回來按 play 能恢復。
 - [ ] **來電**：來電時 Engine 暫停，掛斷後依系統行為恢復或停在 paused，記下結果。
