@@ -109,7 +109,7 @@ background.detach();
 
 | 指令 | 用途 |
 |---|---|
-| `pnpm dev` | 啟動 Demo 頁的 dev server（HTTPS 自簽，手機可用 LAN IP 連線） |
+| `pnpm dev` | 啟動 Demo 頁的 dev server（HTTPS 自簽，手機以開發機的主機名稱連線） |
 | `pnpm build` | tsc 輸出到 `dist/`、複製 wasm 資產到 `dist/wasm/`、產生 `wasm.json`、`NOTICE`、`LICENSES/` 與 `thirdPartyNotices`；加 `--watch` 可與 App 同時開發 |
 | `pnpm typecheck` | 型別檢查 |
 | `pnpm lint` | ESLint 與 Prettier 的 check |

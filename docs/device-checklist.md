@@ -4,8 +4,8 @@
 
 ## 執行方式
 
-1. 開發機執行 `pnpm dev`。dev server 開 HTTPS（自簽憑證）並聽所有介面，終端機會列出 LAN 的網址（`https://<LAN IP>:5173/`）。
-2. 實機與開發機在同一個網路，以瀏覽器開啟該網址，接受自簽憑證的警告，進入 Demo 頁（`/demo/`）。Demo 頁預設勾選「背景播放模組」與「Media Session」（App 的典型用法）；項目要求不勾選時取消勾選，或開 `/demo/?background=0`、`/demo/?mediasession=0`（兩者可以並用：`/demo/?background=0&mediasession=0`）。
+1. 開發機執行 `pnpm dev`。dev server 開 HTTPS（自簽憑證）並聽所有介面。
+2. 實機與開發機在同一個網路，以瀏覽器開啟以開發機主機名稱組成的網址，例如路由器 DNS 的 `https://<hostname>.lan:5173/` 或 mDNS 的 `https://<hostname>.local:5173/`。不要用終端機列出的 LAN IP：iOS Safari 以 IP 連線時，接受憑證後會顯示「網路連線中斷」，整個 Demo 頁打不開（iOS Chrome 不受影響，原因未查）。開啟後接受自簽憑證的警告，進入 Demo 頁（`/demo/`）。Demo 頁預設勾選「背景播放模組」與「Media Session」（App 的典型用法）；項目要求不勾選時取消勾選，或開 `/demo/?background=0`、`/demo/?mediasession=0`（兩者可以並用：`/demo/?background=0&mediasession=0`）。
 3. 依下方對應平台的項目操作。每一項記下結果（通過／失敗／不適用）與觀察；失敗時按事件 log 的「複製」，連同裝置、OS 與瀏覽器版本一起貼上。
 4. 結果整理成一則 issue 留言，標明 Engine 的 commit。
 
