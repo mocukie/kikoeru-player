@@ -67,6 +67,9 @@ const autoplayInput = element('autoplay', HTMLInputElement);
 const backgroundInput = element('background', HTMLInputElement);
 // 背景播放模組預設 attach（App 的典型用法）；query `background=0` 時不 attach，只測 Engine 本身的 E2E 用。
 backgroundInput.checked = new URLSearchParams(location.search).get('background') !== '0';
+const mediaSessionInput = element('media-session', HTMLInputElement);
+// Demo 頁預設扮演 App 設定 Media Session；query `mediasession=0` 時不設定（例如驗證 Now Playing 是 AudioContext 時）。
+mediaSessionInput.checked = new URLSearchParams(location.search).get('mediasession') !== '0';
 const nextOnEndedInput = element('next-on-ended', HTMLInputElement);
 element('engine-options', HTMLElement).textContent =
   `EngineOptions（由頁面 query 覆蓋）：${JSON.stringify(options)}`;
@@ -137,15 +140,18 @@ function setupEngine(): void {
   globalThis.engine = target;
   target.addEventListener('statechange', (e) => {
     log(`statechange ${e.previous} → ${e.state} paused=${String(e.paused)} reason=${e.reason}`);
+    updateMediaSession();
   });
   target.addEventListener('durationchange', (e) => {
     log(`durationchange ${String(e.duration)}`);
+    updateMediaSession();
   });
   target.addEventListener('trackschange', (e) => {
     log(`trackschange ${String(e.tracks.length)} 軌 selected=${JSON.stringify(e.selected)}`);
   });
   target.addEventListener('seeked', (e) => {
     log(`seeked ${e.currentTime.toFixed(3)}`);
+    updateMediaSession();
   });
   target.addEventListener('ended', () => {
     log('ended');
@@ -173,11 +179,14 @@ function setupEngine(): void {
     log('destroy');
     // 背景播放模組已經自己 detach。
     if (engine === target) background = null;
+    // state 已是 idle，可能沒有 statechange。
+    updateMediaSession();
   });
   target.addEventListener('ended', () => {
     if (nextOnEndedInput.checked) playNext();
   });
   if (backgroundInput.checked) attachBackground();
+  updateMediaSession();
 }
 
 // ───────────────────────────── 背景播放模組 ─────────────────────────────
@@ -214,21 +223,82 @@ function playNext(): void {
   if (!next) return;
   mediaSelect.value = next.value;
   const url = mediaUrl();
+  mediaTitle = fileName(url);
   command(`load ${url}（下一首，paused: false）`, () =>
     engine.load({ kind: 'http', url }, { paused: false }).then((info) => info.format),
   );
 }
 
+// ───────────────────────────── Media Session ─────────────────────────────
+
+/** 目前媒體的檔名（Media Session 的 title）；在呼叫 `load()` 之前設定，`reload()` 沿用。 */
+let mediaTitle = '';
+
+/**
+ * 扮演 App 回報 Media Session 的 metadata、playbackState 與 position（ADR-0006：由 App 負責），供實機清單檢查鎖屏與
+ * 通知的進度條。不設任何 action handler：鎖屏按鍵經 anchor 鏡像的行為要在沒有 handler 時驗證，handler 屬於 kikoeru。
+ * position 只在 statechange、durationchange、seeked 與改變 playbackRate 時更新，之間由 OS 依速度推算。
+ * 讀取目前的 `engine`，舊 Engine 的事件呼叫到也無妨。
+ */
+function updateMediaSession(): void {
+  if (!mediaSessionInput.checked) return;
+  const session = navigator.mediaSession;
+  const title = engine.state === 'idle' ? null : mediaTitle;
+  if ((session.metadata?.title ?? null) !== title) {
+    session.metadata = title === null ? null : new MediaMetadata({ title });
+  }
+  session.playbackState = engine.paused ? 'paused' : 'playing';
+  const duration = engine.duration;
+  if (Number.isFinite(duration)) {
+    // position 超出 [0, duration] 時 setPositionState() 會丟出 TypeError。
+    const position = Math.min(Math.max(engine.currentTime, 0), duration);
+    session.setPositionState({ duration, position, playbackRate: engine.playbackRate });
+  } else {
+    session.setPositionState();
+  }
+}
+
+function clearMediaSession(): void {
+  const session = navigator.mediaSession;
+  session.metadata = null;
+  session.playbackState = 'none';
+  session.setPositionState();
+}
+
+mediaSessionInput.addEventListener('change', () => {
+  if (mediaSessionInput.checked) {
+    updateMediaSession();
+    log('Media Session 開始設定');
+  } else {
+    clearMediaSession();
+    log('Media Session 清除');
+  }
+});
+
 setupEngine();
 
 // ───────────────────────────── 操作 ─────────────────────────────
 
+/**
+ * URL 路徑的最後一段（解碼後）；沒有時用整個 URL。不是 UTF-8 的百分比編碼（例如 `%E9`）仍是可讀取的 URL，
+ * 解碼失敗時保留原始片段，不讓 Media Session 的 title 擋住 load。
+ */
+function fileName(url: string): string {
+  const name = new URL(url, location.href).pathname.split('/').pop();
+  if (!name) return url;
+  try {
+    return decodeURIComponent(name);
+  } catch {
+    return name;
+  }
+}
+
 /** 本機檔案 → URL → 測試媒體，依序取第一個有值的。 */
-function selectedSource(): { name: string; source: Source } {
+function selectedSource(): { name: string; title: string; source: Source } {
   const file = fileInput.files?.[0];
-  if (file) return { name: file.name, source: { kind: 'blob', blob: file } };
+  if (file) return { name: file.name, title: file.name, source: { kind: 'blob', blob: file } };
   const url = urlInput.value.trim() || mediaUrl();
-  return { name: url, source: { kind: 'http', url } };
+  return { name: url, title: fileName(url), source: { kind: 'http', url } };
 }
 
 let loadSeq = 0;
@@ -247,8 +317,9 @@ function mediaUrl(): string {
 }
 
 element('load', HTMLElement).addEventListener('click', () => {
-  const { name, source } = selectedSource();
+  const { name, title, source } = selectedSource();
   const paused = !autoplayInput.checked;
+  mediaTitle = title;
   command(`load ${name}${paused ? '' : '（paused: false）'}`, () =>
     engine.load(source, { paused }).then((info) => info.format),
   );
@@ -280,6 +351,7 @@ function recreateEngine(reason: string): void {
   engine.volume = Number(volumeInput.value);
   engine.muted = mutedInput.checked;
   engine.playbackRate = Number(rateInput.value);
+  updateMediaSession();
   log(`建立新的 Engine（${reason}）`);
 }
 
@@ -325,6 +397,7 @@ const rateValue = element('rate-value', HTMLOutputElement);
 function applyRate(): void {
   engine.playbackRate = Number(rateInput.value);
   rateValue.value = engine.playbackRate.toFixed(2);
+  updateMediaSession();
 }
 rateInput.addEventListener('input', applyRate);
 rateInput.addEventListener('change', () => {
