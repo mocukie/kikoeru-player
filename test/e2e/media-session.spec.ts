@@ -37,6 +37,7 @@ async function open(page: Page, path: string): Promise<void> {
   await page.locator('#media').selectOption('audio/flac.flac');
 }
 
+/** `navigator.mediaSession` 讀得回來的部分：metadata 的 title（沒有 metadata 時為 null）與 playbackState。 */
 function session(page: Page) {
   return page.evaluate(() => ({
     title: navigator.mediaSession.metadata?.title ?? null,

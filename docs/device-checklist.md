@@ -79,7 +79,7 @@ Safari 不跑 E2E，共同項目都要做。
 - [ ] **buffering 時不被凍結**：故障注入選「delay=200」或「stall@1MB」，在背景中播放到 buffering；恢復後繼續出聲（anchor 在 buffering 時繼續播放，process 沒有被凍結）。
 - [ ] **暫停後從鎖屏恢復**：播放中從頁面按 pause，鎖屏的播放器仍在；從鎖屏按播放能恢復，事件 log 出現 `paused=false reason=command`（anchor 的外部播放鏡像為 `engine.play()`）。另外暫停 40 秒以上（Engine 已 suspend `AudioContext`）再從鎖屏按播放，記下是否出聲、是否得到 `AUDIO_LOCKED`。
 - [ ] **中斷與恢復**：來電、鬧鐘或計時器、拔除耳機；事件 log 的 reason（`interrupted`、`external` 或 anchor 鏡像的 `command`），以及之後按 play 能恢復。
-- [ ] **鎖屏進度條**：勾選「Media Session」時，鎖屏或通知的進度條與 duration 跟 Demo 頁的 `currentTime`、`duration` 一致；分別在播放中、seek 之後、playbackRate 1.5、暫停、背景接下一首時檢查。iOS 另外記下 anchor 是 Now Playing 時，`setPositionState()` 是否蓋過 anchor 的 5 秒循環（蓋不過時 kikoeru 的進度條也會錯，要重新評估 [ADR-0006](adr/0006-background-playback-module.md)）。取消勾選後 metadata 與進度條消失（或回到 anchor 自己的進度）。
+- [ ] **鎖屏進度條**：勾選「Media Session」時，鎖屏或通知的進度條與 duration 跟 Demo 頁的 `currentTime`、`duration` 一致；分別在播放中、seek 之後、playbackRate 1.5、暫停、背景接下一首時檢查。iOS 另外記下 anchor 是 Now Playing 時，`setPositionState()` 是否蓋過 anchor 的 5 秒循環（蓋不過時 kikoeru 的進度條也會錯，要重新評估 [ADR-0006](adr/0006-background-playback-module.md)）。另外記下 buffering 時進度條是否繼續走（`paused` 為 false 時 `playbackState` 仍是 `playing`，position 只在恢復播放的 `statechange` 時校正）。取消勾選後 metadata 與進度條消失（或回到 anchor 自己的進度）。
 - [ ] **detach**：播放中取消勾選「背景播放模組」，鎖屏的播放器消失或不再控制 Engine；再勾選時立即回來。
 
 ### iOS Safari

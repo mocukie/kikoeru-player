@@ -275,15 +275,15 @@ mediaSessionInput.addEventListener('change', () => {
   }
 });
 
+setupEngine();
+
+// ───────────────────────────── 操作 ─────────────────────────────
+
 /** URL 路徑的最後一段（解碼後）；沒有時用整個 URL。 */
 function fileName(url: string): string {
   const name = new URL(url, location.href).pathname.split('/').pop();
   return name ? decodeURIComponent(name) : url;
 }
-
-setupEngine();
-
-// ───────────────────────────── 操作 ─────────────────────────────
 
 /** 本機檔案 → URL → 測試媒體，依序取第一個有值的。 */
 function selectedSource(): { name: string; title: string; source: Source } {
