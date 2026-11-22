@@ -2,6 +2,7 @@
 
 import type {
   ProbedMedia,
+  WireCue,
   WireError,
   WireSource,
   WorkerBufferMessage,
@@ -24,6 +25,7 @@ import { EngineError } from './errors.js';
 import {
   BeforeAudioStartEvent,
   BufferedChangeEvent,
+  CuesEvent,
   DurationChangeEvent,
   EngineErrorEvent,
   SeekedEvent,
@@ -211,6 +213,10 @@ class EngineImpl extends EventTarget implements Engine {
    * 才完成，畫面與聲音一起開始。
    */
   #videoPending = false;
+  /** 送出 cue 的字幕軌（已送出 `start`）；沒有選用字幕軌時為 null。 */
+  #subtitleTrackId: string | null = null;
+  /** load 完成（軌道公布）之前收到的 cue，帶著收到時的 epoch；load 完成時送出仍是目前 epoch 的那些。 */
+  #pendingCues: { epoch: number; cues: readonly WireCue[] }[] = [];
   /** 音訊已備妥而影片還沒備妥時，`VIDEO_READY_TIMEOUT_MS` 後不再等的 timer。 */
   #videoTimer: ReturnType<typeof setTimeout> | null = null;
   /** 繪製迴圈（rAF）的取消；沒有影片軌時為 null。 */
@@ -722,13 +728,18 @@ class EngineImpl extends EventTarget implements Engine {
       const videoTrack = tracks.find(
         (t): t is VideoTrack => t.kind === 'video' && t.id === load.selection.video,
       );
+      const subtitleTrack = tracks.find(
+        (t) => t.kind === 'subtitle' && t.supported && t.id === load.selection.subtitle,
+      );
       if (videoTrack) this.#startVideo(videoTrack);
+      this.#subtitleTrackId = subtitleTrack?.id ?? null;
       worker.post({
         type: 'start',
         epoch: this.#epoch,
         time: load.startTime,
         audio: audioTrack?.streamIndex ?? null,
         video: videoTrack?.streamIndex ?? null,
+        subtitle: subtitleTrack?.streamIndex ?? null,
       });
 
       // worklet 回報後，#applyOutput() 結束 load、發布媒體並離開 loading。
@@ -824,8 +835,10 @@ class EngineImpl extends EventTarget implements Engine {
     this.#setState('idle', 'command', true);
   }
 
-  /** 換成新的媒體（load）或結束媒體時，清掉屬於上一份媒體的播放紀錄、錯誤、watchdog 的進度與緩衝資訊。 */
+  /** 換成新的媒體（load）或結束媒體時，清掉屬於上一份媒體的播放紀錄、錯誤、watchdog 的進度、緩衝資訊與字幕。 */
   #resetMediaState(): void {
+    this.#subtitleTrackId = null;
+    this.#pendingCues = [];
     this.#played = false;
     this.#error = null;
     this.#watchdogStep = 0;
@@ -863,6 +876,12 @@ class EngineImpl extends EventTarget implements Engine {
           case 'videoerror':
             if (message.epoch !== this.#epoch) break;
             this.#onVideoError(message.error, message.beforeFirstFrame);
+            break;
+          case 'cues':
+            if (message.epoch !== this.#epoch) break;
+            // 軌道公布之前（loading）先留著，App 在 trackschange 拿到 header 之後才收到 cue。
+            if (this.#loadContext) this.#pendingCues.push(message);
+            else this.#dispatchCues(message.cues);
             break;
           case 'probe':
             if (this.#loadContext && message.epoch === this.#epoch)
@@ -984,6 +1003,8 @@ class EngineImpl extends EventTarget implements Engine {
         load.seek?.resolve(load.startTime);
         load.seek = null;
         this.#publishMedia(load.info, load.selection);
+        if (this.#epoch !== epoch) break;
+        this.#flushPendingCues();
         if (this.#epoch !== epoch) break;
         this.#setState(output === 'playing' ? 'playing' : 'ready', 'media');
         break;
@@ -1478,6 +1499,26 @@ class EngineImpl extends EventTarget implements Engine {
     this.#clearVideoTimer();
     this.#videoPending = this.#videoTrack !== null;
     if (this.#videoPending) this.#syncWorklet();
+  }
+
+  // ───────────────────────────── 字幕 ─────────────────────────────
+
+  /** 選中字幕軌的一批 cue 以 `cues` 事件送出（補上 trackId）。 */
+  #dispatchCues(cues: readonly WireCue[]): void {
+    const trackId = this.#subtitleTrackId;
+    if (trackId === null || cues.length === 0) return;
+    this.dispatchEvent(new CuesEvent({ trackId, cues: cues.map((cue) => ({ ...cue, trackId })) }));
+  }
+
+  /** load 完成：送出留著的 cue 中仍是目前 epoch 的那些；listener 改變了 epoch 就停。 */
+  #flushPendingCues(): void {
+    const pending = this.#pendingCues;
+    this.#pendingCues = [];
+    const epoch = this.#epoch;
+    for (const batch of pending) {
+      if (this.#epoch !== epoch) return;
+      if (batch.epoch === epoch) this.#dispatchCues(batch.cues);
+    }
   }
 
   // ───────────────────────────── 影片 ─────────────────────────────

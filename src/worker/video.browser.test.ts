@@ -67,7 +67,14 @@ describe('CI 組的影片', () => {
       return;
     }
 
-    driver.post({ type: 'start', epoch: 1, time: 0, audio: null, video: video.streamIndex });
+    driver.post({
+      type: 'start',
+      epoch: 1,
+      time: 0,
+      audio: null,
+      video: video.streamIndex,
+      subtitle: null,
+    });
     const { end, frames } = await driver.videoDone(1);
     expect(end.type).toBe('videoend');
     expect(frames).toHaveLength(spec.seconds * 30);
@@ -143,7 +150,14 @@ describe('影片的輸出', () => {
   ])('從 %f 秒開始：第一張是 pts ≤ 起點的最後一張（%f 秒），之後連續', async (time, first) => {
     const { driver, video } = await open('video/h264-aac.mp4');
     if (!video.supported) return;
-    driver.post({ type: 'start', epoch: 1, time, audio: null, video: video.streamIndex });
+    driver.post({
+      type: 'start',
+      epoch: 1,
+      time,
+      audio: null,
+      video: video.streamIndex,
+      subtitle: null,
+    });
     const { frames } = await driver.videoDone(1);
     expect(frames[0]?.time).toBeCloseTo(first, 3);
     expect(frames).toHaveLength(300 - Math.round(first * 30));
@@ -165,7 +179,14 @@ describe('影片的輸出', () => {
     const { driver, video } = await open('video/h264-aac.mp4');
     if (!video.supported) return;
     driver.autoCloseFrames = false;
-    driver.post({ type: 'start', epoch: 1, time: 0, audio: null, video: video.streamIndex });
+    driver.post({
+      type: 'start',
+      epoch: 1,
+      time: 0,
+      audio: null,
+      video: video.streamIndex,
+      subtitle: null,
+    });
     await new Promise((resolve) => setTimeout(resolve, 500));
     // 沒有 close 的 frame 加上 decode 佇列到 8 就停止送進 decoder；decoder 內部（B-frame 的重排）暫存的之後仍會輸出。
     expect(driver.heldFrames.length).toBeGreaterThanOrEqual(8 - MAX_DECODE_QUEUE);

@@ -139,6 +139,13 @@ ff -f lavfi -i "$(video 20 320 180)" -f lavfi -i "$(stereo 20 880)" -f lavfi -i 
   -metadata:s:a:1 language=chi -metadata:s:a:1 title="beep 440 Hz" \
   -metadata:s:s:0 language=jpn -metadata:s:s:1 language=chi \
   video/multi-track.mkv
+# 其他字幕格式：2 秒。WebVTT 與 PGS（圖形字幕）在 MKV；mov_text 在 MP4。
+ff -f lavfi -i "$(video 2 320 180)" -f lavfi -i "$(stereo 2 880)" -i .work/short.vtt -i .work/short.sup \
+  -map 0:v -map 1:a -map 2 -map 3 "${h264[@]}" -c:a aac -b:a 128k -c:s:0 webvtt -c:s:1 copy \
+  video/subtitle-formats.mkv
+ff -f lavfi -i "$(video 2 320 180)" -f lavfi -i "$(stereo 2 880)" -i .work/short-mov-text.srt \
+  -map 0:v -map 1:a -map 2 "${h264[@]}" -c:a aac -b:a 128k -c:s mov_text -movflags +faststart \
+  video/mov-text.mp4
 # 外掛音軌：與 multi-track.mkv 同長，440 Hz。
 ff -f lavfi -i "$(stereo 20 440)" -c:a flac video/external-audio-440.flac
 

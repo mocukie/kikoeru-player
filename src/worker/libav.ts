@@ -15,6 +15,7 @@ import { Demuxer, type DemuxerOptions, type PacketLane, type PacketReader } from
 import { crashReason, WorkerError } from './errors.js';
 import type { RawMedia, RawStream } from './probe.js';
 import type { ByteSource } from './source.js';
+import type { SubtitlePacket } from './subtitles.js';
 import type { Stereo, Stretcher } from './tempo.js';
 import { withParameterSets } from './video-codec.js';
 import type { VideoChunk } from './video-pipeline.js';
@@ -114,7 +115,7 @@ export class LibavMedia {
   readonly #demuxPkt: number;
   /** 目前音軌的 decoder；換音軌時釋放，seek 時 flush 後沿用。 */
   #decoder: LibavAudioDecoder | null = null;
-  /** 目前沒有 discard 的 stream（`audio,video`）；選擇改變時重設各 stream 的 discard。 */
+  /** 目前沒有 discard 的 stream（`audio,video,subtitle`）；選擇改變時重設各 stream 的 discard。 */
   #selection = '';
 
   private constructor(
@@ -219,8 +220,9 @@ export class LibavMedia {
   }
 
   /**
-   * 開始一個 epoch 的輸出：只 demux 選用的音軌與影片軌（其餘 discard），回傳這個 epoch 的 demuxer、音訊的供料與影片的
-   * 封包 lane。音軌的 decoder 與 filter graph 在換音軌時建立，同一條音軌沿用。
+   * 開始一個 epoch 的輸出：只 demux 選用的音軌、影片軌與字幕軌（其餘 discard），回傳這個 epoch 的 demuxer、音訊的供料
+   * 與影片的封包 lane；字幕軌的封包不進封包佇列，每批 demux 讀到的直接交給 `subtitle.onPackets`。音軌的 decoder 與
+   * filter graph 在換音軌時建立，同一條音軌沿用。
    *
    * `seek` 時先跳到 `startTime` 往前 preroll 的 keyframe（有影片軌時，libavformat 以影片軌的 keyframe 為準），再 flush
    * 音訊的 decoder 與 filter graph；pipeline 解碼並丟掉起點之前的 sample，輸出的第一個 sample 落在 `startTime`
@@ -229,10 +231,11 @@ export class LibavMedia {
   async startOutput(options: {
     audio: number | null;
     video: number | null;
+    subtitle: { stream: number; onPackets: (packets: SubtitlePacket[]) => void } | null;
     seek: boolean;
     startTime: number;
     signal: AbortSignal;
-    demux: Omit<DemuxerOptions<Packet>, 'reader' | 'streams' | 'startTime'>;
+    demux: Omit<DemuxerOptions<Packet>, 'reader' | 'streams' | 'sparse' | 'startTime'>;
     audioOptions: Omit<
       AudioPipelineOptions<Packet>,
       'packets' | 'fatal' | 'decoder' | 'createStretcher' | 'startTime' | 'signal'
@@ -245,15 +248,17 @@ export class LibavMedia {
   }> {
     const libav = this.#libav;
     const streams = [options.audio, options.video].filter((s): s is number => s !== null);
-    for (const index of streams) {
+    const subtitle = options.subtitle;
+    const demuxed = subtitle ? [...streams, subtitle.stream] : streams;
+    for (const index of demuxed) {
       if (!this.#streams[index]) throw new WorkerError('INTERNAL', `沒有 stream ${String(index)}`);
     }
-    const selection = streams.join(',');
+    const selection = [options.audio, options.video, subtitle?.stream ?? null].join(',');
     if (selection !== this.#selection) {
       for (const s of this.#streams) {
         await libav.AVStream_discard_s(
           s.ptr,
-          streams.includes(s.index) ? AV_DISCARD_DEFAULT : AV_DISCARD_ALL,
+          demuxed.includes(s.index) ? AV_DISCARD_DEFAULT : AV_DISCARD_ALL,
         );
       }
       this.#selection = selection;
@@ -285,7 +290,7 @@ export class LibavMedia {
         const [result, packets] = await libav.ff_read_frame_multi(this.#fmt, this.#demuxPkt, {
           limit: READ_LIMIT,
         });
-        const selected = streams.flatMap((index) => packets[index] ?? []);
+        const selected = demuxed.flatMap((index) => packets[index] ?? []);
         if (result === libav.AVERROR_EOF) return { packets: selected, eof: true };
         if (result < 0 && result !== -libav.EAGAIN) {
           const text = await libav.ff_error(result);
@@ -303,10 +308,24 @@ export class LibavMedia {
         duration: packetDuration(packet),
       }),
     };
-    const demuxer = new Demuxer({
+    const demuxer = new Demuxer<Packet>({
       ...options.demux,
       reader,
       streams,
+      ...(subtitle && {
+        sparse: {
+          streams: [subtitle.stream],
+          onPackets: (packets) => {
+            subtitle.onPackets(
+              packets.map((packet) => ({
+                time: this.#packetTime(packet),
+                duration: packetDuration(packet),
+                data: packet.data,
+              })),
+            );
+          },
+        },
+      }),
       startTime: options.startTime,
     });
     const audio = audioDecoder

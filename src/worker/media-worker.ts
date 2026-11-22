@@ -1,10 +1,11 @@
-// media Worker 的訊息處理：init、load（開檔與 probe）、start 與 seek（音訊供料與影片解碼）、port（改接重建後的
+// media Worker 的訊息處理：init、load（開檔與 probe）、start 與 seek（音訊供料、影片解碼與字幕 cue）、port（改接重建後的
 // worklet）、rate（變速）、frameclosed（影片 frame 的 backpressure）與 stats。
 // 主執行緒每次 load 都 terminate 舊的 Worker（ADR-0002），但 Worker 也處理同一個 Worker 內的 load 取代：
 // 前一個 load 的讀取被中止、instance 被丟棄。
 
 import type {
   MainToWorkerMessage,
+  ProbedTrack,
   RetryPolicy,
   WorkerLimits,
   WorkerLoadMessage,
@@ -26,6 +27,7 @@ import { NORMAL_QUEUE_BYTES, NORMAL_QUEUE_SECONDS } from './packet-queue.js';
 import { hasPlayableTrack, toProbedMedia, videoConfig, withPlatformSupport } from './probe.js';
 import { RangeCache } from './range-cache.js';
 import { openSource, type ByteSource } from './source.js';
+import { cueReader, type SubtitlePacket } from './subtitles.js';
 import type { VideoConfig } from './video-codec.js';
 import {
   FrameCredit,
@@ -77,6 +79,8 @@ interface OutputRequest {
   audio: number | null;
   /** 選用影片軌的 stream index；null 表示不解碼影片。 */
   video: number | null;
+  /** 選用字幕軌的 stream index；null 表示不送 cue。 */
+  subtitle: number | null;
   /** 先 seek 到 `time`；false 時接著 demuxer 目前的位置（開檔後的開頭）讀。 */
   seek: boolean;
 }
@@ -91,6 +95,8 @@ interface Load {
   source: ByteSource | null;
   /** probe 之後才有。 */
   tracker: BufferTracker | null;
+  /** probe 到的軌道；probe 之後才有。 */
+  tracks: readonly ProbedTrack[];
   /** 開檔、probe 中。start 等它完成。 */
   opening: Promise<void>;
   /** 已建立（或正在建立）libav instance，計入 `libavInstances`。 */
@@ -117,8 +123,9 @@ export class MediaWorker {
     video: number | null;
     setRate: ((rate: number) => void) | null;
   } | null = null;
-  /** `start` 選用的音軌與影片軌；之後的 `seek` 沿用。`start` 之前為 undefined。 */
-  #tracks: { audio: number | null; video: number | null } | undefined = undefined;
+  /** `start` 選用的各軌；之後的 `seek` 沿用。`start` 之前為 undefined。 */
+  #tracks: { audio: number | null; video: number | null; subtitle: number | null } | undefined =
+    undefined;
   /** 還沒 close 的 `VideoFrame`（Worker 內暫留的加上送到主執行緒的），所有 load 共用。 */
   readonly #frames = new FrameCredit();
   #libavInstances = 0;
@@ -162,7 +169,7 @@ export class MediaWorker {
         this.#startLoad(message);
         break;
       case 'start':
-        this.#tracks = { audio: message.audio, video: message.video };
+        this.#tracks = { audio: message.audio, video: message.video, subtitle: message.subtitle };
         // 開檔後 demuxer 在開頭；從其他位置開始要先 seek。
         this.#startOutput({ ...message, seek: message.time > 0 });
         break;
@@ -242,6 +249,7 @@ export class MediaWorker {
       media: null,
       source: null,
       tracker: null,
+      tracks: [],
       opening: Promise.resolve(),
       hasInstance: false,
       video: null,
@@ -293,6 +301,7 @@ export class MediaWorker {
         throw new WorkerError('CODEC_UNSUPPORTED', '沒有可以播放的音軌或影片軌');
       }
       load.media = media;
+      load.tracks = probed.tracks;
       load.tracker = new BufferTracker({
         source: opened,
         size: opened.size,
@@ -375,6 +384,7 @@ export class MediaWorker {
       const started = await media.startOutput({
         audio: message.audio,
         video: video ? message.video : null,
+        subtitle: this.#subtitleOutput(load, message, output),
         seek: message.seek,
         startTime,
         signal,
@@ -434,6 +444,35 @@ export class MediaWorker {
       if (this.#output !== output) return;
       this.#reportError(message.epoch, error);
     }
+  }
+
+  /**
+   * 選用字幕軌的 cue：每批 demux 讀到的字幕封包轉成 cue，以 `cues` 送出。不支援的軌（圖形字幕）不會被選用，選了也
+   * 不 demux。被取代的輸出不再送。
+   */
+  #subtitleOutput(
+    load: Load,
+    message: OutputRequest,
+    output: AbortController,
+  ): { stream: number; onPackets: (packets: SubtitlePacket[]) => void } | null {
+    const stream = message.subtitle;
+    const track = load.tracks.find((t) => t.kind === 'subtitle' && t.streamIndex === stream);
+    if (stream === null || track?.kind !== 'subtitle' || !track.supported) return null;
+    const read = cueReader(track);
+    const { epoch } = message;
+    return {
+      stream,
+      onPackets: (packets) => {
+        if (this.#output !== output) return;
+        const cues = packets.flatMap((p) => read(p) ?? []);
+        if (cues.length === 0) return;
+        this.#log.log('debug', 'subtitle', `送出 ${String(cues.length)} 個 cue`, {
+          epoch,
+          start: cues[0]?.start,
+        });
+        this.#deps.postMessage({ type: 'cues', epoch, cues });
+      },
+    };
   }
 
   /** 這次 load 的影片解碼；第一次輸出影片時建立。Engine 對應不到 WebCodecs 的軌（不會被選用）為 null。 */

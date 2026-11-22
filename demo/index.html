@@ -62,6 +62,18 @@
         object-fit: contain;
         background: #000;
       }
+      #current-cue {
+        min-height: 2.8em;
+        white-space: pre-wrap;
+      }
+      #cue-log {
+        max-height: 30vh;
+        overflow: auto;
+        padding-left: 2.5rem;
+        font:
+          0.8rem/1.4 ui-monospace,
+          monospace;
+      }
       #log {
         max-height: 50vh;
         overflow: auto;
@@ -129,6 +141,14 @@
       <label><input id="autoplay" type="checkbox" /> load 後直接播放（paused: false）</label>
     </div>
     <div class="row">
+      <label for="subtitle-lang">字幕偏好語言</label>
+      <input
+        id="subtitle-lang"
+        type="text"
+        placeholder="load 時的 preferredLanguages.subtitle，以逗號分隔，例如 ja 或 zh"
+      />
+    </div>
+    <div class="row">
       <label
         ><input id="background" type="checkbox" /> 背景播放模組（audioSession 與靜音 anchor）</label
       >
@@ -175,6 +195,20 @@
         attachCanvas（取消時不繪製，但照樣解碼）</label
       >
     </div>
+
+    <h2>內嵌字幕</h2>
+    <dl>
+      <dt>字幕軌</dt>
+      <dd id="subtitle-track">—</dd>
+      <dt>目前的 cue</dt>
+      <dd id="current-cue"></dd>
+      <dt>cue</dt>
+      <dd id="cue-count">—</dd>
+    </dl>
+    <details open>
+      <summary>cue log（以 id 去重，依開始時間排列）</summary>
+      <ol id="cue-log"></ol>
+    </details>
 
     <h2>狀態</h2>
     <dl>

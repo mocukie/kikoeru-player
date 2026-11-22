@@ -1,5 +1,6 @@
 // 一個 epoch 的 demux：從 demuxer 讀出選用中的各條軌的封包，放進各自的封包佇列（ADR-0007）。音訊與影片的供料
 // 各自從自己的 lane 取封包；佇列平常約 2 秒，某條選用中的軌是空的（交錯不良）時繼續 demux 到硬上限。
+// 字幕這類稀疏的軌不進佇列：封包隨 demux 的進度直接交出，否則它空著的 lane 會讓 demux 一直跑到硬上限。
 
 import { WorkerError } from './errors.js';
 import type { Logger } from './log.js';
@@ -33,6 +34,11 @@ export interface DemuxerOptions<P> {
   reader: PacketReader<P>;
   /** 選用中各條軌的 stream index；其他 stream 的封包丟掉。 */
   streams: readonly number[];
+  /**
+   * 稀疏的軌（字幕）：不進封包佇列、不影響 demux 何時停下與 demux 進度，每批 demux 讀到的封包（依 demux 的順序）
+   * 直接交給 `onPackets`。停下之後讀到的那一批不交出。
+   */
+  sparse?: { streams: readonly number[]; onPackets: (packets: P[]) => void };
   /** 這個 epoch 的起點（秒）：demux 進度的初始值。 */
   startTime: number;
   epoch: number;
@@ -55,6 +61,7 @@ export class Demuxer<P> {
   readonly #options: DemuxerOptions<P>;
   readonly #packets: PacketQueue<P>;
   readonly #streams: ReadonlySet<number>;
+  readonly #sparse: ReadonlySet<number>;
   /** 封包佇列超過硬上限：所有供料立即結束（`MEMORY_LIMIT`）。 */
   readonly #fatal = new AbortController();
   /** 已 demux 的封包的結尾（媒體時間）。 */
@@ -63,6 +70,7 @@ export class Demuxer<P> {
   constructor(options: DemuxerOptions<P>) {
     this.#options = options;
     this.#streams = new Set(options.streams);
+    this.#sparse = new Set(options.sparse?.streams);
     this.#end = options.startTime;
     const measure = (p: P) => options.reader.measure(p);
     this.#packets = new PacketQueue<P>(
@@ -103,21 +111,27 @@ export class Demuxer<P> {
    * 取完才回報，錯誤的位置接近實際播放到的地方），封包佇列超過硬上限則 abort `fatal`。不會 reject。
    */
   async run(stop: AbortSignal): Promise<void> {
-    const { reader, onDemux, log, epoch } = this.#options;
+    const { reader, onDemux, log, epoch, sparse } = this.#options;
     try {
       for (;;) {
         await this.#packets.space(stop);
         const { packets, eof } = await reader.read();
         if (stop.aborted) return;
         const byStream = new Map<number, P[]>();
+        const sparsePackets: P[] = [];
         for (const packet of packets) {
           const { stream, time, duration } = reader.measure(packet);
+          if (this.#sparse.has(stream)) {
+            sparsePackets.push(packet);
+            continue;
+          }
           if (!this.#streams.has(stream)) continue;
           this.#end = time === null ? this.#end + duration : Math.max(this.#end, time + duration);
           const lane = byStream.get(stream) ?? [];
           lane.push(packet);
           byStream.set(stream, lane);
         }
+        if (sparsePackets.length > 0) sparse?.onPackets(sparsePackets);
         for (const [stream, lane] of byStream) this.#packets.push(stream, lane);
         onDemux?.(this.#end, eof);
         if (eof) {

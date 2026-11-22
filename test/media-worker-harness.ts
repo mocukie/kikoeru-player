@@ -6,6 +6,7 @@ import type {
   ProbedAudioTrack,
   ProbedMedia,
   RetryPolicy,
+  WireCue,
   WireLogLevel,
   WorkerLimits,
   WorkerStats,
@@ -221,10 +222,18 @@ export class WorkerDriver {
     return reply.media;
   }
 
-  /** 從 `time` 開始輸出 `audio` 軌（與 `video` 軌），要 `frames` 個 frame（預設全部），等到 EOF 或送滿。 */
+  /**
+   * 從 `time` 開始輸出 `audio` 軌（與 `video` 軌、`subtitle` 軌），要 `frames` 個 frame（預設全部），等到 EOF 或送滿。
+   */
   async decode(
     audio: number | null,
-    options: { epoch?: number; time?: number; frames?: number; video?: number | null } = {},
+    options: {
+      epoch?: number;
+      time?: number;
+      frames?: number;
+      video?: number | null;
+      subtitle?: number | null;
+    } = {},
   ): Promise<DecodedPcm> {
     const epoch = options.epoch ?? 1;
     this.post({
@@ -233,8 +242,14 @@ export class WorkerDriver {
       time: options.time ?? 0,
       audio,
       video: options.video ?? null,
+      subtitle: options.subtitle ?? null,
     });
     return this.collect(epoch, options.frames);
+  }
+
+  /** `epoch` 收到的 cue，依收到的順序。 */
+  cues(epoch: number): WireCue[] {
+    return this.messages.flatMap((m) => (m.type === 'cues' && m.epoch === epoch ? m.cues : []));
   }
 
   /** close 留著的 frame 並告訴 Worker。 */

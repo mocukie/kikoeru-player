@@ -11,6 +11,7 @@ import {
   type LogEntry,
   type LogLevel,
   type Source,
+  type SubtitleCue,
 } from '../src/index.js';
 
 declare global {
@@ -73,6 +74,9 @@ mediaSessionInput.checked = new URLSearchParams(location.search).get('mediasessi
 const nextOnEndedInput = element('next-on-ended', HTMLInputElement);
 const videoCanvas = element('video', HTMLCanvasElement);
 const attachCanvasInput = element('attach-canvas', HTMLInputElement);
+const subtitleLangInput = element('subtitle-lang', HTMLInputElement);
+// query `subtitleLang` 給初始值（E2E 用）。
+subtitleLangInput.value = new URLSearchParams(location.search).get('subtitleLang') ?? '';
 element('engine-options', HTMLElement).textContent =
   `EngineOptions（由頁面 query 覆蓋）：${JSON.stringify(options)}`;
 
@@ -154,6 +158,16 @@ function setupEngine(): void {
   });
   target.addEventListener('trackschange', (e) => {
     log(`trackschange ${String(e.tracks.length)} 軌 selected=${JSON.stringify(e.selected)}`);
+    resetCues(e.selected.subtitle);
+  });
+  target.addEventListener('cues', (e) => {
+    const first = e.cues[0];
+    const last = e.cues.at(-1);
+    log(
+      `cues ${e.trackId} ${String(e.cues.length)} 個` +
+        (first && last ? ` [${first.start.toFixed(3)}, ${last.end.toFixed(3)}]` : ''),
+    );
+    addCues(e.trackId, e.cues);
   });
   target.addEventListener('videoresize', (e) => {
     log(
@@ -198,6 +212,67 @@ function setupEngine(): void {
   });
   if (backgroundInput.checked) attachBackground();
   updateMediaSession();
+}
+
+// ───────────────────────────── 內嵌字幕 ─────────────────────────────
+
+/**
+ * 扮演 App 累積內嵌字幕的 cue：以 `id` 去重（seek 後可能重送），依開始時間排列；選中的字幕軌改變時清空。
+ * 「目前的 cue」在 render() 內依 `currentTime` 挑選；ASS 顯示 Dialogue 行（字幕的繪製由 App 負責）。
+ */
+const cueStore = new Map<string, SubtitleCue>();
+let cueTrack: string | null = null;
+let cueRepeats = 0;
+const cueLog = element('cue-log', HTMLOListElement);
+const cueCountText = element('cue-count', HTMLElement);
+const subtitleTrackText = element('subtitle-track', HTMLElement);
+const currentCueText = element('current-cue', HTMLElement);
+
+function cueText(cue: SubtitleCue): string {
+  return 'dialogue' in cue ? cue.dialogue : cue.text;
+}
+
+function resetCues(track: string | null): void {
+  if (track === cueTrack) return;
+  cueTrack = track;
+  cueStore.clear();
+  cueRepeats = 0;
+  cueLog.replaceChildren();
+  updateCueCount();
+}
+
+function addCues(trackId: string, cues: readonly SubtitleCue[]): void {
+  if (trackId !== cueTrack) return;
+  for (const cue of cues) {
+    if (cueStore.has(cue.id)) {
+      cueRepeats++;
+      continue;
+    }
+    cueStore.set(cue.id, cue);
+    const item = document.createElement('li');
+    item.dataset.id = cue.id;
+    item.dataset.start = String(cue.start);
+    item.textContent = `${cue.start.toFixed(3)}–${cue.end.toFixed(3)} ${cueText(cue)}`;
+    const after = [...cueLog.children].find(
+      (li) => Number((li as HTMLElement).dataset.start) > cue.start,
+    );
+    cueLog.insertBefore(item, after ?? null);
+  }
+  updateCueCount();
+}
+
+function updateCueCount(): void {
+  cueCountText.textContent =
+    cueTrack === null ? '—' : `${String(cueStore.size)} 個，重送 ${String(cueRepeats)} 個`;
+}
+
+function renderCues(time: number): void {
+  subtitleTrackText.textContent = cueTrack ?? '—';
+  const current = [...cueStore.values()]
+    .filter((cue) => cue.start <= time && time < cue.end)
+    .map(cueText)
+    .join('\n');
+  if (currentCueText.textContent !== current) currentCueText.textContent = current;
 }
 
 // ───────────────────────────── 背景播放模組 ─────────────────────────────
@@ -330,9 +405,17 @@ function mediaUrl(): string {
 element('load', HTMLElement).addEventListener('click', () => {
   const { name, title, source } = selectedSource();
   const paused = !autoplayInput.checked;
+  const subtitle = subtitleLangInput.value
+    .split(',')
+    .map((lang) => lang.trim())
+    .filter((lang) => lang !== '');
   mediaTitle = title;
-  command(`load ${name}${paused ? '' : '（paused: false）'}`, () =>
-    engine.load(source, { paused }).then((info) => info.format),
+  command(
+    `load ${name}${paused ? '' : '（paused: false）'}${subtitle.length > 0 ? ` 字幕偏好 ${subtitle.join(',')}` : ''}`,
+    () =>
+      engine
+        .load(source, { paused, ...(subtitle.length > 0 && { preferredLanguages: { subtitle } }) })
+        .then((info) => info.format),
   );
 });
 element('play', HTMLElement).addEventListener('click', () => {
@@ -496,6 +579,7 @@ function render(): void {
   pausedText.textContent = String(engine.paused);
   unlockedText.textContent = String(engine.audioUnlocked);
   currentTimeText.textContent = engine.currentTime.toFixed(3);
+  renderCues(engine.currentTime);
   durationText.textContent = String(engine.duration);
   const size = engine.videoSize;
   videoSizeText.textContent = size

@@ -7,6 +7,7 @@ import type {
   WireError,
   WireLogEntry,
   WireLogLevel,
+  WireCue,
   WireSource,
 } from './media.js';
 
@@ -66,9 +67,9 @@ export interface WorkerLoadMessage<H extends HostTypes> {
 }
 
 /**
- * probe 之後開始輸出：只讀選用的音軌與影片軌（其餘 discard），從 `time`（秒）開始供料，精準度同 `seek`。
+ * probe 之後開始輸出：只讀選用的音軌、影片軌與字幕軌（其餘 discard），從 `time`（秒）開始供料，精準度同 `seek`。
  * Worker 依 worklet 的 `need` 送出這個 epoch 的 PCM，音訊到結尾時送出 `eof`；影片解出的 frame 以 `frame` 送出，
- * 全部送出後送 `videoend`。每個 load 只送一次；之後改變位置經由 `seek`。
+ * 全部送出後送 `videoend`；字幕軌的 cue 隨 demux 的進度以 `cues` 送出。每個 load 只送一次；之後改變位置經由 `seek`。
  */
 export interface WorkerStartMessage {
   type: 'start';
@@ -78,10 +79,12 @@ export interface WorkerStartMessage {
   audio: number | null;
   /** 選用影片軌的 stream index（probe 時 supported 的軌）；null 表示不解碼影片。 */
   video: number | null;
+  /** 選用字幕軌的 stream index（probe 時 supported 的軌）；null 表示不送 cue。 */
+  subtitle: number | null;
 }
 
 /**
- * 換到新的 epoch，從 `time`（秒）重新供料，音軌沿用 `start` 的選擇；`start` 之前收到的 seek 不處理。
+ * 換到新的 epoch，從 `time`（秒）重新供料，各軌沿用 `start` 的選擇；`start` 之前收到的 seek 不處理。
  * 中止進行中的讀取，等被取代的供料停下後，跳到 `time` 往前 preroll 的 keyframe 解碼並丟掉之前的 sample：
  * 送出的第一個 sample 就在 `time`（捨入到最近的 sample）。被取代的 seek 與供料不回報任何訊息。
  */
@@ -141,6 +144,7 @@ export type WorkerToMainMessage<H extends HostTypes = HostTypes> =
   | WorkerFrameMessage<H>
   | WorkerVideoEndMessage
   | WorkerVideoErrorMessage
+  | WorkerCuesMessage
   | WorkerLogMessage;
 
 /**
@@ -205,6 +209,16 @@ export interface WorkerVideoErrorMessage {
   epoch: number;
   error: WireError;
   beforeFirstFrame: boolean;
+}
+
+/**
+ * 選用字幕軌的一批 cue：一次 demux 讀到的字幕封包，依 demux 的順序。seek（新的 epoch）之後從 demuxer 跳到的
+ * keyframe 開始重新送出，跟之前送過的 cue 可能重複（`id` 相同）。
+ */
+export interface WorkerCuesMessage {
+  type: 'cues';
+  epoch: number;
+  cues: WireCue[];
 }
 
 /** http 的一個請求失敗（包括之後會重試的）；非致命，供卡住而放棄時回報最後一次的讀取錯誤。 */

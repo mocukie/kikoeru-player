@@ -55,6 +55,8 @@
 | `sar-2-1.mkv` | 2 s | H.264，SAR 2:1 | AAC | Matroska 的 DisplayWidth 與 H.264 的 VUI 都記錄 SAR 2:1，顯示為 640×180 |
 | `bad-interleave.mp4` | 10 s | H.264 2 Mbps CBR | AAC | 交錯不良：fragmented MP4，每 5 秒一個 fragment，fragment 內影片的 sample 在前、音訊在後；0 秒的音訊在約 1.2 MB 處 |
 | `multi-track.mkv` | 20 s | H.264 | 2 軌，見下表 | 另有 2 條內嵌字幕軌 |
+| `subtitle-formats.mkv` | 2 s | H.264 | AAC | 字幕 1：WebVTT，0 s 與 1 s 各一個 0.5 秒的 cue，文字為 `[embedded webvtt] <秒數>`；字幕 2：PGS（圖形字幕），同樣的時間顯示一個小方塊 |
+| `mov-text.mp4` | 2 s | H.264 | AAC | 字幕：mov_text，0 s 與 1 s 各一個 0.5 秒的 cue，文字為 `[embedded mov_text] <秒數>`；cue 之間有清空畫面的空 sample |
 | `external-audio-440.flac` | 20 s | — | FLAC，基準頻率 440 Hz | 外掛音軌，與 `multi-track.mkv` 同長 |
 
 `multi-track.mkv` 的軌道（依容器內順序）：
@@ -64,8 +66,8 @@
 | 影片 | H.264 | | | 白框 |
 | 音訊 1 | AAC | `jpn` | `beep 880 Hz` | 基準頻率 880 Hz |
 | 音訊 2 | Opus | `chi` | `beep 440 Hz` | 基準頻率 440 Hz |
-| 字幕 1 | SRT | `jpn` | | 每整秒一個 0.5 秒的 cue，文字以 `[embedded srt]` 開頭，接著是日文的秒數 |
-| 字幕 2 | ASS | `chi` | | 同上，以 `[embedded ass]` 開頭、繁體中文；完整的 V4+ Format，帶 `\fad` |
+| 字幕 1 | SRT | `jpn` | | 每整秒一個 0.5 秒的 cue，第 n 秒的文字為 `[embedded srt] n秒目、ビープ音が鳴りました。` |
+| 字幕 2 | ASS | `chi` | | 同上，Text 為 `{\fad(50,50)}[embedded ass] 第n秒，聽到嗶聲了。`（Layer 0、Style `Default`）；header 是 `gen-subs.py` 寫出的完整 V4+ header |
 
 cue 與 beep 同時開始：第 n 個 cue 是 n 秒到 n + 0.5 秒（n 從 0 起算）。
 

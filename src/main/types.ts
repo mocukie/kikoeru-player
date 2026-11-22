@@ -542,22 +542,33 @@ export interface TimeRange {
 
 // ───────────────────────────── 字幕 cue ─────────────────────────────
 
-/** 內嵌字幕的 cue，隨 demux 進度串流送出；同一個 cue 可能因 seek 重新送出，App 以 id 去重。 */
+/**
+ * 內嵌字幕的 cue，隨 demux 進度串流送出（通常比播放位置早約 2 秒），只送選中的字幕軌；同一個 cue 可能因 seek 重新送出，
+ * App 以 id 去重。seek 時 demux 從落點之前的 keyframe 開始，比 keyframe 更早開始、仍在顯示中的 cue 不會重新送出。
+ */
 export type SubtitleCue = TextCue | AssCue;
 
 /** 各種 cue 共有的欄位。 */
 export interface CueBase {
   trackId: string;
-  /** 穩定的 id（由 pts 與 ReadOrder 組成），可用來去重。 */
+  /**
+   * 穩定的 id，跨 seek 不變，可用來去重：ASS／SSA 由 pts 與 ReadOrder 組成；文字字幕沒有 ReadOrder，由 pts 與文字的
+   * hash 組成。
+   */
   id: string;
+  /** 開始的媒體時間（秒）。 */
   start: number;
+  /** 結束的媒體時間（秒）；容器沒有記錄時長時等於 `start`。 */
   end: number;
 }
 
 /** 文字字幕的 cue。 */
 export interface TextCue extends CueBase {
   format: 'subrip' | 'webvtt' | 'mov_text';
-  /** 封包內的原始文字，不解析標記。 */
+  /**
+   * 封包內的原始文字，不解析標記（SRT 的 `<i>`、WebVTT 的 `<v>` 等原樣保留）。mov_text 取 sample 內的文字，不含之後的
+   * style 等 box；只用來清空畫面的空 sample 不送出。
+   */
   text: string;
 }
 
@@ -567,7 +578,11 @@ export interface AssCue extends CueBase {
   /** Matroska 封包原文：`ReadOrder,Layer,Style,Name,MarginL,MarginR,MarginV,Effect,Text`（不含時間）。 */
   raw: string;
   readOrder: number;
-  /** 依 header 的 Format 重組的完整 `Dialogue:` 行，可以直接餵給 libass／JASSUB。 */
+  /**
+   * 依 header 的 Format 重組的完整 `Dialogue:` 行，可以直接餵給 libass／JASSUB。時間是媒體時間軸上的 `start`／`end`
+   * （`H:MM:SS.cc`）；header 沒有 `[Events]` 的 Format 時以 V4+ 的標準 Format 重組，SSA 的 `Marked` 欄位填
+   * `Marked=<Layer>`。
+   */
   dialogue: string;
 }
 
@@ -600,7 +615,10 @@ export interface EngineEventMap {
   bufferedchange: BufferedChangeEvent;
   /** `videoSize` 改變。 */
   videoresize: VideoResizeEvent;
-  /** 一批新的內嵌字幕 cue（只送選中的字幕軌）。 */
+  /**
+   * 一批新的內嵌字幕 cue（只送選中的字幕軌），隨 demux 的進度送出。load 期間 demux 到的 cue 留到 load 完成、
+   * `trackschange` 之後才送出，App 可以先從軌道取得 ASS 的 header。
+   */
   cues: CuesEvent;
   /** buffering 超過 `stallTimeout`，Engine 開始自動恢復。 */
   stall: StallEvent;
