@@ -140,6 +140,8 @@ jobs:
     needs: [ensure-wasm, publish-wasm]
     if: ${{ !cancelled() && needs.ensure-wasm.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.publish-wasm.result) }}
     runs-on: ubuntu-latest
+    # 平常約 6 分鐘。Firefox 的音訊卡死（#76）時 Vitest browser mode 會一直等下去，不設定會等到預設的 6 小時。
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       # 測試媒體依產生 script 的內容快取；script 沒變就不重新產生。
