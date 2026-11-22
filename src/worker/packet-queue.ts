@@ -129,6 +129,11 @@ export class PacketQueue<P> {
     );
   }
 
+  /** demux 已到結尾，而且這條軌的佇列空了。 */
+  laneDrained(stream: number): boolean {
+    return this.#ended && this.#lane(stream).packets.length === 0;
+  }
+
   /** demux 到了結尾。 */
   end(): void {
     this.#ended = true;

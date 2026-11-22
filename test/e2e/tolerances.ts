@@ -13,6 +13,12 @@ export const BEEP_ONSET_TOLERANCE = 0.02;
  */
 export const STRETCHED_BEEP_ONSET_TOLERANCE = 0.04;
 
+/**
+ * 白框出現的時刻與 beep 被聽到的時刻的差（秒）：1 個影片 frame（30 fps）加 1 個 rAF（60 Hz），約 50 ms。frame 依音訊時鐘
+ * 在 rAF 內挑選，量測端也在 rAF 內讀 canvas，各有最多一個 rAF 的落差。
+ */
+export const WHITE_BOX_TO_BEEP_TOLERANCE = 1 / 30 + 1 / 60;
+
 /** `atempo` 1.25x 時相鄰兩個 beep 被聽到的間隔，與 0.8 秒的差（秒）。 */
 export const STRETCHED_BEEP_INTERVAL_TOLERANCE = 0.01;
 

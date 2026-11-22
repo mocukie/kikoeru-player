@@ -14,11 +14,12 @@ import {
   type WorkerEndpoint,
 } from '../../test/media-worker-harness.js';
 import type { WorkerToMainMessage, WorkerToWorkletMessage } from '../protocol/index.js';
+import type { WorkerHost } from './host.js';
 import { MediaWorker, type MediaWorkerDeps } from './media-worker.js';
 import type { ByteSource } from './source.js';
 
 function inPage(deps: Omit<MediaWorkerDeps, 'postMessage'> = {}): WorkerEndpoint {
-  let listener: ((message: WorkerToMainMessage) => void) | null = null;
+  let listener: ((message: WorkerToMainMessage<WorkerHost>) => void) | null = null;
   const worker = new MediaWorker({ ...deps, postMessage: (m) => listener?.(m) });
   return {
     post: (message) => {

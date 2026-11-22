@@ -187,7 +187,9 @@ export interface Engine extends EventTarget {
   readonly error: EngineError | null;
   /**
    * 影片的顯示尺寸（已套用旋轉與 SAR）；沒有選用影片軌，或選用的影片軌還沒畫出第一張 frame 時為 null。
-   * 0.1.0 還不解碼影片，一律為 null。
+   * 在第一張 frame 畫出（沒有 canvas 時是輪到它顯示）時更新並發出 `videoresize`；`load()` 開始時回到 null。
+   * SAR 以容器記錄的為準（MP4 的 `pasp`、Matroska 的 DisplayWidth／Height），容器沒有記錄時沿用瀏覽器依 bitstream
+   * 給的 `VideoFrame.displayWidth`／`displayHeight`。
    */
   readonly videoSize: VideoSize | null;
 
@@ -228,7 +230,8 @@ export interface Engine extends EventTarget {
   // ── 指令 ──
 
   /**
-   * 載入新媒體，並中止舊媒體的讀取。resolve 時 state 為 `'ready'`（`options.paused === false` 時為 `'playing'`）。
+   * 載入新媒體，並中止舊媒體的讀取。resolve 時 state 為 `'ready'`（`options.paused === false` 時為 `'playing'`）；
+   * 選用了影片軌時，起點的 frame 也已經畫出（影片超過 2 秒還沒備妥時不再等它）。
    *
    * `options.paused === false` 時與 `play()` 一樣在呼叫內同步解鎖 AudioContext。沒有 gesture 而 AudioContext
    * 無法開始時，`paused` 回到 true，仍以 state `'ready'` resolve；App 可以由 `audioUnlocked` 得知，請使用者點擊後 `play()`。
@@ -274,7 +277,8 @@ export interface Engine extends EventTarget {
   pause(): Promise<void>;
 
   /**
-   * 精準 seek（影片到 frame、音訊到 sample），resolve 實際落點（夾在 `[0, duration]`）。
+   * 精準 seek（影片到 frame、音訊到 sample），resolve 實際落點（夾在 `[0, duration]`）。影片顯示 pts ≤ 落點的最後一張
+   * frame，聲音與畫面在落點的 frame 畫出之後才一起開始（影片超過 2 秒還沒備妥時不再等它）。
    * 執行期間 state 為 `'seeking'`；完成時發出 `seeked` 並補發一次 `timeupdate`，之後依 `paused` 回到
    * `'playing'` 或 `'paused'`（還沒播放過時為 `'ready'`）。`'ended'` 時 seek 也一樣，從新的位置繼續。
    * 連續呼叫時只執行最後一個，被取代的 reject AbortError。
@@ -332,8 +336,10 @@ export interface Engine extends EventTarget {
   // ── 影片輸出 ──
 
   /**
-   * 指定繪製目標；null 表示不再繪製（影片仍會解碼以維持同步，除非也關掉影片軌）。
-   * Engine 會把 `canvas.width`／`height` 設為影片顯示尺寸，版面縮放由 App 用 CSS（例如 `object-fit: contain`）處理。
+   * 指定繪製目標；null 表示不再繪製（影片仍會解碼以維持同步，除非也關掉影片軌）。接上時立即畫上目前的 frame。
+   * Engine 依音訊時鐘挑選 pts ≤ `currentTime` 的最新一張 frame，以 2D context 畫上去（套用旋轉），並把
+   * `canvas.width`／`height` 設為影片顯示尺寸（`videoSize`）；版面縮放由 App 用 CSS（例如 `object-fit: contain`）處理。
+   * canvas 不能是已經 `transferControlToOffscreen()` 的。
    */
   attachCanvas(canvas: HTMLCanvasElement | null): void;
 
@@ -714,7 +720,11 @@ export interface EngineStats {
    * `targetMs`：實際生效的 `audioBuffer.targetMs`。
    */
   audio: { ringMs: number; underruns: number; outputLatencyMs: number; targetMs: number };
-  /** 影片解碼；沒有選用影片軌時為 null。 */
+  /**
+   * 影片解碼；沒有選用影片軌時為 null。`decoded`：decoder 輸出的 frame 數；`dropped`：時鐘已經越過、沒有畫出就丟棄的
+   * frame 數；`decodeQueueSize`：`VideoDecoder.decodeQueueSize`（上限 4）；`avgDecodeMs`：送進 decoder 到輸出 frame
+   * 的時間（ms，移動平均）。`decoded` 與 `dropped` 在 `load()` 時歸零。
+   */
   video: {
     decoded: number;
     dropped: number;
@@ -734,7 +744,9 @@ export interface EngineStats {
   wasmHeapBytes: number;
   /**
    * 存活中的資源數，用於診斷 leak：`destroy()` 後全為 0；換檔後 `workers` 為 1、
-   * `libavInstances` 等於來源數（主來源加外掛音軌）。`workers` 是建立之後還沒 terminate 的 media Worker 數。
+   * `libavInstances` 等於來源數（主來源加外掛音軌）。`workers` 是建立之後還沒 terminate 的 media Worker 數；
+   * `openVideoFrames` 是還沒 close 的 `VideoFrame`（主執行緒畫面上與等待顯示的，加上 media Worker 內暫留的），
+   * 播放影片時最多十幾張。
    */
   resources: { workers: number; libavInstances: number; openVideoFrames: number };
 }

@@ -11,6 +11,8 @@ export interface HostTypes {
   messagePort: unknown;
   /** `Blob`。 */
   blob: unknown;
+  /** `VideoFrame`。 */
+  videoFrame: unknown;
 }
 
 /** 送進 media Worker 的來源描述，對應公開的 `Source`；URL 一律轉成字串。 */

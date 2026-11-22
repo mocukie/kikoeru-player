@@ -8,6 +8,7 @@ import {
   mediaUrl,
   WorkerDriver,
 } from '../../test/media-worker-harness.js';
+import type { WorkerHost } from './host.js';
 import type { RetryPolicy, WorkerLimits, WorkerToMainMessage } from '../protocol/index.js';
 
 const workers: Worker[] = [];
@@ -29,7 +30,7 @@ function spawn(
         worker.postMessage(message, transfer);
       },
       onMessage: (listener) => {
-        worker.onmessage = ({ data }: MessageEvent<WorkerToMainMessage>) => {
+        worker.onmessage = ({ data }: MessageEvent<WorkerToMainMessage<WorkerHost>>) => {
           listener(data);
         };
       },
@@ -42,7 +43,7 @@ test('script 執行完畢就送出 ready，在任何其他訊息之前', async (
   const worker = new Worker(new URL('./index.js', import.meta.url), { type: 'module' });
   workers.push(worker);
   const first = await new Promise<WorkerToMainMessage>((resolve) => {
-    worker.onmessage = ({ data }: MessageEvent<WorkerToMainMessage>) => {
+    worker.onmessage = ({ data }: MessageEvent<WorkerToMainMessage<WorkerHost>>) => {
       resolve(data);
     };
   });
@@ -256,7 +257,7 @@ describe('Range 快取與預讀', () => {
   });
 
   test('封包佇列超過硬上限時回報 fatal 的 MEMORY_LIMIT', async () => {
-    // 以很小的硬上限模擬：一批 demux 出的封包就超過。只播音訊時要有兩條選用中的軌才會真的超過（影片的 issue）。
+    // 以很小的硬上限模擬：一批 demux 出的封包就超過。交錯不良的檔案真的超過的情況見 video.browser.test.ts。
     const driver = await spawn(undefined, undefined, { packetQueueBytes: 1024 });
     await driver.load({ kind: 'http', url: mediaUrl('audio/pcm-s16.wav') });
     await expect(driver.decode(0, { epoch: 2 })).rejects.toMatchObject({

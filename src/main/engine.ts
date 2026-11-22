@@ -32,6 +32,7 @@ import {
   StateChangeEvent,
   TimeUpdateEvent,
   TracksChangeEvent,
+  VideoResizeEvent,
 } from './events.js';
 import { errorScope, fromWorkerTime, Logger } from './log.js';
 import { notImplemented } from './not-implemented.js';
@@ -39,6 +40,7 @@ import { resolveEngineOptions, type ResolvedEngineOptions } from './options.js';
 import { createWebMediaWorker } from './media-worker.js';
 import { detectPlatform } from './platform.js';
 import { sameTrackStructure, selectInitialTracks, toContainerTracks } from './tracks.js';
+import { VideoRenderer } from './video-renderer.js';
 import { loadWasmAssets } from './wasm.js';
 import type {
   AudioTrack,
@@ -55,6 +57,7 @@ import type {
   Track,
   TrackSelection,
   VideoSize,
+  VideoTrack,
 } from './types.js';
 
 /**
@@ -95,6 +98,11 @@ const MIN_RATE = 0.5;
 const MAX_RATE = 2;
 /** `buffered` 的終點變動至少這麼多秒才發出 bufferedchange。 */
 const BUFFERED_CHANGE_SECONDS = 0.5;
+/**
+ * load、seek 時音訊已備妥而影片的第一張 frame 超過這麼久（ms）還沒來，就不再等它（例如 decoder 卡住），先開始播放，
+ * frame 到了再畫。
+ */
+const VIDEO_READY_TIMEOUT_MS = 2000;
 
 const noSelection: Readonly<TrackSelection> = { audio: null, video: null, subtitle: null };
 
@@ -194,8 +202,19 @@ class EngineImpl extends EventTarget implements Engine {
   /** 這份媒體是否播放過；seek 結束時決定回到 `'ready'` 或 `'paused'`。 */
   #played = false;
   #worker: MediaWorker | null = null;
-  /** 0.1.0 不解碼影片：有影片軌也還沒有畫面，一律為 null。#50 接上影片之後改為選用中影片軌畫出的 frame 的尺寸。 */
-  readonly videoSize: VideoSize | null = null;
+  /** 依音訊時鐘挑選並繪製 Worker 送來的 VideoFrame。 */
+  readonly #video: VideoRenderer;
+  /** 目前解碼中的影片軌（已送出 `start`）；沒有選用、或 configure 失敗而不播影片時為 null。 */
+  #videoTrack: VideoTrack | null = null;
+  /**
+   * 這個 epoch 的影片還沒備妥（第一張 frame、`videoend` 或 `videoerror` 都還沒來）：worklet 先停住，load 與 seek 等它
+   * 才完成，畫面與聲音一起開始。
+   */
+  #videoPending = false;
+  /** 音訊已備妥而影片還沒備妥時，`VIDEO_READY_TIMEOUT_MS` 後不再等的 timer。 */
+  #videoTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 繪製迴圈（rAF）的取消；沒有影片軌時為 null。 */
+  #cancelFrameLoop: (() => void) | null = null;
   /** 建立後還沒 terminate 的 media Worker 數（`getStats().resources.workers`）。 */
   #liveWorkers = 0;
   /** AudioContext 與 worklet；`suspend()`、`resume()`、`close()` 都經它的串行佇列。 */
@@ -224,6 +243,16 @@ class EngineImpl extends EventTarget implements Engine {
     this.#deps = deps;
     this.#options = options;
     this.#log = new Logger(options.log, options.logLevel);
+    this.#video = new VideoRenderer({
+      closed: (source, count) => {
+        // 被 terminate 的 Worker 不必再知道。
+        if (source === this.#worker) this.#worker?.post({ type: 'frameclosed', count });
+      },
+      resized: (size) => {
+        this.dispatchEvent(new VideoResizeEvent({ size }));
+      },
+    });
+    this.#video.attach(options.canvas);
     const { audioBuffer, audioFadeMs, assets } = options;
     this.#context = new AudioContextLifecycle(
       (handlers, config) => {
@@ -319,6 +348,9 @@ class EngineImpl extends EventTarget implements Engine {
   }
   get audioUnlocked(): boolean {
     return this.#context.unlocked;
+  }
+  get videoSize(): VideoSize | null {
+    return this.#video.size;
   }
 
   get volume(): number {
@@ -476,12 +508,12 @@ class EngineImpl extends EventTarget implements Engine {
     return this.#destroying;
   }
 
-  attachCanvas(): void {
-    notImplemented('attachCanvas()');
+  attachCanvas(canvas: HTMLCanvasElement | null): void {
+    this.#video.attach(canvas);
   }
   /**
-   * 彙整主執行緒（音訊輸出、buffered）與 media Worker（快取、網路、封包佇列、wasm heap、libav instance）的數字。
-   * `video` 由影片的 issue 接上，目前一律為 null。
+   * 彙整主執行緒（音訊輸出、buffered、影片的 dropped 與持有的 VideoFrame）與 media Worker（快取、網路、封包佇列、
+   * wasm heap、libav instance、影片解碼）的數字。
    */
   async getStats(): Promise<EngineStats> {
     const worker = await this.#workerStats();
@@ -496,7 +528,14 @@ class EngineImpl extends EventTarget implements Engine {
         outputLatencyMs: (audio?.outputLatency() ?? 0) * 1000,
         targetMs: this.#options.audioBuffer.targetMs,
       },
-      video: null,
+      video: this.#videoTrack
+        ? {
+            decoded: worker?.video?.decoded ?? 0,
+            dropped: this.#video.dropped,
+            decodeQueueSize: worker?.video?.decodeQueueSize ?? 0,
+            avgDecodeMs: worker?.video?.avgDecodeMs ?? 0,
+          }
+        : null,
       packetQueue: worker?.packetQueue ?? { audioSeconds: 0, videoSeconds: 0, bytes: 0 },
       cache: {
         bytes: worker?.cache.bytes ?? 0,
@@ -512,7 +551,7 @@ class EngineImpl extends EventTarget implements Engine {
       resources: {
         workers: this.#liveWorkers,
         libavInstances: worker?.libavInstances ?? 0,
-        openVideoFrames: 0,
+        openVideoFrames: this.#video.open + (worker?.openVideoFrames ?? 0),
       },
     };
   }
@@ -605,6 +644,9 @@ class EngineImpl extends EventTarget implements Engine {
       if (this.#loadContext === load) this.#loadContext = null;
     });
     this.#resetMediaState();
+    this.#stopVideo();
+    // reload：畫面上的 frame 留到新的 frame 畫出。
+    if (!reloadOf) this.#video.reset(epoch, null);
     this.#currentTime = startTime;
     if (!reloadOf) this.#publishMedia(null, noSelection);
     signal.throwIfAborted();
@@ -677,17 +719,23 @@ class EngineImpl extends EventTarget implements Engine {
       // worklet 以 duration 截掉多的音訊、在 eof 之後補靜音並判定 ended；Worker 開始供料之前送到。
       audio.post({ type: 'duration', epoch: this.#epoch, duration: probed.duration });
       const audioTrack = tracks.find((t) => t.id === load.selection.audio);
+      const videoTrack = tracks.find(
+        (t): t is VideoTrack => t.kind === 'video' && t.id === load.selection.video,
+      );
+      if (videoTrack) this.#startVideo(videoTrack);
       worker.post({
         type: 'start',
         epoch: this.#epoch,
         time: load.startTime,
         audio: audioTrack?.streamIndex ?? null,
+        video: videoTrack?.streamIndex ?? null,
       });
 
       // worklet 回報後，#applyOutput() 結束 load、發布媒體並離開 loading。
       await this.#until(() => this.#loadContext !== load, signal);
       signal.throwIfAborted();
-      return info;
+      // 影片軌 configure 失敗時 info 已換成標為不支援的那份。
+      return load.info;
     } catch (error) {
       if (!signal.aborted) this.#fail(this.#toEngineError(error));
       throw error;
@@ -748,7 +796,7 @@ class EngineImpl extends EventTarget implements Engine {
   async #runDestroy(): Promise<void> {
     this.#isDestroyed = true;
     this.#queue.close(() => this.#destroyedError());
-    // 主執行緒還沒有持有任何 VideoFrame；影片的 issue 在這裡 close() 它們。
+    // 佇列中與畫面上的 VideoFrame 都在這裡 close。
     this.#clearMedia();
     this.dispatchEvent(new Event('destroy'));
     // 斷開 worklet 並經佇列 close()；佇列的 timeout 保證一定會 settle，失敗也不讓 destroy() 失敗。
@@ -767,7 +815,9 @@ class EngineImpl extends EventTarget implements Engine {
     this.#loadContext = null;
     this.#lastLoad = null;
     this.#resetMediaState();
+    this.#stopVideo();
     const epoch = ++this.#epoch;
+    this.#video.reset(epoch, null);
     this.#flushAudio(0);
     this.#publishMedia(null, noSelection);
     if (this.#epoch !== epoch) return;
@@ -794,8 +844,26 @@ class EngineImpl extends EventTarget implements Engine {
           this.#log.forward({ ...message.entry, time: fromWorkerTime(message.entry.time) });
           return;
         }
-        if (worker !== this.#worker) return;
+        if (worker !== this.#worker) {
+          // 被 terminate 的 Worker 在之前送出的 frame 也要 close。
+          if (message.type === 'frame') message.frame.close();
+          return;
+        }
         switch (message.type) {
+          case 'frame':
+            this.#video.push(message.epoch, message.frame, worker);
+            if (message.epoch !== this.#epoch) break;
+            this.#renderVideo();
+            // videoresize 的 listener 可能已經 seek 或換檔。
+            if (message.epoch === this.#epoch) this.#onVideoReady();
+            break;
+          case 'videoend':
+            if (message.epoch === this.#epoch) this.#onVideoReady();
+            break;
+          case 'videoerror':
+            if (message.epoch !== this.#epoch) break;
+            this.#onVideoError(message.error, message.beforeFirstFrame);
+            break;
           case 'probe':
             if (this.#loadContext && message.epoch === this.#epoch)
               this.#loadContext.probed = message.media;
@@ -892,6 +960,15 @@ class EngineImpl extends EventTarget implements Engine {
   /** worklet 開始輸出（`playing`）或停止輸出、資料已備妥（`paused`）。 */
   #applyOutput(output: 'playing' | 'paused'): void {
     this.#lastOutput = output;
+    // 影片還沒備妥：load 與 seek 等第一張 frame（或不再等）之後由 #onVideoReady() 再套用；worklet 被要求停住，
+    // 它回報的 paused 也不是使用者的暫停。
+    if (
+      this.#videoPending &&
+      (output === 'paused' || this.#state === 'loading' || this.#state === 'seeking')
+    ) {
+      this.#armVideoTimer();
+      return;
+    }
     // 等 bufferAhead 時 worklet 被要求停住，它回報的 paused 不是使用者的暫停。
     if (output === 'paused' && this.#holding && !this.#paused) return;
     // 想播放而 context 還在啟動：等啟動的結果（成功時 worklet 會開始輸出，失敗時 #onStartFailed() 再套用）。
@@ -968,7 +1045,7 @@ class EngineImpl extends EventTarget implements Engine {
     const output = this.#audio;
     if (!output) return;
     const running = this.#context.running;
-    const play = !this.#paused && running && !this.#holding;
+    const play = !this.#paused && running && !this.#holding && !this.#videoPending;
     if (!force && play === this.#workletPlay) return;
     this.#workletPlay = play;
     const epoch = this.#epoch;
@@ -1385,6 +1462,10 @@ class EngineImpl extends EventTarget implements Engine {
     this.#flushAudio(time);
   }
 
+  /**
+   * 新的 epoch 從 `position` 開始：worklet 丟掉舊的資料，影片佇列中舊 epoch 的 frame close。解碼中的影片要等新 epoch 的
+   * 第一張 frame，worklet 在那之前停住。
+   */
   #flushAudio(position: number): void {
     this.#currentTime = position;
     this.#heardFloor = position;
@@ -1393,6 +1474,112 @@ class EngineImpl extends EventTarget implements Engine {
     this.#lastOutput = null;
     if (this.#loadContext) this.#loadContext.flushedAt = position;
     this.#audio?.post({ type: 'flush', epoch: this.#epoch, position });
+    this.#video.flush(this.#epoch);
+    this.#clearVideoTimer();
+    this.#videoPending = this.#videoTrack !== null;
+    if (this.#videoPending) this.#syncWorklet();
+  }
+
+  // ───────────────────────────── 影片 ─────────────────────────────
+
+  /** 開始解碼 `track`（送出 `start` 之前）：等第一張 frame，並開始繪製迴圈。 */
+  #startVideo(track: VideoTrack): void {
+    this.#videoTrack = track;
+    this.#video.setTrack(track);
+    this.#videoPending = true;
+    this.#syncWorklet();
+    const schedule = frameScheduler();
+    const tick = () => {
+      this.#cancelFrameLoop = schedule(tick);
+      this.#renderVideo();
+    };
+    this.#cancelFrameLoop?.();
+    this.#cancelFrameLoop = schedule(tick);
+  }
+
+  /** 不再解碼影片（換媒體、結束媒體、影片軌失敗）：停止繪製迴圈，不再等影片。 */
+  #stopVideo(): void {
+    this.#cancelFrameLoop?.();
+    this.#cancelFrameLoop = null;
+    this.#videoTrack = null;
+    this.#videoPending = false;
+    this.#clearVideoTimer();
+  }
+
+  /** 依此刻的音訊時鐘挑選並繪製 frame。 */
+  #renderVideo(): void {
+    if (this.#videoTrack) this.#video.render(this.currentTime);
+  }
+
+  /** 這個 epoch 的影片備妥（或不再等）：worklet 依播放意圖恢復，等待中的 load／seek 依 worklet 的回報完成。 */
+  #onVideoReady(): void {
+    if (!this.#videoPending) return;
+    this.#videoPending = false;
+    this.#clearVideoTimer();
+    this.#syncWorklet();
+    const last = this.#lastOutput;
+    // 想播放而 worklet 剛被要求播放：等它回報 playing。
+    if (last === 'playing' || (last === 'paused' && !this.#workletPlay)) this.#applyOutput(last);
+    this.#notify();
+  }
+
+  /**
+   * `VideoDecoder` 失敗。configure 或首個 keyframe 失敗（`beforeFirstFrame`）時與 `isConfigSupported` 誤報相同：
+   * 該軌改為不支援（`'platform'`），不選用影片、只播音訊。播放中的解碼失敗只記 log（降級屬於影片降級的 issue）。
+   */
+  #onVideoError(error: WireError, beforeFirstFrame: boolean): void {
+    const track = this.#videoTrack;
+    this.#log.log('warn', 'video', error.message, {
+      code: error.code,
+      beforeFirstFrame,
+      ...(track && { track: track.id }),
+    });
+    if (beforeFirstFrame && track) {
+      // 不再解碼影片；#videoPending 留給下面的 #onVideoReady() 結束等待。
+      this.#cancelFrameLoop?.();
+      this.#cancelFrameLoop = null;
+      this.#videoTrack = null;
+      this.#video.setTrack(null);
+      const mark = (tracks: readonly Track[]): Track[] =>
+        tracks.map((t) =>
+          t.id === track.id ? { ...t, supported: false, unsupportedReason: 'platform' } : t,
+        );
+      const load = this.#loadContext;
+      if (load?.info) {
+        // 還在 loading：媒體在 load 完成時一起發布。
+        load.info = { ...load.info, tracks: mark(load.info.tracks) };
+        load.selection = { ...load.selection, video: null };
+      } else if (this.#media) {
+        const epoch = this.#epoch;
+        this.#publishMedia(
+          { ...this.#media, tracks: mark(this.#media.tracks) },
+          { ...this.#selected, video: null },
+        );
+        // trackschange 的 listener 可能已經 seek 或換檔。
+        if (this.#epoch !== epoch) return;
+      }
+    }
+    this.#onVideoReady();
+  }
+
+  /** 音訊已備妥、影片還沒：`VIDEO_READY_TIMEOUT_MS` 後不再等。 */
+  #armVideoTimer(): void {
+    this.#videoTimer ??= setTimeout(() => {
+      this.#videoTimer = null;
+      if (this.#isDestroyed || !this.#videoPending) return;
+      this.#log.log(
+        'warn',
+        'video',
+        `影片的第一張 frame 超過 ${String(VIDEO_READY_TIMEOUT_MS)} ms 沒有備妥，先開始播放`,
+        { position: this.#currentTime },
+      );
+      this.#onVideoReady();
+    }, VIDEO_READY_TIMEOUT_MS);
+  }
+
+  #clearVideoTimer(): void {
+    if (this.#videoTimer !== null) clearTimeout(this.#videoTimer);
+    this.#videoTimer = null;
   }
 
   #beginSeek(time: number): void {
@@ -1407,8 +1594,10 @@ class EngineImpl extends EventTarget implements Engine {
     this.#terminateWorker();
     this.#loadContext = null;
     this.#error = error;
+    this.#stopVideo();
     // 停掉 ring 內剩下的聲音。
     const epoch = ++this.#epoch;
+    this.#video.reset(epoch, null);
     this.#flushAudio(position);
     this.#queue.fail(error);
     this.#setState('error', reason);
@@ -1537,6 +1726,26 @@ class EngineImpl extends EventTarget implements Engine {
   #destroyedError(): EngineError {
     return new EngineError('DESTROYED', { fatal: false, position: this.currentTime });
   }
+}
+
+/**
+ * 繪製迴圈的排程：有 `requestAnimationFrame` 時每個 frame 一次，否則（Node 測試）約 60 Hz 的 timer。回傳取消的函式。
+ */
+function frameScheduler(): (callback: () => void) => () => void {
+  if (typeof requestAnimationFrame === 'function') {
+    return (callback) => {
+      const id = requestAnimationFrame(callback);
+      return () => {
+        cancelAnimationFrame(id);
+      };
+    };
+  }
+  return (callback) => {
+    const id = setTimeout(callback, 16);
+    return () => {
+      clearTimeout(id);
+    };
+  };
 }
 
 /** 夾在 `[0, duration]`；duration 未知（NaN）時只夾下限。 */

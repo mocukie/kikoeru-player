@@ -6,8 +6,8 @@ import {
   Demand,
   type AudioDecoder,
   type DecodedAudio,
-  type PacketReader,
 } from './audio-pipeline.js';
+import { Demuxer, withDemux, type PacketReader } from './demuxer.js';
 import { WorkerError } from './errors.js';
 import type { Logger } from './log.js';
 import type { PacketQueueLimits } from './packet-queue.js';
@@ -44,7 +44,12 @@ class FakeReader implements PacketReader<FakePacket> {
     return Promise.resolve({ packets, eof: this.#batches.length === 0 });
   }
   measure(packet: FakePacket) {
-    return { bytes: packet.frames * 4, time: packet.time ?? null, duration: packet.frames / RATE };
+    return {
+      stream: 0,
+      bytes: packet.frames * 4,
+      time: packet.time ?? null,
+      duration: packet.frames / RATE,
+    };
   }
 }
 
@@ -157,27 +162,48 @@ function setup(
   const controller = new AbortController();
   const epoch = options.epoch ?? 1;
   demand.setEpoch(epoch);
-  const pipeline = new AudioPipeline({
+  const startTime = options.startTime ?? 0;
+  const demuxer = new Demuxer({
     reader,
+    streams: [0],
+    startTime,
+    epoch,
+    ...(options.queueLimits && { queueLimits: options.queueLimits }),
+    ...(options.onDemux && { onDemux: options.onDemux }),
+    ...(options.log && { log: options.log }),
+  });
+  const pipeline = new AudioPipeline({
+    packets: demuxer.lane(0),
+    fatal: demuxer.fatal,
     decoder: options.decoder ?? new FakeDecoder(),
     sampleRate: RATE,
-    startTime: options.startTime ?? 0,
+    startTime,
     rate: options.rate ?? 1,
     createStretcher: stretch.create,
     epoch,
     demand,
     pool,
     signal: controller.signal,
-    ...(options.queueLimits && { queueLimits: options.queueLimits }),
-    ...(options.onDemux && { onDemux: options.onDemux }),
     ...(options.log && { log: options.log }),
     // 與 MessagePort 一樣 transfer：送出後原本的 buffer 被 detach。
     post: (message, transfer) => posted.push(structuredClone({ message, transfer }, { transfer })),
   });
-  const running = pipeline.run();
+  const running = withDemux(demuxer, controller.signal, () => pipeline.run());
   const pcm = () =>
     posted.map((p) => p.message).filter((m): m is WorkletPcmMessage => m.type === 'pcm');
-  return { pipeline, running, posted, pcm, demand, pool, reader, controller, epoch, stretch };
+  return {
+    pipeline,
+    demuxer,
+    running,
+    posted,
+    pcm,
+    demand,
+    pool,
+    reader,
+    controller,
+    epoch,
+    stretch,
+  };
 }
 
 /** 讓 pipeline 處理完目前能處理的工作。 */
@@ -630,12 +656,12 @@ describe('封包佇列', () => {
 
   test('worklet 要求之前就 demux 到約 2 秒的封包，之後停下', async () => {
     const ends: number[] = [];
-    const { reader, pipeline } = setup({ batches: many(500), onDemux: (end) => ends.push(end) });
+    const { reader, demuxer } = setup({ batches: many(500), onDemux: (end) => ends.push(end) });
     await settle();
     const reads = reader.reads;
     expect(reads).toBeGreaterThan(90);
     expect(reads).toBeLessThan(100);
-    expect(pipeline.queuedSeconds).toBeGreaterThanOrEqual(2);
+    expect(demuxer.seconds(0)).toBeGreaterThanOrEqual(2);
     expect(ends.at(-1)).toBeCloseTo((reads * 1024) / RATE, 6);
     await settle();
     expect(reader.reads).toBe(reads);

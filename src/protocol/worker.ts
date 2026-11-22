@@ -18,6 +18,7 @@ export type MainToWorkerMessage<H extends HostTypes> =
   | WorkerSeekMessage
   | WorkerPortMessage<H>
   | WorkerRateMessage
+  | WorkerFrameClosedMessage
   | WorkerStatsRequestMessage;
 
 /** Worker 建立後的第一個訊息；`workletPort` 以 transfer 傳送。 */
@@ -65,9 +66,9 @@ export interface WorkerLoadMessage<H extends HostTypes> {
 }
 
 /**
- * probe 之後開始輸出：只讀選用的音軌（其餘 discard），從 `time`（秒）開始供料，精準度同 `seek`。
- * Worker 依 worklet 的 `need` 送出這個 epoch 的 PCM，音訊到結尾時送出 `eof`。每個 load 只送一次；
- * 之後改變位置經由 `seek`。
+ * probe 之後開始輸出：只讀選用的音軌與影片軌（其餘 discard），從 `time`（秒）開始供料，精準度同 `seek`。
+ * Worker 依 worklet 的 `need` 送出這個 epoch 的 PCM，音訊到結尾時送出 `eof`；影片解出的 frame 以 `frame` 送出，
+ * 全部送出後送 `videoend`。每個 load 只送一次；之後改變位置經由 `seek`。
  */
 export interface WorkerStartMessage {
   type: 'start';
@@ -75,6 +76,8 @@ export interface WorkerStartMessage {
   time: number;
   /** 選用音軌的 stream index；null 表示不輸出音訊：Worker 立即送出 `eof`，worklet 以靜音推進時鐘。 */
   audio: number | null;
+  /** 選用影片軌的 stream index（probe 時 supported 的軌）；null 表示不解碼影片。 */
+  video: number | null;
 }
 
 /**
@@ -109,14 +112,25 @@ export interface WorkerRateMessage {
   rate: number;
 }
 
+/**
+ * 主執行緒 close 了 `count` 張 Worker 送來的 `VideoFrame`（畫過、被取代、過時或 epoch 過期）。Worker 依它控制還沒 close
+ * 的 frame 數（backpressure），不帶 epoch：任何 epoch 的 frame 都計入。
+ */
+export interface WorkerFrameClosedMessage {
+  type: 'frameclosed';
+  count: number;
+}
+
 /** 要求 Worker 回報它持有的資源；以 `stats` 回覆同一個 `id`。 */
 export interface WorkerStatsRequestMessage {
   type: 'stats';
   id: number;
 }
 
-/** media Worker 送給主執行緒的訊息。 */
-export type WorkerToMainMessage =
+/**
+ * media Worker 送給主執行緒的訊息。`H` 只決定 `frame` 的 `VideoFrame` 型別；不碰 frame 的一方可以省略。
+ */
+export type WorkerToMainMessage<H extends HostTypes = HostTypes> =
   | WorkerReadyMessage
   | WorkerProbeMessage
   | WorkerErrorMessage
@@ -124,6 +138,9 @@ export type WorkerToMainMessage =
   | WorkerStatsMessage
   | WorkerBufferMessage
   | WorkerReadErrorMessage
+  | WorkerFrameMessage<H>
+  | WorkerVideoEndMessage
+  | WorkerVideoErrorMessage
   | WorkerLogMessage;
 
 /**
@@ -161,6 +178,33 @@ export interface WorkerBufferMessage {
   eof: boolean;
   /** 預讀正在抓取；false 表示已達目標（或沒有預讀），等待也不會再增加資料。 */
   fetching: boolean;
+}
+
+/**
+ * 解出的一張 `VideoFrame`（以 transfer 傳送），依 pts 的順序。`frame.timestamp` 是媒體時間軸上的 µs。seek 之後的第一張
+ * 是 pts ≤ 起點的最後一張。主執行緒負責 close（包括 epoch 過期的），close 之後送 `frameclosed`。
+ */
+export interface WorkerFrameMessage<H extends HostTypes> {
+  type: 'frame';
+  epoch: number;
+  frame: H['videoFrame'];
+}
+
+/** 這個 epoch 的影片 frame 都送出了（播到結尾，或 demux 失敗而停止）。 */
+export interface WorkerVideoEndMessage {
+  type: 'videoend';
+  epoch: number;
+}
+
+/**
+ * `VideoDecoder` 失敗，這個 epoch 不再送出 frame。`beforeFirstFrame`：這條軌還沒解出過任何 frame（configure 或首個
+ * keyframe 失敗），等同 `isConfigSupported` 誤報，主執行緒把該軌改為不支援（`'platform'`）。
+ */
+export interface WorkerVideoErrorMessage {
+  type: 'videoerror';
+  epoch: number;
+  error: WireError;
+  beforeFirstFrame: boolean;
 }
 
 /** http 的一個請求失敗（包括之後會重試的）；非致命，供卡住而放棄時回報最後一次的讀取錯誤。 */
@@ -219,4 +263,8 @@ export interface WorkerStats {
   packetQueue: { audioSeconds: number; videoSeconds: number; bytes: number };
   /** 存在中的 libav instance 的 wasm linear memory 合計（bytes）。 */
   wasmHeapBytes: number;
+  /** 影片解碼；沒有解碼影片時為 null。`avgDecodeMs`：送進 decoder 到輸出 frame 的時間（ms，移動平均）。 */
+  video: { decoded: number; decodeQueueSize: number; avgDecodeMs: number } | null;
+  /** Worker 內還沒 close、也還沒送出的 `VideoFrame` 數。 */
+  openVideoFrames: number;
 }

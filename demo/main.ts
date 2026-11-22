@@ -71,6 +71,8 @@ const mediaSessionInput = element('media-session', HTMLInputElement);
 // Demo 頁預設扮演 App 設定 Media Session；query `mediasession=0` 時不設定（例如驗證 Now Playing 是 AudioContext 時）。
 mediaSessionInput.checked = new URLSearchParams(location.search).get('mediasession') !== '0';
 const nextOnEndedInput = element('next-on-ended', HTMLInputElement);
+const videoCanvas = element('video', HTMLCanvasElement);
+const attachCanvasInput = element('attach-canvas', HTMLInputElement);
 element('engine-options', HTMLElement).textContent =
   `EngineOptions（由頁面 query 覆蓋）：${JSON.stringify(options)}`;
 
@@ -135,7 +137,11 @@ function logOptions(): Pick<EngineOptions, 'log' | 'logLevel'> {
 
 /** 建立 Engine 並接上事件 log；`globalThis.engine` 指向新的 Engine。 */
 function setupEngine(): void {
-  const target = createEngine({ ...options, ...logOptions() });
+  const target = createEngine({
+    ...options,
+    ...logOptions(),
+    canvas: attachCanvasInput.checked ? videoCanvas : null,
+  });
   engine = target;
   globalThis.engine = target;
   target.addEventListener('statechange', (e) => {
@@ -148,6 +154,11 @@ function setupEngine(): void {
   });
   target.addEventListener('trackschange', (e) => {
     log(`trackschange ${String(e.tracks.length)} 軌 selected=${JSON.stringify(e.selected)}`);
+  });
+  target.addEventListener('videoresize', (e) => {
+    log(
+      `videoresize ${e.size ? `${String(e.size.width)}×${String(e.size.height)} rotation=${String(e.size.rotation)}` : 'null'}`,
+    );
   });
   target.addEventListener('seeked', (e) => {
     log(`seeked ${e.currentTime.toFixed(3)}`);
@@ -409,6 +420,11 @@ element('rate-reset', HTMLElement).addEventListener('click', () => {
   log(`playbackRate = ${engine.playbackRate.toFixed(2)}`);
 });
 
+attachCanvasInput.addEventListener('change', () => {
+  engine.attachCanvas(attachCanvasInput.checked ? videoCanvas : null);
+  log(`attachCanvas(${attachCanvasInput.checked ? 'canvas' : 'null'})`);
+});
+
 // 選了本機檔案或填了 URL 之後，清掉另一個，避免不知道用的是哪一個。
 fileInput.addEventListener('change', () => {
   urlInput.value = '';
@@ -424,6 +440,7 @@ const pausedText = element('paused', HTMLElement);
 const unlockedText = element('audio-unlocked', HTMLElement);
 const currentTimeText = element('current-time', HTMLElement);
 const durationText = element('duration', HTMLElement);
+const videoSizeText = element('video-size', HTMLElement);
 const mediaText = element('media-info', HTMLElement);
 const errorText = element('error', HTMLElement);
 const audioStatsText = element('audio-stats', HTMLElement);
@@ -452,7 +469,8 @@ setInterval(() => {
         `${(cache.bytes / MiB).toFixed(2)}／${(cache.limitBytes / MiB).toFixed(0)} MiB，` +
         `預讀 ${(cache.aheadBytes / MiB).toFixed(2)}／${(cache.readaheadTarget / MiB).toFixed(2)} MiB` +
         `${cache.fetching ? '（抓取中）' : ''}，hits ${String(cache.hits)}／misses ${String(cache.misses)}，` +
-        `bufferAhead ${bufferAhead.toFixed(1)} s，封包佇列 ${packetQueue.audioSeconds.toFixed(1)} s`;
+        `bufferAhead ${bufferAhead.toFixed(1)} s，封包佇列 音訊 ${packetQueue.audioSeconds.toFixed(1)} s` +
+        `／影片 ${packetQueue.videoSeconds.toFixed(1)} s`;
       networkStatsText.textContent =
         `已讀 ${(network.bytesLoaded / MiB).toFixed(2)} MiB，進行中 ${String(network.inflight.length)} 個` +
         network.inflight
@@ -479,6 +497,10 @@ function render(): void {
   unlockedText.textContent = String(engine.audioUnlocked);
   currentTimeText.textContent = engine.currentTime.toFixed(3);
   durationText.textContent = String(engine.duration);
+  const size = engine.videoSize;
+  videoSizeText.textContent = size
+    ? `${String(size.width)}×${String(size.height)} rotation=${String(size.rotation)}`
+    : '—';
   bufferedText.textContent =
     engine.buffered.map((r) => `[${r.start.toFixed(1)}, ${r.end.toFixed(1)}]`).join(' ') || '—';
   const duration = engine.duration;

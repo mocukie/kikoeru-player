@@ -6,4 +6,5 @@ export interface WorkerHost extends HostTypes {
   wasmModule: WebAssembly.Module;
   messagePort: MessagePort;
   blob: Blob;
+  videoFrame: VideoFrame;
 }

@@ -10,12 +10,14 @@ import {
   type AudioDecoder,
   type AudioPipelineOptions,
   type DecodedAudio,
-  type PacketReader,
 } from './audio-pipeline.js';
+import { Demuxer, type DemuxerOptions, type PacketLane, type PacketReader } from './demuxer.js';
 import { crashReason, WorkerError } from './errors.js';
 import type { RawMedia, RawStream } from './probe.js';
 import type { ByteSource } from './source.js';
 import type { Stereo, Stretcher } from './tempo.js';
+import { withParameterSets } from './video-codec.js';
+import type { VideoChunk } from './video-pipeline.js';
 
 type LibAV = libavjs.LibAV;
 type Packet = libavjs.Packet;
@@ -46,6 +48,8 @@ const READ_LIMIT = 32 * 1024;
 const AVSEEK_FLAG_BACKWARD = 1;
 const AV_DISCARD_DEFAULT = 0;
 const AV_DISCARD_ALL = 48;
+/** `AV_PKT_DATA_DISPLAYMATRIX`：codecpar 的 coded side data 中的 display matrix。 */
+const AV_PKT_DATA_DISPLAYMATRIX = 5;
 const AV_CHANNEL_MONO = 0x4;
 const AV_CHANNEL_STEREO = 0x3;
 /** `av_channel_layout_default()` 對常見聲道數的 mask；容器沒有記錄 layout 時使用。 */
@@ -110,6 +114,8 @@ export class LibavMedia {
   readonly #demuxPkt: number;
   /** 目前音軌的 decoder；換音軌時釋放，seek 時 flush 後沿用。 */
   #decoder: LibavAudioDecoder | null = null;
+  /** 目前沒有 discard 的 stream（`audio,video`）；選擇改變時重設各 stream 的 discard。 */
+  #selection = '';
 
   private constructor(
     libav: LibAV,
@@ -137,7 +143,7 @@ export class LibavMedia {
   }
 
   /**
-   * 中止進行中的來源讀取：等待它的 libav 呼叫（demux、seek）以錯誤結束。之後要先經 `startAudio()` 的 seek
+   * 中止進行中的來源讀取：等待它的 libav 呼叫（demux、seek）以錯誤結束。之後要先經 `startOutput()` 的 seek
    * 才能繼續讀（中止後直接續讀會讀到錯位的封包）。
    */
   abortReads(): void {
@@ -213,44 +219,73 @@ export class LibavMedia {
   }
 
   /**
-   * 只讀選用的音軌（其餘 discard），回傳從 `options.startTime` 開始的這個 epoch 的供料。音軌的 decoder 與
-   * filter graph 在換音軌時建立，同一條音軌沿用。
+   * 開始一個 epoch 的輸出：只 demux 選用的音軌與影片軌（其餘 discard），回傳這個 epoch 的 demuxer、音訊的供料與影片的
+   * 封包 lane。音軌的 decoder 與 filter graph 在換音軌時建立，同一條音軌沿用。
    *
-   * `seek` 時先跳到 `startTime` 往前 preroll 的 keyframe，再 flush decoder 與 filter graph；pipeline 解碼並丟掉
-   * 起點之前的 sample，輸出的第一個 sample 落在 `startTime`（ADR-0003）。不 seek 時接著 demuxer 目前的位置讀，
-   * 只用於開檔後的第一次輸出。呼叫端要先停下前一個供料。
+   * `seek` 時先跳到 `startTime` 往前 preroll 的 keyframe（有影片軌時，libavformat 以影片軌的 keyframe 為準），再 flush
+   * 音訊的 decoder 與 filter graph；pipeline 解碼並丟掉起點之前的 sample，輸出的第一個 sample 落在 `startTime`
+   *（ADR-0003）。不 seek 時接著 demuxer 目前的位置讀，只用於開檔後的第一次輸出。呼叫端要先停下前一個輸出。
    */
-  async startAudio(
-    streamIndex: number,
-    options: Omit<AudioPipelineOptions<Packet>, 'reader' | 'decoder' | 'createStretcher'> & {
-      seek: boolean;
-    },
-  ): Promise<AudioPipeline<Packet>> {
+  async startOutput(options: {
+    audio: number | null;
+    video: number | null;
+    seek: boolean;
+    startTime: number;
+    signal: AbortSignal;
+    demux: Omit<DemuxerOptions<Packet>, 'reader' | 'streams' | 'startTime'>;
+    audioOptions: Omit<
+      AudioPipelineOptions<Packet>,
+      'packets' | 'fatal' | 'decoder' | 'createStretcher' | 'startTime' | 'signal'
+    >;
+  }): Promise<{
+    demuxer: Demuxer<Packet>;
+    audio: AudioPipeline<Packet> | null;
+    /** 影片軌的 lane，封包已轉成 chunk（沒有時間戳的封包為 null）。 */
+    video: PacketLane<VideoChunk | null> | null;
+  }> {
     const libav = this.#libav;
-    const stream = this.#streams[streamIndex];
-    if (!stream) throw new WorkerError('INTERNAL', `沒有 stream ${String(streamIndex)}`);
-    let decoder = this.#decoder;
-    if (decoder?.streamIndex !== streamIndex) {
+    const streams = [options.audio, options.video].filter((s): s is number => s !== null);
+    for (const index of streams) {
+      if (!this.#streams[index]) throw new WorkerError('INTERNAL', `沒有 stream ${String(index)}`);
+    }
+    const selection = streams.join(',');
+    if (selection !== this.#selection) {
       for (const s of this.#streams) {
-        await libav.AVStream_discard_s(s.ptr, s === stream ? AV_DISCARD_DEFAULT : AV_DISCARD_ALL);
+        await libav.AVStream_discard_s(
+          s.ptr,
+          streams.includes(s.index) ? AV_DISCARD_DEFAULT : AV_DISCARD_ALL,
+        );
       }
-      await this.#decoder?.free();
+      this.#selection = selection;
+    }
+    let decoder = this.#decoder;
+    if (options.audio !== null && decoder?.streamIndex !== options.audio) {
+      await decoder?.free();
       this.#decoder = null;
-      decoder = await LibavAudioDecoder.create(libav, stream, this.origin, options.sampleRate);
+      const stream = this.#streams[options.audio];
+      if (!stream) throw new WorkerError('INTERNAL', `沒有 stream ${String(options.audio)}`);
+      decoder = await LibavAudioDecoder.create(
+        libav,
+        stream,
+        this.origin,
+        options.audioOptions.sampleRate,
+      );
       this.#decoder = decoder;
     }
+    const audioDecoder = options.audio === null ? null : decoder;
     if (options.seek) {
-      const codec = this.raw.streams[streamIndex]?.codec ?? '';
+      const codec = options.audio === null ? '' : (this.raw.streams[options.audio]?.codec ?? '');
+      const preroll = audioDecoder ? await audioDecoder.preroll(codec) : 0;
       // 落點在開頭附近時也往前跳：容器的第一個封包可能早於 0（例如 MP4 的 priming）。
-      await this.#seek(options.startTime - (await decoder.preroll(codec)), options.signal);
-      await decoder.reset();
+      await this.#seek(options.startTime - preroll, options.signal);
+      await audioDecoder?.reset();
     }
     const reader: PacketReader<Packet> = {
       read: async () => {
         const [result, packets] = await libav.ff_read_frame_multi(this.#fmt, this.#demuxPkt, {
           limit: READ_LIMIT,
         });
-        const selected = packets[streamIndex] ?? [];
+        const selected = streams.flatMap((index) => packets[index] ?? []);
         if (result === libav.AVERROR_EOF) return { packets: selected, eof: true };
         if (result < 0 && result !== -libav.EAGAIN) {
           const text = await libav.ff_error(result);
@@ -262,17 +297,71 @@ export class LibavMedia {
         return { packets: selected, eof: false };
       },
       measure: (packet) => ({
+        stream: packet.stream_index ?? -1,
         bytes: packet.data.byteLength,
         time: this.#packetTime(packet),
-        duration: decoder.packetDuration(packet),
+        duration: packetDuration(packet),
       }),
     };
-    return new AudioPipeline({
-      ...options,
+    const demuxer = new Demuxer({
+      ...options.demux,
       reader,
-      decoder,
-      createStretcher: (rate) => this.createStretcher(options.sampleRate, rate),
+      streams,
+      startTime: options.startTime,
     });
+    const audio = audioDecoder
+      ? new AudioPipeline({
+          ...options.audioOptions,
+          packets: demuxer.lane(audioDecoder.streamIndex),
+          fatal: demuxer.fatal,
+          decoder: audioDecoder,
+          startTime: options.startTime,
+          signal: options.signal,
+          createStretcher: (rate) => this.createStretcher(options.audioOptions.sampleRate, rate),
+        })
+      : null;
+    return {
+      demuxer,
+      audio,
+      video: options.video === null ? null : this.#videoLane(demuxer, options.video),
+    };
+  }
+
+  /**
+   * 影片軌的封包轉成 `VideoDecoder` 的 chunk：timestamp 是媒體時間軸上的 µs（沒有 pts 時用 dts，例如 AVI），
+   * Annex B 的 keyframe 補上 extradata 的參數集。沒有時間戳的封包為 null。
+   */
+  #videoLane(demuxer: Demuxer<Packet>, streamIndex: number): PacketLane<VideoChunk | null> {
+    const lane = demuxer.lane(streamIndex);
+    const toChunk = this.#videoChunks(streamIndex);
+    return {
+      next: async (signal) => {
+        const packet = await lane.next(signal);
+        return packet === undefined ? undefined : toChunk(packet);
+      },
+      get drained() {
+        return lane.drained;
+      },
+    };
+  }
+
+  #videoChunks(streamIndex: number): (packet: Packet) => VideoChunk | null {
+    const raw = this.raw.streams[streamIndex];
+    const codec = raw?.codec ?? '';
+    const extradata = raw?.extradata ?? null;
+    const keyFlag = this.#libav.AV_PKT_FLAG_KEY;
+    return (packet) => {
+      const time = this.#packetTime(packet);
+      if (time === null) return null;
+      const key = ((packet.flags ?? 0) & keyFlag) !== 0;
+      const duration = packetDuration(packet);
+      return {
+        type: key ? 'key' : 'delta',
+        timestamp: Math.round(time * 1e6),
+        ...(duration > 0 && { duration: Math.round(duration * 1e6) }),
+        data: key ? withParameterSets(codec, packet.data, extradata) : packet.data,
+      };
+    };
   }
 
   /** 建立速度為 `rate` 的 `atempo` stretcher（`sampleRate` 的 stereo fltp）。 */
@@ -280,13 +369,15 @@ export class LibavMedia {
     return LibavStretcher.create(this.#libav, sampleRate, rate);
   }
 
-  /** 封包的 pts 換算到媒體時間軸（秒）；沒有時間戳時為 null。 */
+  /** 封包的 pts（沒有時用 dts）換算到媒體時間軸（秒）；都沒有時為 null。 */
   #packetTime(packet: Packet): number | null {
     const num = packet.time_base_num ?? 0;
     const den = packet.time_base_den ?? 0;
-    if (packet.pts === undefined || !(num > 0 && den > 0)) return null;
-    const pts = int64(this.#libav, packet.pts, packet.ptshi ?? 0);
-    return pts === null ? null : (pts * num) / den - this.origin;
+    if (!(num > 0 && den > 0)) return null;
+    const pts = packet.pts === undefined ? null : int64(this.#libav, packet.pts, packet.ptshi ?? 0);
+    const dts = packet.dts === undefined ? null : int64(this.#libav, packet.dts, packet.dtshi ?? 0);
+    const ts = pts ?? dts;
+    return ts === null ? null : (ts * num) / den - this.origin;
   }
 
   /**
@@ -520,10 +611,7 @@ class LibavAudioDecoder implements AudioDecoder<Packet> {
   }
 
   packetDuration(packet: Packet): number {
-    const duration = (packet.duration ?? 0) + (packet.durationhi ?? 0) * 2 ** 32;
-    const num = packet.time_base_num ?? 0;
-    const den = packet.time_base_den ?? 0;
-    return duration > 0 && num > 0 && den > 0 ? (duration * num) / den : 0;
+    return packetDuration(packet);
   }
 
   async #filter(frames: number[], fin: boolean): Promise<DecodedAudio[]> {
@@ -666,9 +754,10 @@ async function rawStream(libav: LibAV, s: libavjs.Stream): Promise<RawStream> {
   const frameRateDen = await libav.AVCodecParameters_framerate_den(cp);
   const extradataSize = await libav.AVCodecParameters_extradata_size(cp);
   const extradata =
-    type === 'subtitle' && extradataSize > 0
+    (type === 'subtitle' || type === 'video') && extradataSize > 0
       ? await libav.copyout_u8(await libav.AVCodecParameters_extradata(cp), extradataSize)
       : null;
+  const video = type === 'video';
   return {
     index: s.index,
     type,
@@ -685,7 +774,59 @@ async function rawStream(libav: LibAV, s: libavjs.Stream): Promise<RawStream> {
     disposition: await libav.AVStream_disposition(s.ptr),
     extradata,
     bitRate: await libav.AVCodecParameters_bit_rate(cp),
+    profile: await libav.AVCodecParameters_profile(cp),
+    level: await libav.AVCodecParameters_level(cp),
+    displayMatrix: video ? await displayMatrix(libav, cp) : null,
+    sampleAspectRatio: video ? await streamSampleAspectRatio(libav, s) : null,
   };
+}
+
+/** 封包的時長（秒）；容器沒有記錄時為 0。 */
+function packetDuration(packet: Packet): number {
+  const duration = (packet.duration ?? 0) + (packet.durationhi ?? 0) * 2 ** 32;
+  const num = packet.time_base_num ?? 0;
+  const den = packet.time_base_den ?? 0;
+  return duration > 0 && num > 0 && den > 0 ? (duration * num) / den : 0;
+}
+
+/**
+ * codecpar 的 coded side data 中的 display matrix（9 個 int32）；沒有時為 null。FFmpeg 7 起 demuxer（例如 mov 的
+ * `tkhd`）把它放在這裡。
+ */
+async function displayMatrix(libav: LibAV, codecpar: number): Promise<Int32Array | null> {
+  const count = await libav.AVCodecParameters_nb_coded_side_data(codecpar);
+  const list = await libav.AVCodecParameters_coded_side_data(codecpar);
+  for (let i = 0; i < count; i++) {
+    if ((await libav.AVPacketSideData_type(list, i)) !== AV_PKT_DATA_DISPLAYMATRIX) continue;
+    if ((await libav.AVPacketSideData_size(list, i)) < 36) continue;
+    return libav.copyout_s32(await libav.AVPacketSideData_data(list, i), 9);
+  }
+  return null;
+}
+
+/** `AVStream` 中各欄位以 int32 計的位置（wasm32）：index、codecpar、disposition 與 sample_aspect_ratio。 */
+const STREAM_INDEX_WORD = 1;
+const STREAM_CODECPAR_WORD = 3;
+const STREAM_DISPOSITION_WORD = 14;
+const STREAM_SAR_WORD = 16;
+
+/**
+ * 容器記錄的 sample aspect ratio（`AVStream.sample_aspect_ratio`，MP4 的 `pasp`、Matroska 的 DisplayWidth／Height）。
+ * libav.js 沒有這個欄位的 accessor，所以直接讀 `AVStream` 的記憶體：同一個 wasm Release 的 struct 排列是固定的，
+ * 先以有 accessor 的欄位（index、codecpar、disposition）核對位置，不符時（排列改變）當成未知（null）。
+ */
+async function streamSampleAspectRatio(
+  libav: LibAV,
+  s: libavjs.Stream,
+): Promise<[number, number] | null> {
+  const words = await libav.copyout_s32(s.ptr, STREAM_SAR_WORD + 2);
+  const matches =
+    words[STREAM_INDEX_WORD] === s.index &&
+    words[STREAM_CODECPAR_WORD] === s.codecpar &&
+    words[STREAM_DISPOSITION_WORD] === (await libav.AVStream_disposition(s.ptr));
+  const num = words[STREAM_SAR_WORD] ?? 0;
+  const den = words[STREAM_SAR_WORD + 1] ?? 0;
+  return matches && num > 0 && den > 0 ? [num, den] : null;
 }
 
 /** libav.js 以 lo／hi 兩個 32-bit 數字表示 int64；`AV_NOPTS_VALUE` 為 null。 */

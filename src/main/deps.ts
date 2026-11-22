@@ -16,6 +16,7 @@ export interface MainHost {
   wasmModule: WebAssembly.Module;
   messagePort: MessagePort;
   blob: Blob;
+  videoFrame: VideoFrame;
 }
 
 /** compile 好的 wasm 與 libav.js glue 的 URL。 */
@@ -74,7 +75,7 @@ export interface AudioOutputConfig {
 
 /** media Worker 的回呼。 */
 export interface MediaWorkerHandlers {
-  message(message: WorkerToMainMessage): void;
+  message(message: WorkerToMainMessage<MainHost>): void;
   /**
    * Worker 已無法繼續運作：`error`／`messageerror`。Worker 的 script 載入失敗時以 `AssetLoadError` 呼叫
    *（Engine 回報 `ASSET_LOAD_FAILED`），其他情況 Engine 回報 `INTERNAL`。

@@ -16,7 +16,7 @@ import {
 export function createWebMediaWorker(handlers: MediaWorkerHandlers): MediaWorker {
   const worker = new Worker(new URL('../worker/index.js', import.meta.url), { type: 'module' });
   let ready = false;
-  worker.onmessage = ({ data }: MessageEvent<WorkerToMainMessage>) => {
+  worker.onmessage = ({ data }: MessageEvent<WorkerToMainMessage<MainHost>>) => {
     if (data.type === 'ready') ready = true;
     handlers.message(data);
   };

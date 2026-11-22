@@ -6,7 +6,7 @@ import { mediaUrl } from '../../test/media-worker-harness.js';
 import type { WorkerToMainMessage } from '../protocol/index.js';
 import { MediaWorker as InPageMediaWorker } from '../worker/media-worker.js';
 import { createWebAudioOutput } from './audio-output.js';
-import type { EngineDeps, MediaWorker, MediaWorkerHandlers } from './deps.js';
+import type { EngineDeps, MainHost, MediaWorker, MediaWorkerHandlers } from './deps.js';
 import { createEngine, createEngineWith } from './engine.js';
 import { createWebMediaWorker } from './media-worker.js';
 import { detectPlatform } from './platform.js';
@@ -122,7 +122,7 @@ function inPageWorkers(key: string, fault: () => unknown) {
     let terminated = false;
     const index = ++state.created;
     const worker = new InPageMediaWorker({
-      postMessage: (message: WorkerToMainMessage) => {
+      postMessage: (message: WorkerToMainMessage<MainHost>) => {
         // 與真實的 Worker 一樣非同步送達。
         setTimeout(() => {
           if (!terminated) handlers.message(message);
