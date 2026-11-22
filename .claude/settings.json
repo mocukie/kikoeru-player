@@ -1,5 +1,8 @@
 {
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true
+  },
+  "permissions": {
+    "allow": ["Bash(gh run cancel:*)", "Bash(gh run rerun:*)"]
   }
 }
