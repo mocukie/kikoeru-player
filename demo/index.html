@@ -187,6 +187,25 @@
       <small>改變時以新的 logLevel 建立新的 Engine；Engine 的 log 記進下方的事件 log</small>
     </div>
 
+    <h2>軌道</h2>
+    <div class="row">
+      <label for="select-audio">音軌</label>
+      <select id="select-audio" data-kind="audio"></select>
+    </div>
+    <div class="row">
+      <label for="select-video">影片軌</label>
+      <select id="select-video" data-kind="video"></select>
+    </div>
+    <div class="row">
+      <label for="select-subtitle">字幕軌</label>
+      <select id="select-subtitle" data-kind="subtitle"></select>
+    </div>
+    <small
+      >選了就呼叫 selectTracks()；不支援的軌也列出（選了會 reject），選單跟著
+      selectedTracks（生效之後才變）。</small
+    >
+    <ul id="track-list"></ul>
+
     <h2>影片</h2>
     <canvas id="video" width="320" height="180"></canvas>
     <div class="row">

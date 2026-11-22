@@ -39,6 +39,6 @@ describe('createEngine', () => {
   it('尚未實作的成員丟出錯誤並指出成員名稱', () => {
     const engine = createEngine();
 
-    expect(() => engine.selectTracks({})).toThrow(/selectTracks/);
+    expect(() => engine.setAudioOffset('a:1', 0)).toThrow(/setAudioOffset/);
   });
 });

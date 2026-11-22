@@ -5,6 +5,8 @@ export type CommandRun<T> = (signal: AbortSignal) => Promise<T>;
 
 interface Entry<K> {
   readonly kind: K;
+  /** `enqueue()` 的 `tag`，交給較新指令的 `supersedes` 判斷。 */
+  readonly tag: unknown;
   readonly run: CommandRun<unknown>;
   readonly controller: AbortController;
   readonly result: Deferred<unknown>;
@@ -37,7 +39,8 @@ export function deferred<T>(): Deferred<T> {
 /**
  * 串行的指令佇列。佇列頭的指令在 `enqueue()` 內同步開始執行，完成後下一個指令接著開始。
  *
- * 取代：新指令取代 `supersedes` 為 true 的所有尚未完成的指令（包括執行中的），它們以 AbortError reject。
+ * 取代：新指令取代 `supersedes` 為 true 的所有尚未完成的指令（包括執行中的），它們以 AbortError reject。`supersedes`
+ * 收到舊指令的 kind 與 `tag`（例如 selectTracks 以 tag 判斷它要改的 kind 是否都已被較新的呼叫接手）。
  * 被取代的包括執行中的指令時，新指令接手它的位置並立即開始執行（例如執行中的 seek 被新的 seek 取代，
  * 不能等排在後面的 play 先完成）；否則新指令照呼叫順序排在尾端。
  */
@@ -54,12 +57,14 @@ export class CommandQueue<K extends string> {
   enqueue<T>(
     kind: K,
     run: CommandRun<T>,
-    supersedes: (kind: K) => boolean = () => false,
+    supersedes: (kind: K, tag: unknown) => boolean = () => false,
+    tag?: unknown,
   ): Promise<T> {
     if (this.#closed) return Promise.reject(this.#closed());
 
     const entry: Entry<K> = {
       kind,
+      tag,
       run,
       controller: new AbortController(),
       result: deferred(),
@@ -67,7 +72,7 @@ export class CommandQueue<K extends string> {
       settled: false,
     };
 
-    const superseded = this.#entries.filter((e) => supersedes(e.kind));
+    const superseded = this.#entries.filter((e) => supersedes(e.kind, e.tag));
     if (superseded[0]?.started) this.#entries.unshift(entry);
     else this.#entries.push(entry);
     for (const e of superseded) {

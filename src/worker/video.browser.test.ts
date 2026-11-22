@@ -301,6 +301,134 @@ describe('交錯不良與壞檔', () => {
   });
 });
 
+describe('換影片軌（select）', () => {
+  async function openMulti(deps: Omit<MediaWorkerDeps, 'postMessage'> = {}) {
+    const opened = await open('video/multi-video.mkv', deps);
+    const videos = opened.media.tracks.filter((t): t is ProbedVideoTrack => t.kind === 'video');
+    const [h264, vp9, hevc] = videos;
+    if (!h264 || !vp9 || !hevc) throw new Error('multi-video.mkv 應該有三條影片軌');
+    const audio = audioTracks(opened.media)[0]?.streamIndex ?? null;
+    return { ...opened, h264, vp9, hevc, audio };
+  }
+
+  test('multi-video.mkv 的軌道組成', async () => {
+    const { h264, vp9, hevc } = await openMulti();
+    expect(h264).toMatchObject({ codec: 'h264', default: true, title: 'H.264 320x180' });
+    expect(vp9).toMatchObject({ codec: 'vp9', default: false, codedWidth: 640, codedHeight: 360 });
+    expect(hevc).toMatchObject({ codec: 'hevc', supported: false, unsupportedReason: 'platform' });
+  });
+
+  test('關閉舊軌的 decoder、為新軌建立新的，從落點之前的 keyframe 解碼；新 epoch 只有新軌的 frame', async () => {
+    const recording = recordingDecoders();
+    const { driver, h264, vp9, audio } = await openMulti(recording);
+    if (!h264.supported || !vp9.supported) return;
+    await driver.decode(audio, { video: h264.streamIndex, frames: 48_000 });
+    await driver.waitFor((m) => m.type === 'frame');
+    driver.post({
+      type: 'select',
+      epoch: 2,
+      time: 3.25,
+      audio,
+      video: vp9.streamIndex,
+      subtitle: null,
+    });
+    const pcm = await driver.collect(2);
+    const { end, frames } = await driver.videoDone(2);
+    expect(end.type).toBe('videoend');
+    expect(pcm.time).toBe(3.25);
+    expect(Math.abs(pcm.left.length / 48_000 - 6.75)).toBeLessThan(0.05);
+    expect(frames[0]?.time).toBeCloseTo(3.233, 2);
+    expect(frames).toHaveLength(300 - 97);
+    for (const frame of frames)
+      expect(frame).toMatchObject({ visibleWidth: 640, visibleHeight: 360 });
+    expect(recording.decoders).toHaveLength(2);
+    expect(recording.decoders[0]?.state).toBe('closed');
+    // 之後的 seek 沿用新的影片軌。
+    await driver.seek(8, 3);
+    const after = await driver.videoDone(3);
+    expect(after.frames[0]).toMatchObject({ visibleWidth: 640 });
+    expect(recording.decoders).toHaveLength(2);
+    const stats = await driver.stats();
+    expect(stats.openVideoFrames).toBe(0);
+    expect(stats.video?.decoded).toBeGreaterThan(300 - 97);
+  });
+
+  test('video: null：關閉 decoder、不再送出 frame，音訊照常', async () => {
+    const recording = recordingDecoders();
+    const { driver, h264, audio } = await openMulti(recording);
+    if (!h264.supported) return;
+    await driver.decode(audio, { video: h264.streamIndex, frames: 48_000 });
+    driver.post({ type: 'select', epoch: 2, time: 1, audio, video: null, subtitle: null });
+    const pcm = await driver.collect(2);
+    expect(pcm.time).toBe(1);
+    expect(Math.abs(pcm.left.length / 48_000 - 9)).toBeLessThan(0.05);
+    expect(driver.frames.filter((f) => f.epoch === 2)).toEqual([]);
+    expect(recording.decoders[0]?.state).toBe('closed');
+    expect((await driver.stats()).video).toBeNull();
+  });
+
+  test('新軌 configure 失敗：videoerror（beforeFirstFrame），換回原本的軌之後照常解碼', async () => {
+    let created = 0;
+    const { driver, h264, vp9, audio } = await openMulti({
+      createVideoDecoder: (init) => {
+        const decoder = createWebVideoDecoder(init);
+        // 第二個 decoder（新軌）configure 失敗。
+        if (++created !== 2) return decoder;
+        return {
+          get state() {
+            return decoder.state;
+          },
+          get decodeQueueSize() {
+            return decoder.decodeQueueSize;
+          },
+          ondequeue: null,
+          configure: () => {
+            decoder.configure({ codec: 'not-a-codec', codedWidth: 320, codedHeight: 180 });
+          },
+          decode: () => undefined,
+          flush: () => decoder.flush(),
+          reset: () => {
+            decoder.reset();
+          },
+          close: () => {
+            decoder.close();
+          },
+        };
+      },
+    });
+    if (!h264.supported || !vp9.supported) return;
+    await driver.decode(audio, { video: h264.streamIndex, frames: 48_000 });
+    driver.post({
+      type: 'select',
+      epoch: 2,
+      time: 1,
+      audio,
+      video: vp9.streamIndex,
+      subtitle: null,
+    });
+    const { end } = await driver.videoDone(2);
+    expect(end).toMatchObject({
+      type: 'videoerror',
+      beforeFirstFrame: true,
+      error: { code: 'CODEC_UNSUPPORTED' },
+    });
+    driver.post({
+      type: 'select',
+      epoch: 3,
+      time: 1,
+      audio,
+      video: h264.streamIndex,
+      subtitle: null,
+    });
+    const pcm = await driver.collect(3);
+    const { frames } = await driver.videoDone(3);
+    expect(pcm.time).toBe(1);
+    expect(frames[0]).toMatchObject({ time: 1, visibleWidth: 320 });
+    expect(frames).toHaveLength(270);
+    expect(driver.messages.filter((m) => m.type === 'error' || m.type === 'crash')).toEqual([]);
+  });
+});
+
 /**
  * 記下建立的每個 decoder（真實的 WebCodecs）；`corrupt` 為 true 的 chunk 只送前一半的 bytes 進去（壞掉的影片封包：
  * length prefix 比資料長）。

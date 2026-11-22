@@ -199,8 +199,24 @@ describe('probe 與選軌', () => {
         rawLanguage: 'jpn',
         title: 'beep 880 Hz',
         default: true,
+        forced: false,
+        sampleRate: 48_000,
+        channels: 2,
+        channelLayout: 'stereo',
+        sampleFormat: 'fltp',
       },
-      { kind: 'audio', streamIndex: 2, codec: 'opus', language: 'zh', title: 'beep 440 Hz' },
+      {
+        kind: 'audio',
+        streamIndex: 2,
+        codec: 'opus',
+        language: 'zh',
+        rawLanguage: 'chi',
+        title: 'beep 440 Hz',
+        default: false,
+        channels: 2,
+        channelLayout: 'stereo',
+        sampleFormat: 'fltp',
+      },
       { kind: 'subtitle', streamIndex: 3, format: 'subrip', language: 'ja', supported: true },
       { kind: 'subtitle', streamIndex: 4, format: 'ass', language: 'zh', supported: true },
     ]);
@@ -215,6 +231,41 @@ describe('probe 與選軌', () => {
     const window = [48_000 + 480, 2400] as const;
     expect(amplitudeAt(pcm.left, 48_000, 440, ...window)).toBeGreaterThan(0.3);
     expect(amplitudeAt(pcm.left, 48_000, 880, ...window)).toBeLessThan(0.02);
+  });
+
+  test('select 換音軌：新的 epoch 從 time 開始只送新軌的聲音，之後的 seek 沿用新軌', async () => {
+    const driver = await WorkerDriver.init(inPage());
+    const media = await driver.load({
+      kind: 'bytes',
+      data: await mediaBytes('video/multi-track.mkv'),
+    });
+    const [ja, zh] = audioTracks(media);
+    const first = await driver.decode(ja?.streamIndex ?? null, { frames: 48_000 });
+    expect(amplitudeAt(first.left, 48_000, 880 * 2, 480, 2400)).toBeGreaterThan(0.3);
+
+    driver.post({
+      type: 'select',
+      epoch: 2,
+      time: 3,
+      audio: zh?.streamIndex ?? null,
+      video: null,
+      subtitle: null,
+    });
+    const pcm = await driver.collect(2, 2 * 48_000);
+    // 起點 3 秒：beep 從第一個 sample 開始，只有 440 Hz。
+    expect(pcm.time).toBe(3);
+    expect(amplitudeAt(pcm.left, 48_000, 440, 480, 2400)).toBeGreaterThan(0.3);
+    expect(amplitudeAt(pcm.left, 48_000, 880, 480, 2400)).toBeLessThan(0.02);
+    expect(beepOnsets(pcm.left, 48_000)[0]).toBeLessThan(0.002);
+
+    const seek = await driver.seek(7, 3, 48_000);
+    expect(amplitudeAt(seek.left, 48_000, 440, 480, 2400)).toBeGreaterThan(0.3);
+
+    // audio: null：立即 eof，worklet 以靜音推進。
+    driver.post({ type: 'select', epoch: 4, time: 8, audio: null, video: null, subtitle: null });
+    const none = await driver.collect(4);
+    expect(none.left).toHaveLength(0);
+    expect(driver.worklet.some((m) => m.type === 'eof' && m.epoch === 4)).toBe(true);
   });
 
   test('容器的 start_time 換算到媒體時間軸：MP3 的第一個 sample 在 0', async () => {

@@ -1,4 +1,4 @@
-// media Worker 的訊息處理：init、load（開檔與 probe）、start 與 seek（音訊供料、影片解碼與字幕 cue）、port（改接重建後的
+// media Worker 的訊息處理：init、load（開檔與 probe）、start、seek 與 select（音訊供料、影片解碼與字幕 cue）、port（改接重建後的
 // worklet）、rate（變速）、frameclosed（影片 frame 的 backpressure）、videosuspend（背景時暫停影片解碼）與 stats。
 // 主執行緒每次 load 都 terminate 舊的 Worker（ADR-0002），但 Worker 也處理同一個 Worker 內的 load 取代：
 // 前一個 load 的讀取被中止、instance 被丟棄。
@@ -107,8 +107,12 @@ interface Load {
   opening: Promise<void>;
   /** 已建立（或正在建立）libav instance，計入 `libavInstances`。 */
   hasInstance: boolean;
-  /** 選用影片軌的解碼；第一次輸出影片時建立，load 結束時 close。 */
+  /** 選用影片軌的解碼；第一次輸出影片時建立，換影片軌、不再輸出影片或 load 結束時 close。 */
   video: VideoDecoding<VideoChunk | null, VideoFrame> | null;
+  /** `video` 解碼的 stream index。 */
+  videoStream: number | null;
+  /** 換影片軌之前各條軌解出的 frame 數合計（`stats.video.decoded` 在 load 內累計）。 */
+  decodedBefore: number;
   disposed: boolean;
 }
 
@@ -184,6 +188,11 @@ export class MediaWorker {
       case 'seek':
         if (this.#tracks === undefined) break;
         this.#startOutput({ ...message, ...this.#tracks, seek: true });
+        break;
+      case 'select':
+        if (this.#tracks === undefined) break;
+        this.#tracks = { audio: message.audio, video: message.video, subtitle: message.subtitle };
+        this.#startOutput({ ...message, seek: true });
         break;
       case 'rate':
         this.#log.log('debug', 'audio', '改變播放速度', { rate: message.rate });
@@ -279,6 +288,8 @@ export class MediaWorker {
       opening: Promise.resolve(),
       hasInstance: false,
       video: null,
+      videoStream: null,
+      decodedBefore: 0,
       disposed: false,
     };
     this.#load = load;
@@ -405,6 +416,8 @@ export class MediaWorker {
         post({ type: 'eof', epoch: message.epoch }, []);
         return;
       }
+      // 前一個輸出已經停下：換了影片軌（或不再輸出影片）才能關掉舊軌的 decoder。
+      if (message.video === null) this.#closeVideo(load);
       const video = message.video === null ? null : this.#videoDecoding(load, message.video);
       const { limits } = env;
       const started = await media.startOutput({
@@ -509,7 +522,8 @@ export class MediaWorker {
 
   /** 這次 load 的影片解碼；第一次輸出影片時建立。Engine 對應不到 WebCodecs 的軌（不會被選用）為 null。 */
   #videoDecoding(load: Load, stream: number): VideoDecoding<VideoChunk | null, VideoFrame> | null {
-    if (load.video) return load.video;
+    if (load.video && load.videoStream === stream) return load.video;
+    this.#closeVideo(load);
     const raw = load.media?.raw.streams[stream];
     const config = raw ? videoConfig(raw) : null;
     if (!config) return null;
@@ -519,6 +533,7 @@ export class MediaWorker {
       credit: this.#frames,
       createDecoder: this.#deps.createVideoDecoder ?? createWebVideoDecoder,
     });
+    load.videoStream = stream;
     if (this.#videoSuspended) load.video.suspend();
     return load.video;
   }
@@ -558,6 +573,8 @@ export class MediaWorker {
         },
         ...(played && { played }),
         fail: (error, beforeFirstFrame) => {
+          // 被取代的輸出（例如已經換了軌）不回報。
+          if (signal.aborted) return;
           // 主執行緒不再選用這條影片軌（只播音訊），之後的 seek 也不 demux 它。
           if (this.#tracks) this.#tracks = { ...this.#tracks, video: null };
           this.#log.log(
@@ -589,6 +606,15 @@ export class MediaWorker {
       if (result !== 'failed') this.#deps.postMessage({ type: 'videoend', epoch });
       if (!hasAudio) throw error;
     }
+  }
+
+  /** 關閉目前影片軌的 decoder（換影片軌、不再輸出影片）。 */
+  #closeVideo(load: Load): void {
+    if (!load.video) return;
+    load.decodedBefore += load.video.stats.decoded;
+    load.video.close();
+    load.video = null;
+    load.videoStream = null;
   }
 
   #stopOutput(): void {
@@ -634,7 +660,10 @@ export class MediaWorker {
         bytes: current?.demuxer.bytes ?? 0,
       },
       wasmHeapBytes: this.#load?.media?.heapBytes ?? 0,
-      video: current?.video != null && video ? video.stats : null,
+      video:
+        current?.video != null && video
+          ? { ...video.stats, decoded: (this.#load?.decodedBefore ?? 0) + video.stats.decoded }
+          : null,
       openVideoFrames: video?.openFrames ?? 0,
     };
   }

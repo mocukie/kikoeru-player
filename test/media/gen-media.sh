@@ -139,6 +139,17 @@ ff -f lavfi -i "$(video 20 320 180)" -f lavfi -i "$(stereo 20 880)" -f lavfi -i 
   -metadata:s:a:1 language=chi -metadata:s:a:1 title="beep 440 Hz" \
   -metadata:s:s:0 language=jpn -metadata:s:s:1 language=chi \
   video/multi-track.mkv
+# 多影片軌：10 秒；H.264 320×180（default）、VP9 640×360、HEVC 320×180（Chromium 與 Firefox 都不支援），
+# 三條軌的白框都與 beep 同步；一條 AAC 音軌。
+ff -f lavfi -i "$video_src" -f lavfi -i "$(video 10 640 360)" -f lavfi -i "$video_src" -f lavfi -i "$audio_src" \
+  -map 0:v -map 1:v -map 2:v -map 3:a \
+  -c:v:0 libx264 -preset veryfast -g 30 \
+  -c:v:1 libvpx-vp9 -b:v:1 0 -crf 40 -deadline realtime -cpu-used 8 -g 30 \
+  -c:v:2 libx265 -preset ultrafast -x265-params log-level=error:keyint=30:pools=none \
+  -c:a aac -b:a 128k \
+  -disposition:v:0 default -disposition:v:1 0 -disposition:v:2 0 \
+  -metadata:s:v:0 title="H.264 320x180" -metadata:s:v:1 title="VP9 640x360" -metadata:s:v:2 title="HEVC" \
+  video/multi-video.mkv
 # 其他字幕格式：2 秒。WebVTT 與 PGS（圖形字幕）在 MKV；mov_text 在 MP4。
 ff -f lavfi -i "$(video 2 320 180)" -f lavfi -i "$(stereo 2 880)" -i .work/short.vtt -i .work/short.sup \
   -map 0:v -map 1:a -map 2 -map 3 "${h264[@]}" -c:a aac -b:a 128k -c:s:0 webvtt -c:s:1 copy \

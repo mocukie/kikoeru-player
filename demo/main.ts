@@ -12,6 +12,9 @@ import {
   type LogLevel,
   type Source,
   type SubtitleCue,
+  type Track,
+  type TrackKind,
+  type TrackSelection,
 } from '../src/index.js';
 
 declare global {
@@ -168,6 +171,7 @@ function setupEngine(): void {
   target.addEventListener('trackschange', (e) => {
     log(`trackschange ${String(e.tracks.length)} 軌 selected=${JSON.stringify(e.selected)}`);
     resetCues(e.selected.subtitle);
+    renderTracks(e.tracks, e.selected);
   });
   target.addEventListener('cues', (e) => {
     const first = e.cues[0];
@@ -222,6 +226,71 @@ function setupEngine(): void {
   if (backgroundInput.checked) attachBackground();
   updateMediaSession();
 }
+
+// ───────────────────────────── 軌道 ─────────────────────────────
+
+/**
+ * 列出所有軌道（包括不支援的），各 kind 一個選單：選了就 `selectTracks()`。選單顯示 `selectedTracks`（生效的值），
+ * 被 reject 或被取代時回到它。E2E 以 `#select-<kind>` 的 value（track id，空字串是關閉）操作。
+ */
+const trackSelects = {
+  audio: element('select-audio', HTMLSelectElement),
+  video: element('select-video', HTMLSelectElement),
+  subtitle: element('select-subtitle', HTMLSelectElement),
+};
+const trackList = element('track-list', HTMLUListElement);
+
+function describeTrack(track: Track): string {
+  const parts = [track.id, track.codec];
+  if (track.language) parts.push(track.language);
+  if (track.title) parts.push(`「${track.title}」`);
+  if (track.kind === 'audio') {
+    parts.push(
+      `${String(track.sampleRate)} Hz ${track.channelLayout ?? `${String(track.channels)}ch`}`,
+    );
+    if (track.sampleFormat) parts.push(track.sampleFormat);
+  }
+  if (track.kind === 'video')
+    parts.push(`${String(track.codedWidth)}×${String(track.codedHeight)}`);
+  if (track.default) parts.push('default');
+  if (track.forced) parts.push('forced');
+  if (!track.supported) parts.push(`不支援（${track.unsupportedReason ?? '?'}）`);
+  return parts.join(' ');
+}
+
+function renderTracks(tracks: readonly Track[], selected: Readonly<TrackSelection>): void {
+  for (const kind of ['audio', 'video', 'subtitle'] as const) {
+    const select = trackSelects[kind];
+    select.replaceChildren(
+      new Option('關閉（null）', ''),
+      ...tracks.filter((t) => t.kind === kind).map((t) => new Option(describeTrack(t), t.id)),
+    );
+    select.value = selected[kind] ?? '';
+    select.disabled = tracks.length === 0;
+  }
+  trackList.replaceChildren(
+    ...tracks.map((track) => {
+      const item = document.createElement('li');
+      item.dataset.id = track.id;
+      item.textContent = `${track.kind} ${describeTrack(track)}`;
+      return item;
+    }),
+  );
+}
+
+for (const [kind, select] of Object.entries(trackSelects) as [TrackKind, HTMLSelectElement][]) {
+  select.addEventListener('change', () => {
+    const id = select.value === '' ? null : select.value;
+    const target = engine;
+    command(`selectTracks({ ${kind}: ${JSON.stringify(id)} })`, () =>
+      target.selectTracks({ [kind]: id }).finally(() => {
+        // reject、被取代：選單回到生效的值。
+        if (engine === target) select.value = target.selectedTracks[kind] ?? '';
+      }),
+    );
+  });
+}
+renderTracks([], { audio: null, video: null, subtitle: null });
 
 // ───────────────────────────── 內嵌字幕 ─────────────────────────────
 

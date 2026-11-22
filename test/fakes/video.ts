@@ -43,12 +43,12 @@ export function videoOnlyMedia(): ProbedMedia {
   return audioMedia({ tracks: [{ ...videoTrack, streamIndex: 0 }] });
 }
 
-/** 送一張 frame（epoch 預設為最後一個 start／seek 的）。 */
+/** 送一張 frame（epoch 預設為最後一個 start／seek／select 的）。 */
 export function frame(worker: FakeMediaWorker, seconds: number, epoch?: number): FakeFrame {
   const f = new FakeFrame(seconds);
   const latest = [...worker.received]
     .reverse()
-    .find((m) => m.type === 'start' || m.type === 'seek');
+    .find((m) => m.type === 'start' || m.type === 'seek' || m.type === 'select');
   const e = epoch ?? (latest && 'epoch' in latest ? latest.epoch : 0);
   worker.reply({ type: 'frame', epoch: e, frame: f });
   return f;

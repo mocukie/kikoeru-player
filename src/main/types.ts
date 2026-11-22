@@ -300,10 +300,21 @@ export interface Engine extends EventTarget {
 
   /**
    * 播放中切換軌道，不重新載入、時間不跳。只帶要改的 kind；null 表示關閉該類軌道
-   * （例如影片檔只播音訊、關掉字幕）。同一 kind 連續呼叫只保留最後一個。不改變 state。
+   * （例如影片檔只播音訊、關掉字幕）。不改變 state。
    *
-   * 選到 `supported: false` 的軌，或新軌 configure／首個 keyframe 失敗時，reject 非致命的
-   * `EngineError('CODEC_UNSUPPORTED')` 並保留原本的軌；後者會把該軌改為 `supported: false` 並發出 `trackschange`。
+   * 從目前位置重新供料：換軌期間時鐘停在切換的位置（聲音以 `audioFadeMs` 淡出淡入，中間短暫無聲），新軌出聲（暫停中為
+   * 資料備妥）、選用影片軌時新的 frame 畫出之後才 resolve；這時 `selectedTracks` 才是新值並發出 `trackschange`。
+   * 換了影片軌時從目前位置之前的 keyframe 解碼，畫面上的 frame 留到新軌的第一張畫出；關掉影片時 `videoSize` 在生效時回到
+   * null。換了字幕軌時，新軌從目前位置之前的 keyframe 起的 cue 在 `trackschange` 之後才送出；換軌期間不送 cue。
+   *
+   * 同一 kind 連續呼叫只保留最後一個：較早的呼叫要改的 kind 都被較新的呼叫接手時，以 AbortError reject（執行中的也是）；
+   * 還有自己負責的 kind 時照常執行，只套用那些 kind。選擇與目前生效的相同時立即 resolve。
+   *
+   * 一個呼叫內的 kind 一起生效或一起不生效：選到 `supported: false` 的軌，或新軌 configure／首個 keyframe 失敗時，
+   * reject 非致命的 `EngineError('CODEC_UNSUPPORTED')` 並保留原本的軌；後者會把該軌改為 `supported: false` 並發出
+   * `trackschange`，換回原本的軌之後才 reject。id 不存在或不是該 kind 的軌時 reject `RangeError`。執行時沒有媒體
+   *（state 為 `'idle'` 或 `'error'`）則以 `DOMException`（name `'InvalidStateError'`）reject；loading 期間呼叫時等
+   * load 完成才執行。
    */
   selectTracks(selection: Partial<TrackSelection>): Promise<void>;
 

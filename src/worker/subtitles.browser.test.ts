@@ -126,6 +126,27 @@ describe('multi-track.mkv', () => {
     for (const cue of after) expect(cue.id).toBe(first.get(Math.round(cue.start)));
   });
 
+  test('select 換字幕軌：新 epoch 從目前位置送出新軌的 cue，舊軌不再送', async () => {
+    const { driver, media } = await open('video/multi-track.mkv');
+    const srt = subtitle(media, 'subrip');
+    const ass = subtitle(media, 'ass');
+    const audio = streamOf(media, 'audio');
+    const video = streamOf(media, 'video');
+    await driver.decode(audio, { video, subtitle: srt.streamIndex, frames: 48_000 });
+    driver.post({ type: 'select', epoch: 2, time: 6.2, audio, video, subtitle: ass.streamIndex });
+    await driver.collect(2);
+    const after = driver.cues(2);
+    expect(after.every((c) => c.format === 'ass')).toBe(true);
+    expectSchedule(after, range(6, 20));
+
+    // 關掉字幕：之後的 seek 也不再送。
+    driver.post({ type: 'select', epoch: 3, time: 2, audio, video, subtitle: null });
+    await driver.collect(3);
+    await driver.seek(10, 4);
+    expect(driver.cues(3)).toEqual([]);
+    expect(driver.cues(4)).toEqual([]);
+  });
+
   test('沒有選字幕軌時不送 cue', async () => {
     const { driver, media } = await open('video/multi-track.mkv');
     await driver.decode(streamOf(media, 'audio'), { video: streamOf(media, 'video') });

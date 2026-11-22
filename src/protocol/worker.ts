@@ -17,6 +17,7 @@ export type MainToWorkerMessage<H extends HostTypes> =
   | WorkerLoadMessage<H>
   | WorkerStartMessage
   | WorkerSeekMessage
+  | WorkerSelectMessage
   | WorkerPortMessage<H>
   | WorkerRateMessage
   | WorkerFrameClosedMessage
@@ -93,6 +94,24 @@ export interface WorkerSeekMessage {
   type: 'seek';
   epoch: number;
   time: number;
+}
+
+/**
+ * 換軌（`selectTracks()`）：選用的各軌改為這裡的值（之後的 `seek`、`port` 沿用），以新的 epoch 從 `time`（秒）重新供料，
+ * 其餘同 `seek`。換了影片軌時關閉舊軌的 `VideoDecoder`、為新軌建立新的，從 `time` 之前的 keyframe 解碼；`video` 為 null 時
+ * 關閉 decoder。新的影片軌 configure 或首個 keyframe 失敗時送出 `videoerror`（`beforeFirstFrame: true`），之後不再選用它。
+ * `start` 之前收到的 select 不處理。
+ */
+export interface WorkerSelectMessage {
+  type: 'select';
+  epoch: number;
+  time: number;
+  /** 選用音軌的 stream index；null 表示不輸出音訊（同 `start`）。 */
+  audio: number | null;
+  /** 選用影片軌的 stream index；null 表示不解碼影片。 */
+  video: number | null;
+  /** 選用字幕軌的 stream index；null 表示不送 cue。 */
+  subtitle: number | null;
 }
 
 /**

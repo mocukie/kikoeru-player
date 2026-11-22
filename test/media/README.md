@@ -55,6 +55,7 @@
 | `sar-2-1.mkv` | 2 s | H.264，SAR 2:1 | AAC | Matroska 的 DisplayWidth 與 H.264 的 VUI 都記錄 SAR 2:1，顯示為 640×180 |
 | `bad-interleave.mp4` | 10 s | H.264 2 Mbps CBR | AAC | 交錯不良：fragmented MP4，每 5 秒一個 fragment，fragment 內影片的 sample 在前、音訊在後；0 秒的音訊在約 1.2 MB 處 |
 | `multi-track.mkv` | 20 s | H.264 | 2 軌，見下表 | 另有 2 條內嵌字幕軌 |
+| `multi-video.mkv` | 10 s | 3 軌：H.264 320×180（default）、VP9 640×360、HEVC 320×180 | AAC | 三條影片軌的白框都與 beep 同步；HEVC 在瀏覽器只測不支援的路徑。title 依序為 `H.264 320x180`、`VP9 640x360`、`HEVC` |
 | `subtitle-formats.mkv` | 2 s | H.264 | AAC | 字幕 1：WebVTT，0 s 與 1 s 各一個 0.5 秒的 cue，文字為 `[embedded webvtt] <秒數>`；字幕 2：PGS（圖形字幕），同樣的時間顯示一個小方塊 |
 | `mov-text.mp4` | 2 s | H.264 | AAC | 字幕：mov_text，0 s 與 1 s 各一個 0.5 秒的 cue，文字為 `[embedded mov_text] <秒數>`；cue 之間有清空畫面的空 sample |
 | `video-only.mp4` | 3 s | H.264 | — | 沒有音軌（MP4，faststart） |

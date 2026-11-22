@@ -58,6 +58,7 @@ import type {
   StateChangeReason,
   TimeRange,
   Track,
+  TrackKind,
   TrackSelection,
   VideoSize,
   VideoTrack,
@@ -87,7 +88,9 @@ export function createEngineWith(deps: EngineDeps, options?: EngineOptions): Eng
   return new EngineImpl(deps, resolveEngineOptions(options, deps.platform));
 }
 
-type CommandKind = 'load' | 'unload' | 'play' | 'pause' | 'seek';
+type CommandKind = 'load' | 'unload' | 'play' | 'pause' | 'seek' | 'select';
+
+const trackKinds: readonly TrackKind[] = ['audio', 'video', 'subtitle'];
 
 /** 沒有播放（暫停中、idle、error）超過這麼久（ms）才經佇列 `suspend()` AudioContext 以省電（ADR-0004）。 */
 const IDLE_SUSPEND_MS = 30_000;
@@ -128,6 +131,19 @@ interface StallEpisode {
   /** 已經嘗試自動恢復的次數。 */
   attempts: number;
   timer: ReturnType<typeof setTimeout> | null;
+}
+
+/** 一次 `selectTracks()` 的要求。同一 kind 由最後一個要求它的呼叫負責：要改的 kind 都被較新的呼叫接手時被取代。 */
+interface SelectRequest {
+  selection: Partial<TrackSelection>;
+}
+
+/** 執行中的換軌：新軌還沒生效（出聲、出畫面）。 */
+interface Switching {
+  /** 生效時公布的選擇；途中影片退回只播音訊時跟著改。 */
+  next: TrackSelection;
+  /** 新的影片軌 configure 或首個 keyframe 失敗。 */
+  failed: { trackId: string; error: WireError } | null;
 }
 
 /** 執行中的 load。 */
@@ -220,9 +236,17 @@ class EngineImpl extends EventTarget implements Engine {
    * 才完成，畫面與聲音一起開始。
    */
   #videoPending = false;
-  /** 送出 cue 的字幕軌（已送出 `start`）；沒有選用字幕軌時為 null。 */
+  /** 送出 cue 的字幕軌（已送出 `start`／`select`）；沒有選用字幕軌時為 null。 */
   #subtitleTrackId: string | null = null;
-  /** load 完成（軌道公布）之前收到的 cue，帶著收到時的 epoch；load 完成時送出仍是目前 epoch 的那些。 */
+  /** Worker 正在輸出的音軌（已送出 `start`／`select`）；不輸出音訊時為 null。 */
+  #audioTrackId: string | null = null;
+  /** 每個 kind 最後一個要求它的 `selectTracks()`。 */
+  readonly #selectOwners: Partial<Record<TrackKind, SelectRequest>> = {};
+  /** 執行中的換軌；新軌生效（或失敗）之前收到的 cue 先留著，生效、發出 trackschange 之後才送出。 */
+  #switching: Switching | null = null;
+  /**
+   * load 完成（軌道公布）或換軌生效之前收到的 cue，帶著收到時的 epoch；完成時送出仍是目前 epoch 的那些。
+   */
   #pendingCues: { epoch: number; cues: readonly WireCue[] }[] = [];
   /** 音訊已備妥而影片還沒備妥時，`VIDEO_READY_TIMEOUT_MS` 後不再等的 timer。 */
   #videoTimer: ReturnType<typeof setTimeout> | null = null;
@@ -503,8 +527,22 @@ class EngineImpl extends EventTarget implements Engine {
     );
   }
 
-  selectTracks(): Promise<void> {
-    return notImplemented('selectTracks()');
+  selectTracks(selection: Partial<TrackSelection>): Promise<void> {
+    if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    const request: SelectRequest = { selection: {} };
+    for (const kind of trackKinds) {
+      const value = selection[kind];
+      if (value !== undefined) request.selection[kind] = value;
+    }
+    this.#log.log('debug', 'command', 'selectTracks', { ...request.selection });
+    for (const kind of kindsOf(request)) this.#selectOwners[kind] = request;
+    return this.#queue.enqueue(
+      'select',
+      (signal) => this.#runSelect(request, signal),
+      (kind, tag) =>
+        kind === 'select' && tag !== request && this.#ownedKinds(tag as SelectRequest).length === 0,
+      request,
+    );
   }
   addExternalAudio(): Promise<AudioTrack> {
     return notImplemented('addExternalAudio()');
@@ -754,6 +792,7 @@ class EngineImpl extends EventTarget implements Engine {
         (t) => t.kind === 'subtitle' && t.supported && t.id === load.selection.subtitle,
       );
       if (videoTrack) this.#startVideo(videoTrack);
+      this.#audioTrackId = audioTrack?.id ?? null;
       this.#subtitleTrackId = subtitleTrack?.id ?? null;
       worker.post({
         type: 'start',
@@ -826,6 +865,154 @@ class EngineImpl extends EventTarget implements Engine {
     return target;
   }
 
+  /**
+   * selectTracks：只套用這個要求仍負責的 kind（被較新的呼叫接手的 kind 交給它們）。先檢查全部的 kind，有任何一個不能選
+   * 就整個要求不生效。選擇與正在輸出、已生效的都相同時什麼都不做。
+   */
+  async #runSelect(request: SelectRequest, signal: AbortSignal): Promise<void> {
+    this.#assertMedia();
+    const next: TrackSelection = { ...this.#selected };
+    for (const kind of this.#ownedKinds(request)) {
+      const value = request.selection[kind];
+      if (value === undefined) continue;
+      if (value !== null) this.#checkSelectable(kind, value);
+      next[kind] = value;
+    }
+    const output = this.#outputSelection();
+    if (sameSelection(next, this.#selected) && sameSelection(next, output)) return;
+    await this.#switchTracks(next, signal);
+  }
+
+  /** `request` 仍負責的 kind：沒有被較新的 `selectTracks()` 接手的。 */
+  #ownedKinds(request: SelectRequest): TrackKind[] {
+    return kindsOf(request).filter((kind) => this.#selectOwners[kind] === request);
+  }
+
+  /** `id` 是否能選為 `kind` 的軌：不存在（或 kind 不符）丟 `RangeError`；不支援丟非致命的 `CODEC_UNSUPPORTED`。 */
+  #checkSelectable(kind: TrackKind, id: string): void {
+    const track = this.#tracks.find((t) => t.id === id);
+    if (track?.kind !== kind) {
+      throw new RangeError(`沒有 id 為 '${id}' 的 ${kind} 軌`);
+    }
+    if (!track.supported) {
+      throw new EngineError('CODEC_UNSUPPORTED', {
+        fatal: false,
+        position: this.currentTime,
+        message: `軌道 '${id}' 不支援（${track.unsupportedReason ?? 'codec'}）`,
+      });
+    }
+  }
+
+  /** Worker 正在輸出的各軌。 */
+  #outputSelection(): TrackSelection {
+    return {
+      audio: this.#audioTrackId,
+      video: this.#videoTrack?.id ?? null,
+      subtitle: this.#subtitleTrackId,
+    };
+  }
+
+  /**
+   * 換成 `next`：從目前位置以新的 epoch 重新供料（state 不變），等新軌出聲（播放中時 worklet 開始輸出；暫停中時資料
+   * 備妥）、影片的第一張 frame 畫出後才公布 `selectedTracks` 並發出 trackschange，再送出期間留著的 cue。
+   * 新的影片軌 configure 或首個 keyframe 失敗時：該軌改為不支援、發出 trackschange，換回原本生效的軌，reject 非致命的
+   * `CODEC_UNSUPPORTED`。
+   */
+  async #switchTracks(next: TrackSelection, signal: AbortSignal): Promise<void> {
+    const switching: Switching = { next: { ...next }, failed: null };
+    this.#switching = switching;
+    try {
+      this.#applySelection(next);
+      await this.#until(() => switching.failed !== null || this.#outputReady(), signal);
+      const failed = switching.failed;
+      this.#switching = null;
+      const epoch = this.#epoch;
+      if (failed) {
+        await this.#revertSwitch(failed, signal);
+        throw new EngineError('CODEC_UNSUPPORTED', {
+          fatal: false,
+          position: this.currentTime,
+          message: failed.error.message,
+          ...(failed.error.detail && { detail: failed.error.detail }),
+        });
+      }
+      // 關掉影片：畫面上的 frame 留到生效時才清掉（videoSize 回到 null）。
+      if (switching.next.video === null) this.#video.setTrack(null);
+      if (this.#epoch !== epoch) return;
+      this.#publishMedia(this.#media, switching.next);
+      if (this.#epoch !== epoch) return;
+      this.#flushPendingCues();
+    } finally {
+      if (this.#switching === switching) this.#switching = null;
+    }
+  }
+
+  /** 新的影片軌失敗：標為不支援並發出 trackschange，換回目前生效的選擇，等它重新輸出。 */
+  async #revertSwitch(
+    failed: NonNullable<Switching['failed']>,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const media = this.#media;
+    if (media) {
+      const epoch = this.#epoch;
+      this.#publishMedia(
+        {
+          ...media,
+          tracks: media.tracks.map((t) =>
+            t.id === failed.trackId
+              ? { ...t, supported: false, unsupportedReason: 'platform' as const }
+              : t,
+          ),
+        },
+        this.#selected,
+      );
+      signal.throwIfAborted();
+      if (this.#epoch !== epoch) return;
+    }
+    this.#pendingCues = [];
+    // 原本沒有選用影片：renderer 不再畫失敗的那條軌。
+    if (this.#selected.video === null) this.#video.setTrack(null);
+    this.#applySelection(this.#selected);
+    await this.#until(() => this.#outputReady(), signal);
+  }
+
+  /** 這個 epoch 的輸出已備妥：worklet 回報過（被要求播放時要等到 playing），影片也備妥（或不再等）。 */
+  #outputReady(): boolean {
+    const last = this.#lastOutput;
+    return (
+      !this.#videoPending && last !== null && (last === 'playing' || this.#workletPlay !== true)
+    );
+  }
+
+  /** 讓 Worker 從目前位置以新的 epoch 輸出 `selection` 的各軌；影片軌換了就重新等第一張 frame。 */
+  #applySelection(selection: TrackSelection): void {
+    const find = (id: string | null) =>
+      id === null ? undefined : this.#tracks.find((t) => t.id === id);
+    const audio = find(selection.audio);
+    const video = find(selection.video);
+    const subtitle = find(selection.subtitle);
+    const time = this.currentTime;
+    if ((video?.id ?? null) !== (this.#videoTrack?.id ?? null)) {
+      if (video?.kind === 'video') this.#startVideo(video);
+      else this.#stopVideo();
+    }
+    this.#audioTrackId = audio?.id ?? null;
+    this.#subtitleTrackId = subtitle?.id ?? null;
+    // 新軌補滿之前時鐘停住，不是音訊輸出停住。
+    this.#stopWatchdog();
+    const epoch = ++this.#epoch;
+    this.#lastReadError = null;
+    this.#worker?.post({
+      type: 'select',
+      epoch,
+      time,
+      audio: audio?.streamIndex ?? null,
+      video: video?.streamIndex ?? null,
+      subtitle: subtitle?.streamIndex ?? null,
+    });
+    this.#flushAudio(time);
+  }
+
   async #runDestroy(): Promise<void> {
     this.#isDestroyed = true;
     this.#unsubscribeVisibility?.();
@@ -862,6 +1049,8 @@ class EngineImpl extends EventTarget implements Engine {
   /** 換成新的媒體（load）或結束媒體時，清掉屬於上一份媒體的播放紀錄、錯誤、watchdog 的進度、緩衝資訊與字幕。 */
   #resetMediaState(): void {
     this.#subtitleTrackId = null;
+    this.#audioTrackId = null;
+    this.#switching = null;
     this.#pendingCues = [];
     this.#played = false;
     this.#error = null;
@@ -906,7 +1095,8 @@ class EngineImpl extends EventTarget implements Engine {
           case 'cues':
             if (message.epoch !== this.#epoch) break;
             // 軌道公布之前（loading）先留著，App 在 trackschange 拿到 header 之後才收到 cue。
-            if (this.#loadContext) this.#pendingCues.push(message);
+            // 換軌生效之前也一樣。
+            if (this.#loadContext || this.#switching) this.#pendingCues.push(message);
             else this.#dispatchCues(message.cues);
             break;
           case 'probe':
@@ -1606,7 +1796,7 @@ class EngineImpl extends EventTarget implements Engine {
     this.#runFrameLoop(true);
     // 沒有音軌時，背景中沒有音訊推進 demux，影片的封包停在切到背景的位置：從目前位置重新 seek。沒有聲音，所以不會
     // 中斷什麼。
-    if (this.#selected.audio === null && this.#isSettled()) this.#retarget(position);
+    if (this.#audioTrackId === null && this.#isSettled()) this.#retarget(position);
   }
 
   /** 有媒體且不在 load、seek 或 error 等轉換中（playing、paused、ready、buffering）。 */
@@ -1644,7 +1834,18 @@ class EngineImpl extends EventTarget implements Engine {
       beforeFirstFrame,
       ...(track && { track: track.id }),
     });
+    const switching = this.#switching;
+    if (track && switching && track.id !== this.#selected.video) {
+      // 換軌中新的影片軌失敗：由 #switchTracks() 標為不支援並換回原本的軌；畫面上的 frame 留著。
+      this.#runFrameLoop(false);
+      this.#videoTrack = null;
+      switching.failed = { trackId: track.id, error };
+      this.#notify();
+      return;
+    }
     if (track) {
+      // 換軌中生效的影片軌失敗：照常退回只播音訊，換軌生效時也不選用影片。
+      if (switching) switching.next = { ...switching.next, video: null };
       // 不再解碼影片；#videoPending 留給下面的 #onVideoReady() 結束等待。
       this.#runFrameLoop(false);
       this.#videoTrack = null;
@@ -1872,6 +2073,15 @@ function frameScheduler(): (callback: () => void) => () => void {
     if (raf) id = requestAnimationFrame(run);
     return cancel;
   };
+}
+
+/** `selectTracks()` 的要求帶了哪些 kind。 */
+function kindsOf(request: SelectRequest): TrackKind[] {
+  return trackKinds.filter((kind) => request.selection[kind] !== undefined);
+}
+
+function sameSelection(a: Readonly<TrackSelection>, b: Readonly<TrackSelection>): boolean {
+  return trackKinds.every((kind) => a[kind] === b[kind]);
 }
 
 /** 夾在 `[0, duration]`；duration 未知（NaN）時只夾下限。 */
