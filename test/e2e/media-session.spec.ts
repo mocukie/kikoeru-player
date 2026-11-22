@@ -25,7 +25,9 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test.afterEach(async ({ page }) => {
+test.afterEach(async ({ page }, testInfo) => {
+  // test.fixme() 跳過的測試沒有開啟 Demo 頁。
+  if (testInfo.expectedStatus === 'skipped') return;
   expect(await page.evaluate(() => (window as unknown as E2EWindow).e2eActionHandlers)).toEqual([]);
   expect(pageErrors).toEqual([]);
 });
@@ -45,7 +47,10 @@ function session(page: Page) {
   }));
 }
 
-test('預設勾選：metadata 是檔名，playbackState 跟著 play／pause', async ({ page }) => {
+test('預設勾選：metadata 是檔名，playbackState 跟著 play／pause', async ({ page, browserName }) => {
+  // CI 的 Firefox（Playwright build、headless、PulseAudio null sink）在 ready 按 play 時約 3 成會讓 content
+  // process 卡死；桌面 Firefox 沒有重現。根因追蹤見 #76。
+  test.fixme(browserName === 'firefox', 'CI 的 Firefox 按 play 時 content process 卡死（#76）');
   await open(page, '/demo/');
   await expect(page.locator('#media-session')).toBeChecked();
   expect(await session(page)).toEqual({ title: null, playbackState: 'paused' });
