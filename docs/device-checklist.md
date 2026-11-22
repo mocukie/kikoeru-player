@@ -1,6 +1,6 @@
 # 實機清單
 
-自動化涵蓋不到、要在實機上確認的項目。規則（執行時機、桌面只留哪些項目、結果貼在哪裡）見[測試規範「實機清單」](testing.md#實機清單)。
+自動化涵蓋不到、要在實機上確認的項目。v1 只執行共同項目與桌面 Firefox，在發 `1.0.0` 前跑一次。規則（執行時機、桌面只留哪些項目、結果貼在哪裡）見[測試規範「實機清單」](testing.md#實機清單)。
 
 ## 執行方式
 
@@ -45,6 +45,8 @@ Demo 頁的「測試媒體」來自 `test/media/out/`：`pnpm media:gen` 產生 
 
 ### Safari
 
+> v1 不執行，延後到 `engine-platforms`（[ADR-0008](adr/0008-v1-desktop-chromium-firefox-only.md)）。
+
 Safari 不跑 E2E，共同項目都要做。
 
 - [ ] AudioWorklet 能接收 transfer 過來的 `MessagePort`：load 之後能出聲（media Worker 經 `MessageChannel` 直接供料給 worklet）。
@@ -52,6 +54,8 @@ Safari 不跑 E2E，共同項目都要做。
 - [ ] 連續播放 30 分鐘以上不中斷、不漂移。
 
 ## 手機
+
+> v1 不執行，延後到 `engine-platforms`（[ADR-0008](adr/0008-v1-desktop-chromium-firefox-only.md)）。
 
 ### iOS Safari
 
@@ -69,6 +73,8 @@ Safari 不跑 E2E，共同項目都要做。
 - [ ] 有線耳機、藍牙耳機的拔除與連接：播放不中斷，或依系統行為暫停後能再按 play 恢復。
 
 ## 背景與鎖屏
+
+> v1 不執行，延後到 `engine-platforms`（[ADR-0008](adr/0008-v1-desktop-chromium-firefox-only.md)）。
 
 使用背景播放模組（`kikoeru-player/background`）：Demo 頁預設勾選「背景播放模組」（`/demo/?background=0` 時不勾選）。底稿來自 kikoeru 的行動瀏覽器背景播放 research；Android 只在使用靜音 anchor 時才有背景播放（[ADR-0006](adr/0006-background-playback-module.md)）。Media Session 由 App 負責：Demo 頁的「Media Session」勾選框（預設勾選，`/demo/?mediasession=0` 時不勾選）扮演 App 設定 metadata（title 是檔名）、`playbackState` 與 position（`setPositionState()`，在 `statechange`、`durationchange`、`seeked` 與改變 playbackRate 時更新），但不設任何 action handler，以下項目記下的是沒有 handler 時、鎖屏按鍵經 anchor 鏡像的行為；Media Session 的上一首、下一首、seek 與 artwork 仍在 kikoeru 驗證。模組的 log 以 `[background]` 開頭出現在事件 log，等級與 Engine 共用頁面的 log 選單（外部暫停、播放的鏡像是 `info`）。
 
