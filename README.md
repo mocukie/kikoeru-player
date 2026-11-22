@@ -89,7 +89,7 @@ background.detach();
 
 ### 支援的瀏覽器
 
-近兩年的 Chromium、Firefox、Safari（含 iOS Safari）。音訊在所有支援的瀏覽器上都能播放；影片依瀏覽器的 WebCodecs 支援而定，不支援的影片軌只播音訊。
+近兩年的桌面 Chromium、Firefox。Safari 與行動瀏覽器可能可以播放，但尚未驗證（[ADR-0008](docs/adr/0008-v1-desktop-chromium-firefox-only.md)）。音訊在所有支援的瀏覽器上都能播放；影片依瀏覽器的 WebCodecs 支援而定，不支援的影片軌只播音訊。
 
 ### 授權
 

@@ -52,8 +52,8 @@
   - Firefox 解出的 `VideoFrame` 是 `BGRX`，Chromium 是 `I420`，繪製路徑兩種都要涵蓋。
   - Linux 的 Playwright WebKit 不跑：媒體走 GStreamer，行為不代表 Safari。
   - 啟動設定集中在 `test/browser-launch.ts`，Vitest 與 Playwright 共用；image 與 PulseAudio 的設定在 `test/docker/`。
-- **Safari**：macOS runner 上的 job，headed、serial，只跑 browser mode 中和平台有關的一小組測試：AudioWorklet 能出聲、`interrupted` 與解鎖、worklet 收 transferred `MessagePort`、WebCodecs H.264／VP9，以及 AV1 回報 `'platform'` 的路徑。不跑 E2E。job 開始時以 `system_profiler SPAudioDataType` 檢查音訊裝置，沒有就直接失敗。觸發時機：每週排程、手動觸發與 push `v*` tag 發版前，不擋 PR。
-- **iOS／Android**：只用實機，不用 Simulator，見下方「實機清單」。
+- **Safari**：v1 不跑，延後到 `engine-platforms`（[ADR-0008](adr/0008-v1-desktop-chromium-firefox-only.md)）。之後的規劃：macOS runner 上的 job，headed、serial，只跑 browser mode 中和平台有關的一小組測試：AudioWorklet 能出聲、`interrupted` 與解鎖、worklet 收 transferred `MessagePort`、WebCodecs H.264／VP9，以及 AV1 回報 `'platform'` 的路徑。不跑 E2E。job 開始時以 `system_profiler SPAudioDataType` 檢查音訊裝置，沒有就直接失敗。觸發時機：每週排程、手動觸發與 push `v*` tag 發版前，不擋 PR。
+- **iOS／Android**：v1 不驗證，延後到 `engine-platforms`（[ADR-0008](adr/0008-v1-desktop-chromium-firefox-only.md)）。之後只用實機，不用 Simulator，見下方「實機清單」。
 
 實作細節（PulseAudio、autoplay、libavcodec、`webdriverio@9` 的坑、runner 的音訊裝置與 Safari 版本）見 [桌面 Firefox、Safari 的媒體測試自動化](https://github.com/mocukie/kikoeru-player/blob/research/browser-automation/docs/research/browser-automation.md)。
 
@@ -90,10 +90,10 @@
 
 ## 實機清單
 
-- [`device-checklist.md`](device-checklist.md)，桌面（Firefox、Safari）與手機（iOS Safari、Android Chrome）分開列。
+- [`device-checklist.md`](device-checklist.md)，桌面（Firefox、Safari）與手機（iOS Safari、Android Chrome）分開列。v1 只執行共同項目與桌面 Firefox；Safari 與手機的段落保留給 `engine-platforms`（[ADR-0008](adr/0008-v1-desktop-chromium-firefox-only.md)）。
 - 桌面部分只留自動化涵蓋不到的項目（真實喇叭與藍牙切換、長時間播放）。
 - Demo 頁的事件 log 有「複製」按鈕；dev server 開 HTTPS（自簽），讓手機以開發機的主機名稱連線（AudioWorklet 需要 secure context；連線方式見實機清單的「執行方式」）。
-- 執行時機：每次發 minor 版本前，以及改到 [ADR-0004](adr/0004-audio-output.md)（音訊輸出）或 [ADR-0006](adr/0006-background-playback-module.md)（背景播放模組）的範圍時。結果貼成 issue 留言。
+- 執行時機：v1 只在發 `1.0.0` 前跑一次；其他版本的發版只看 CI。結果貼成 issue 留言。
 
 ## 本機與 CI
 
@@ -105,7 +105,7 @@
 | CI `check` | 依賴 `ensure-wasm`、`publish-wasm`（lint 與 typecheck 用 wasm Release 的 `libav.types.d.ts`） | lint、typecheck、Node 測試 |
 | CI `browser` | 依賴 `ensure-wasm`、`publish-wasm` 與媒體快取 | Chromium 與 Firefox 的 browser mode 與 E2E（含 leak 測試），以及 Vite fixture App 的驗收（`pnpm fixture`） |
 | CI `release` | 只在 `v*` tag 與 `workflow_dispatch`（演練）時，依賴 `check` 與 `browser` | tag 與 `package.json` 的版本一致、wasm Release 已發布，`pnpm pack` 後附在 GitHub Release；演練只上傳成 workflow artifact |
-| CI Safari | macOS runner，排程 | 見上方「瀏覽器」 |
+| CI Safari | macOS runner，排程（v1 不做） | 見上方「瀏覽器」 |
 
 PR 必須 `check` 與 `browser` 都通過。
 
