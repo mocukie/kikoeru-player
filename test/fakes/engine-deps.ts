@@ -7,6 +7,27 @@ import {
 } from './audio-output.js';
 import { FakeMediaWorkers } from './media-worker.js';
 
+/** 可控制的頁面可見性；`setHidden()` 改變並通知訂閱者（同 `visibilitychange`）。 */
+export class FakePageVisibility {
+  hidden = false;
+  readonly #listeners = new Set<() => void>();
+
+  /** 目前的訂閱數（確認 destroy 之後取消訂閱）。 */
+  get subscribers(): number {
+    return this.#listeners.size;
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+
+  setHidden(hidden: boolean): void {
+    this.hidden = hidden;
+    for (const listener of [...this.#listeners]) listener();
+  }
+}
+
 /** 最小的合法 wasm（只有 magic 與版本），讓 `init` 帶的是真正的 `WebAssembly.Module`。 */
 const emptyModule = new WebAssembly.Module(new Uint8Array([0x00, 0x61, 0x73, 0x6d, 1, 0, 0, 0]));
 
@@ -19,6 +40,7 @@ export interface FakeEngineDeps {
     config: FakeAudioOutputConfig,
   ): FakeAudioOutput;
   workers: FakeMediaWorkers;
+  visibility: FakePageVisibility;
   /** 最後建立的音訊輸出（watchdog 重建後是新的那個）；還沒建立時讀取會丟錯。 */
   readonly audio: FakeAudioOutput;
   /** 依建立順序的所有音訊輸出。 */
@@ -49,6 +71,7 @@ export function createFakeDeps(
       return audio;
     },
     workers,
+    visibility: new FakePageVisibility(),
     get audio() {
       const audio = outputs.at(-1);
       if (!audio) throw new Error('還沒有建立音訊輸出');

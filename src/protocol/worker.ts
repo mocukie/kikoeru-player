@@ -20,6 +20,7 @@ export type MainToWorkerMessage<H extends HostTypes> =
   | WorkerPortMessage<H>
   | WorkerRateMessage
   | WorkerFrameClosedMessage
+  | WorkerVideoSuspendMessage
   | WorkerStatsRequestMessage;
 
 /** Worker 建立後的第一個訊息；`workletPort` 以 transfer 傳送。 */
@@ -124,6 +125,23 @@ export interface WorkerFrameClosedMessage {
   count: number;
 }
 
+/**
+ * 背景時暫停影片解碼、回到前景時恢復（`suspendVideoWhenHidden`）。不帶 epoch，沿用到之後的 `start`、`seek`，所以在
+ * `start` 之前送出就讓這次 load 一開始就不解碼影片。
+ *
+ * - `suspended: true`：關閉 `VideoDecoder`，Worker 內暫留的 frame close，不再送出 frame；音訊照常。有音軌時影片的封包
+ *   只留播放位置之前最後一個 keyframe 之後的（依音訊取用的進度估計），封包佇列不會因為影片沒人取用而增長；沒有音軌時
+ *   影片的封包讓 demux 停在平常的上限。
+ * - `suspended: false`：建立新的 decoder，從 pts ≤ `time` 的最後一個 keyframe 解碼，送出 `time` 的那一張（pts ≤ `time`
+ *   的最後一張）與之後的。佇列中沒有那個 keyframe 時從下一個 keyframe 開始。
+ */
+export interface WorkerVideoSuspendMessage {
+  type: 'videosuspend';
+  suspended: boolean;
+  /** 恢復時此刻的播放位置（秒）；`suspended: true` 時不使用。 */
+  time: number;
+}
+
 /** 要求 Worker 回報它持有的資源；以 `stats` 回覆同一個 `id`。 */
 export interface WorkerStatsRequestMessage {
   type: 'stats';
@@ -201,8 +219,10 @@ export interface WorkerVideoEndMessage {
 }
 
 /**
- * `VideoDecoder` 失敗，這個 epoch 不再送出 frame。`beforeFirstFrame`：這條軌還沒解出過任何 frame（configure 或首個
- * keyframe 失敗），等同 `isConfigSupported` 誤報，主執行緒把該軌改為不支援（`'platform'`）。
+ * `VideoDecoder` 失敗而放棄這條影片軌：之後不再送出 frame，之後的 `seek` 也不再 demux 它。解出過 frame 之後的失敗已經
+ * 先重新設定 decoder（從下一個 keyframe 繼續）一次，還沒解出 frame 又失敗才送出（`DECODE_FAILED`）。
+ * `beforeFirstFrame`：這條軌還沒解出過任何 frame（configure 或首個 keyframe 失敗，`CODEC_UNSUPPORTED`），等同
+ * `isConfigSupported` 誤報。兩種情況主執行緒都把該軌改為不支援（`'platform'`）、只播音訊。
  */
 export interface WorkerVideoErrorMessage {
   type: 'videoerror';

@@ -21,8 +21,8 @@ declare global {
 /**
  * 頁面 URL 的 query 可以覆蓋部分 `EngineOptions`，供 E2E 與實機測試製造網路不足的情況：
  * `readahead`（`limits.readaheadSeconds`）、`cacheMiB`（`limits.cacheBytes`，MiB）、`stallTimeout`、
- * `stallAttempts`。例如 `/demo/?readahead=1&stallTimeout=3000`。log 等級由頁面上的選單決定（query `logLevel`
- * 給初始值）。
+ * `stallAttempts`，以及 `suspendVideoWhenHidden=0`（背景時照常解碼影片）。例如 `/demo/?readahead=1&stallTimeout=3000`。
+ * log 等級由頁面上的選單決定（query `logLevel` 給初始值）。
  */
 function engineOptions(query: URLSearchParams): EngineOptions {
   const number = (name: string) => {
@@ -33,6 +33,7 @@ function engineOptions(query: URLSearchParams): EngineOptions {
   const cacheMiB = number('cacheMiB');
   const stallTimeout = number('stallTimeout');
   const stallAttempts = number('stallAttempts');
+  const suspendVideoWhenHidden = query.get('suspendVideoWhenHidden');
   return {
     limits: {
       ...(readaheadSeconds !== undefined && { readaheadSeconds }),
@@ -40,6 +41,9 @@ function engineOptions(query: URLSearchParams): EngineOptions {
     },
     ...(stallTimeout !== undefined && { stallTimeout }),
     ...(stallAttempts !== undefined && { stallAttempts }),
+    ...(suspendVideoWhenHidden !== null && {
+      suspendVideoWhenHidden: suspendVideoWhenHidden !== '0',
+    }),
   };
 }
 
@@ -93,6 +97,11 @@ function log(message: string): void {
   // 只捲動 log 本身：scrollIntoView() 也會捲動頁面，頁面比視窗高時，按鈕會在 E2E 點下去之前被移走。
   logList.scrollTop = logList.scrollHeight;
 }
+
+// 分頁切到背景、回到前景（`suspendVideoWhenHidden` 在這時暫停、恢復影片解碼；log 等級 info 以上時有 Engine 的 log）。
+document.addEventListener('visibilitychange', () => {
+  log(`visibilitychange ${document.visibilityState}`);
+});
 
 element('copy-log', HTMLElement).addEventListener('click', () => {
   const text = [navigator.userAgent, ...logLines].join('\n');

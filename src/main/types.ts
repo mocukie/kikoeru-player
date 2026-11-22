@@ -79,7 +79,15 @@ export interface EngineOptions {
   stallAttempts?: number;
   /** 預設的偏好語言（BCP 47），`load()` 的 `preferredLanguages` 會覆蓋。預設沒有偏好。 */
   preferredLanguages?: { audio?: string[]; subtitle?: string[] };
-  /** 背景（`document.hidden`）時停止解碼影片、只播聲音，回前景時從 keyframe 重新同步。預設 true。 */
+  /**
+   * 背景（`document.hidden`，例如切到其他分頁或最小化視窗）時關閉 `VideoDecoder`、停止解碼影片，只播聲音；state、
+   * `currentTime` 與事件照常，背景中的 seek、load 不等影片的第一張 frame。回到前景（`visibilitychange`）時建立新的
+   * decoder，從 pts ≤ 此刻位置的 keyframe 解碼，依音訊時鐘在數個 frame 內重新同步，聲音不中斷；沒有音軌的媒體改從
+   * 此刻位置重新 seek。背景中畫面停在最後畫出的 frame。預設 true。
+   *
+   * false 時背景中照常解碼；`requestAnimationFrame` 停住時改以 timer 依音訊時鐘消耗 frame。瀏覽器在背景回收 decoder
+   *（Chromium 會回收背景中的 codec）時當作播放中解碼失敗處理：重新設定 decoder，仍然失敗就只播音訊。
+   */
   suspendVideoWhenHidden?: boolean;
   /**
    * AudioWorklet ring buffer 的水位（ms）：低於 `refillMs` 就向 media Worker 要資料，補到 `targetMs`，
@@ -266,6 +274,8 @@ export interface Engine extends EventTarget {
    * 並 resume AudioContext，所以在 user gesture 內呼叫時會自動解鎖；AudioContext 開始之前不會進入 `'playing'`。
    * resume 被拒絕或 2 秒內沒有完成時，以非致命的 `EngineError('AUDIO_LOCKED')` reject，`paused` 回到 true；
    * 逾時而 AudioContext 仍處於系統中斷（iOS 的 `'interrupted'`）時改為非致命的 `EngineError('AUDIO_OUTPUT')`。
+   * 沒有音軌的媒體（純影片）也一樣：時鐘由 AudioWorklet 以靜音推進到 `duration`，所以同樣需要 AudioContext 與
+   * user gesture。
    */
   play(): Promise<void>;
 
@@ -467,12 +477,15 @@ export interface TrackBase {
   codec: string;
   /** WebCodecs 的 codec string（只有影片軌），例如 `'avc1.640028'`。 */
   codecString?: string;
-  /** false 時無法選用，原因見 `unsupportedReason`。播放中發現實際無法解碼時會改為 false 並發出 `trackschange`。 */
+  /**
+   * false 時無法選用，原因見 `unsupportedReason`。播放中發現實際無法解碼時（影片的 configure、首個 keyframe 失敗，
+   * 或播放中重新設定 decoder 之後仍然失敗）會改為 false 並發出 `trackschange`。
+   */
   supported: boolean;
   /**
    * - `'codec'`：Engine 本身不支援，例如 wasm 沒有這個 decoder，或沒對應到 WebCodecs 的影片 codec。
    * - `'platform'`：Engine 支援、這個瀏覽器不支援，例如沒有 WebCodecs、`isConfigSupported` 為 false、
-   *   configure 或首個 keyframe 失敗。
+   *   configure 或首個 keyframe 失敗，或播放中解碼失敗、重新設定 decoder 之後仍然失敗（退回只播音訊）。
    * - `'bitmap-subtitle'`：圖形字幕（PGS、DVD），Engine 不解碼。
    */
   unsupportedReason?: 'codec' | 'platform' | 'bitmap-subtitle';

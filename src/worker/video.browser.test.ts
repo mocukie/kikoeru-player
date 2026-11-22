@@ -10,7 +10,14 @@ import {
 import type { ProbedMedia, ProbedVideoTrack, WorkerToMainMessage } from '../protocol/index.js';
 import type { WorkerHost } from './host.js';
 import { MediaWorker, type MediaWorkerDeps } from './media-worker.js';
-import { MAX_DECODE_QUEUE, MAX_OPEN_FRAMES } from './video-pipeline.js';
+import {
+  MAX_DECODE_QUEUE,
+  MAX_OPEN_FRAMES,
+  type VideoChunk,
+  type VideoDecoderInit,
+  type VideoDecoderLike,
+} from './video-pipeline.js';
+import { createWebVideoDecoder } from './webcodecs.js';
 
 function inPage(deps: Omit<MediaWorkerDeps, 'postMessage'> = {}): WorkerEndpoint {
   let listener: ((message: WorkerToMainMessage<WorkerHost>) => void) | null = null;
@@ -291,5 +298,142 @@ describe('交錯不良與壞檔', () => {
     if (end.type === 'videoerror') expect(end).toMatchObject({ beforeFirstFrame: false });
     expect(frames.length).toBeGreaterThan(60);
     expect(frames.length).toBeLessThan(200);
+  });
+});
+
+/**
+ * 記下建立的每個 decoder（真實的 WebCodecs）；`corrupt` 為 true 的 chunk 只送前一半的 bytes 進去（壞掉的影片封包：
+ * length prefix 比資料長）。
+ */
+function recordingDecoders(corrupt: (chunk: VideoChunk) => boolean = () => false) {
+  const decoders: VideoDecoderLike[] = [];
+  const createVideoDecoder = (init: VideoDecoderInit<VideoFrame>): VideoDecoderLike => {
+    const inner = createWebVideoDecoder(init);
+    const decoder: VideoDecoderLike = {
+      get state() {
+        return inner.state;
+      },
+      get decodeQueueSize() {
+        return inner.decodeQueueSize;
+      },
+      get ondequeue() {
+        return inner.ondequeue;
+      },
+      set ondequeue(handler) {
+        inner.ondequeue = handler;
+      },
+      configure: (config) => {
+        inner.configure(config);
+      },
+      decode: (chunk) => {
+        inner.decode(
+          corrupt(chunk) ? { ...chunk, data: chunk.data.slice(0, chunk.data.length >> 1) } : chunk,
+        );
+      },
+      flush: () => inner.flush(),
+      reset: () => {
+        inner.reset();
+      },
+      close: () => {
+        inner.close();
+      },
+    };
+    decoders.push(decoder);
+    return decoder;
+  };
+  return { decoders, createVideoDecoder };
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+describe('影片的降級', () => {
+  test('播放中壞掉的 keyframe：重新設定 decoder，從下一個 keyframe 繼續', async () => {
+    // 3 秒的 keyframe 壞掉：3–4 秒的 GOP 解不出來，之後照常。
+    const recording = recordingDecoders((chunk) => chunk.timestamp === 3_000_000);
+    const { driver, media, video } = await open('video/h264-aac.mp4', recording);
+    if (!video.supported) return;
+    const [audio] = audioTracks(media);
+    await driver.decode(audio?.streamIndex ?? null, { video: video.streamIndex });
+    const { end, frames } = await driver.videoDone(1);
+    expect(end.type).toBe('videoend');
+    expect(recording.decoders).toHaveLength(2);
+    const times = frames.map((f) => Math.round(f.time * 30));
+    // decoder 失敗時還在它內部（B-frame 的重排）沒有輸出的 frame 一起丟掉。
+    expect(times.filter((t) => t < 90).length).toBeGreaterThanOrEqual(80);
+    expect(times.filter((t) => t >= 90 && t < 120)).toEqual([]);
+    expect(times.filter((t) => t >= 120)).toHaveLength(180);
+  });
+
+  test('重新設定之後仍然失敗：放棄影片軌（DECODE_FAILED，非致命），音訊照常播完，之後的 seek 也不解碼影片', async () => {
+    // 3 秒之後的封包都是壞的。
+    const recording = recordingDecoders((chunk) => chunk.timestamp >= 3_000_000);
+    const { driver, media, video } = await open('video/h264-aac.mp4', recording);
+    if (!video.supported) return;
+    const [audio] = audioTracks(media);
+    const pcm = await driver.decode(audio?.streamIndex ?? null, { video: video.streamIndex });
+    const { end, frames } = await driver.videoDone(1);
+    expect(end).toMatchObject({
+      type: 'videoerror',
+      beforeFirstFrame: false,
+      error: { code: 'DECODE_FAILED', fatal: false },
+    });
+    expect(recording.decoders).toHaveLength(2);
+    expect(frames.length).toBeGreaterThanOrEqual(85);
+    expect(frames.length).toBeLessThanOrEqual(92);
+    expect(Math.abs(pcm.left.length / 48_000 - 10)).toBeLessThan(0.05);
+    expect(driver.messages.filter((m) => m.type === 'error' || m.type === 'crash')).toEqual([]);
+
+    await driver.seek(1, 2);
+    await sleep(200);
+    expect(driver.frames.filter((f) => f.epoch === 2)).toEqual([]);
+    expect(recording.decoders).toHaveLength(2);
+  });
+
+  test('背景：關閉 decoder、不再送出 frame，音訊照常；影片的封包不隨播放累積', async () => {
+    const recording = recordingDecoders();
+    const { driver, media, video } = await open('video/multi-track.mkv', recording);
+    if (!video.supported) return;
+    const [audio] = audioTracks(media);
+    await driver.decode(audio?.streamIndex ?? null, { video: video.streamIndex, frames: 48_000 });
+    await driver.waitFor((m) => m.type === 'frame');
+    driver.post({ type: 'videosuspend', suspended: true, time: 0 });
+    expect(recording.decoders[0]?.state).toBe('closed');
+    await sleep(50);
+    const received = driver.frames.length;
+
+    // 音訊播到 15 秒：影片的封包只留播放位置附近的（沒有修正時會從背景開始的位置一路累積到 17 秒）。
+    await driver.collect(1, 14 * 48_000);
+    const stats = await driver.stats();
+    expect(stats.packetQueue.videoSeconds).toBeLessThan(6);
+    expect(stats.openVideoFrames).toBe(0);
+    expect(driver.frames).toHaveLength(received);
+    expect(recording.decoders).toHaveLength(1);
+
+    const rest = await driver.collect(1);
+    expect(rest.left.length / 48_000).toBeGreaterThan(4.5);
+    expect(driver.messages.filter((m) => m.type === 'error' || m.type === 'crash')).toEqual([]);
+  });
+
+  test('回到前景：建立新的 decoder，從恢復位置之前的 keyframe 解碼，第一張送出的是恢復位置的 frame', async () => {
+    const recording = recordingDecoders();
+    const { driver, media, video } = await open('video/h264-aac.mp4', recording);
+    if (!video.supported) return;
+    const [audio] = audioTracks(media);
+    // 背景中 load：一開始就不解碼影片。
+    driver.post({ type: 'videosuspend', suspended: true, time: 0 });
+    await driver.decode(audio?.streamIndex ?? null, {
+      video: video.streamIndex,
+      frames: 6 * 48_000,
+    });
+    expect(recording.decoders).toHaveLength(0);
+    expect(driver.frames).toEqual([]);
+
+    driver.post({ type: 'videosuspend', suspended: false, time: 4.5 });
+    await driver.collect(1);
+    const { end, frames } = await driver.videoDone(1);
+    expect(end.type).toBe('videoend');
+    expect(recording.decoders).toHaveLength(1);
+    expect(frames[0]?.time).toBeCloseTo(4.5, 3);
+    expect(frames).toHaveLength(300 - 135);
   });
 });

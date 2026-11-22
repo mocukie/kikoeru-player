@@ -43,6 +43,7 @@ import { createWebMediaWorker } from './media-worker.js';
 import { detectPlatform } from './platform.js';
 import { sameTrackStructure, selectInitialTracks, toContainerTracks } from './tracks.js';
 import { VideoRenderer } from './video-renderer.js';
+import { documentVisibility } from './visibility.js';
 import { loadWasmAssets } from './wasm.js';
 import type {
   AudioTrack,
@@ -75,6 +76,7 @@ export function createEngine(options?: EngineOptions): Engine {
       loadWasm: () => loadWasmAssets(options?.assets),
       createWorker: createWebMediaWorker,
       createAudioOutput: createWebAudioOutput,
+      visibility: documentVisibility(),
     },
     options,
   );
@@ -105,6 +107,11 @@ const BUFFERED_CHANGE_SECONDS = 0.5;
  * frame 到了再畫。
  */
 const VIDEO_READY_TIMEOUT_MS = 2000;
+/**
+ * 繪製迴圈的備援 timer（ms）：背景分頁的 `requestAnimationFrame` 停住時（`suspendVideoWhenHidden: false`），改由 timer
+ * 推進，frame 才會照常被消耗、close，Worker 的解碼與封包佇列不會因此停住而增長。
+ */
+const HIDDEN_FRAME_MS = 100;
 
 const noSelection: Readonly<TrackSelection> = { audio: null, video: null, subtitle: null };
 
@@ -221,6 +228,13 @@ class EngineImpl extends EventTarget implements Engine {
   #videoTimer: ReturnType<typeof setTimeout> | null = null;
   /** 繪製迴圈（rAF）的取消；沒有影片軌時為 null。 */
   #cancelFrameLoop: (() => void) | null = null;
+  /**
+   * 背景中暫停影片解碼（`suspendVideoWhenHidden` 且 `document.hidden`）：已告訴 Worker（`videosuspend`），不畫、不等影片，
+   * 收到的 frame 立即 close。
+   */
+  #videoSuspended = false;
+  /** 取消訂閱頁面的可見性；`suspendVideoWhenHidden: false` 時為 null。 */
+  #unsubscribeVisibility: (() => void) | null = null;
   /** 建立後還沒 terminate 的 media Worker 數（`getStats().resources.workers`）。 */
   #liveWorkers = 0;
   /** AudioContext 與 worklet；`suspend()`、`resume()`、`close()` 都經它的串行佇列。 */
@@ -259,6 +273,12 @@ class EngineImpl extends EventTarget implements Engine {
       },
     });
     this.#video.attach(options.canvas);
+    if (options.suspendVideoWhenHidden) {
+      this.#videoSuspended = deps.visibility.hidden;
+      this.#unsubscribeVisibility = deps.visibility.subscribe(() => {
+        this.#onVisibilityChange();
+      });
+    }
     const { audioBuffer, audioFadeMs, assets } = options;
     this.#context = new AudioContextLifecycle(
       (handlers, config) => {
@@ -689,6 +709,8 @@ class EngineImpl extends EventTarget implements Engine {
         [port],
       );
       worker.post({ type: 'load', epoch, source: toWireSource(source) });
+      // 背景中 load：一開始就不解碼影片。
+      if (this.#videoSuspended) worker.post({ type: 'videosuspend', suspended: true, time: 0 });
 
       const probed = await this.#waitFor(() => load.probed, signal);
       signal.throwIfAborted();
@@ -806,6 +828,8 @@ class EngineImpl extends EventTarget implements Engine {
 
   async #runDestroy(): Promise<void> {
     this.#isDestroyed = true;
+    this.#unsubscribeVisibility?.();
+    this.#unsubscribeVisibility = null;
     this.#queue.close(() => this.#destroyedError());
     // 佇列中與畫面上的 VideoFrame 都在這裡 close。
     this.#clearMedia();
@@ -865,7 +889,9 @@ class EngineImpl extends EventTarget implements Engine {
         switch (message.type) {
           case 'frame':
             this.#video.push(message.epoch, message.frame, worker);
-            if (message.epoch !== this.#epoch) break;
+            // 背景中：Worker 在收到 videosuspend 之前送出的 frame 不畫，立即 close。
+            if (this.#videoSuspended) this.#video.flush(this.#epoch);
+            if (message.epoch !== this.#epoch || this.#videoSuspended) break;
             this.#renderVideo();
             // videoresize 的 listener 可能已經 seek 或換檔。
             if (message.epoch === this.#epoch) this.#onVideoReady();
@@ -1497,7 +1523,7 @@ class EngineImpl extends EventTarget implements Engine {
     this.#audio?.post({ type: 'flush', epoch: this.#epoch, position });
     this.#video.flush(this.#epoch);
     this.#clearVideoTimer();
-    this.#videoPending = this.#videoTrack !== null;
+    this.#videoPending = this.#videoTrack !== null && !this.#videoSuspended;
     if (this.#videoPending) this.#syncWorklet();
   }
 
@@ -1523,28 +1549,70 @@ class EngineImpl extends EventTarget implements Engine {
 
   // ───────────────────────────── 影片 ─────────────────────────────
 
-  /** 開始解碼 `track`（送出 `start` 之前）：等第一張 frame，並開始繪製迴圈。 */
+  /** 開始解碼 `track`（送出 `start` 之前）：等第一張 frame，並開始繪製迴圈。背景中不等、不畫。 */
   #startVideo(track: VideoTrack): void {
     this.#videoTrack = track;
     this.#video.setTrack(track);
-    this.#videoPending = true;
+    this.#videoPending = !this.#videoSuspended;
     this.#syncWorklet();
+    this.#runFrameLoop(!this.#videoSuspended);
+  }
+
+  /** 開始或停止繪製迴圈：每個 rAF（背景時 rAF 停住則由 timer）依音訊時鐘畫一次。 */
+  #runFrameLoop(run: boolean): void {
+    this.#cancelFrameLoop?.();
+    this.#cancelFrameLoop = null;
+    if (!run) return;
     const schedule = frameScheduler();
     const tick = () => {
       this.#cancelFrameLoop = schedule(tick);
       this.#renderVideo();
     };
-    this.#cancelFrameLoop?.();
     this.#cancelFrameLoop = schedule(tick);
   }
 
   /** 不再解碼影片（換媒體、結束媒體、影片軌失敗）：停止繪製迴圈，不再等影片。 */
   #stopVideo(): void {
-    this.#cancelFrameLoop?.();
-    this.#cancelFrameLoop = null;
+    this.#runFrameLoop(false);
     this.#videoTrack = null;
     this.#videoPending = false;
     this.#clearVideoTimer();
+  }
+
+  /** 頁面切到背景或回到前景（`suspendVideoWhenHidden`）。 */
+  #onVisibilityChange(): void {
+    if (this.#isDestroyed) return;
+    const hidden = this.#deps.visibility.hidden;
+    if (hidden === this.#videoSuspended) return;
+    this.#videoSuspended = hidden;
+    const position = this.currentTime;
+    const track = this.#videoTrack;
+    this.#log.log(
+      'info',
+      'video',
+      hidden ? '頁面切到背景：暫停影片解碼，只播聲音' : '頁面回到前景：從 keyframe 重新同步影片',
+      { position, ...(track && { track: track.id }) },
+    );
+    // Worker 記住這個狀態，之後的 start、seek 沿用；沒有選用影片軌時也要告訴它。
+    this.#worker?.post({ type: 'videosuspend', suspended: hidden, time: position });
+    if (!track) return;
+    if (hidden) {
+      // 佇列中的 frame close（畫面上的那張留著），不再等影片。
+      this.#video.flush(this.#epoch);
+      this.#runFrameLoop(false);
+      this.#onVideoReady();
+      return;
+    }
+    this.#runFrameLoop(true);
+    // 沒有音軌時，背景中沒有音訊推進 demux，影片的封包停在切到背景的位置：從目前位置重新 seek。沒有聲音，所以不會
+    // 中斷什麼。
+    if (this.#selected.audio === null && this.#isSettled()) this.#retarget(position);
+  }
+
+  /** 有媒體且不在 load、seek 或 error 等轉換中（playing、paused、ready、buffering）。 */
+  #isSettled(): boolean {
+    const state = this.#state;
+    return state === 'playing' || state === 'paused' || state === 'ready' || state === 'buffering';
   }
 
   /** 依此刻的音訊時鐘挑選並繪製 frame。 */
@@ -1565,8 +1633,9 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   /**
-   * `VideoDecoder` 失敗。configure 或首個 keyframe 失敗（`beforeFirstFrame`）時與 `isConfigSupported` 誤報相同：
-   * 該軌改為不支援（`'platform'`），不選用影片、只播音訊。播放中的解碼失敗只記 log（降級屬於影片降級的 issue）。
+   * Worker 放棄了影片軌（`VideoDecoder` 失敗）：該軌改為不支援（`'platform'`），不選用影片、只播音訊。
+   * configure 或首個 keyframe 失敗（`beforeFirstFrame`）時與 `isConfigSupported` 誤報相同；播放中的解碼失敗（Worker
+   * 已經重新設定過 decoder）另外發出非致命的 `DECODE_FAILED`，state 不變。
    */
   #onVideoError(error: WireError, beforeFirstFrame: boolean): void {
     const track = this.#videoTrack;
@@ -1575,29 +1644,40 @@ class EngineImpl extends EventTarget implements Engine {
       beforeFirstFrame,
       ...(track && { track: track.id }),
     });
-    if (beforeFirstFrame && track) {
+    if (track) {
       // 不再解碼影片；#videoPending 留給下面的 #onVideoReady() 結束等待。
-      this.#cancelFrameLoop?.();
-      this.#cancelFrameLoop = null;
+      this.#runFrameLoop(false);
       this.#videoTrack = null;
+      const load = this.#loadContext;
+      let media = this.#media;
+      // listener 內換檔、unload 或 destroy 之後，這份媒體的降級就不再繼續；seek 不影響。
+      const same = () =>
+        !this.#destroyedDuring() && this.#loadContext === load && this.#media === media;
       this.#video.setTrack(null);
+      if (!same()) return;
       const mark = (tracks: readonly Track[]): Track[] =>
         tracks.map((t) =>
           t.id === track.id ? { ...t, supported: false, unsupportedReason: 'platform' } : t,
         );
-      const load = this.#loadContext;
       if (load?.info) {
         // 還在 loading：媒體在 load 完成時一起發布。
         load.info = { ...load.info, tracks: mark(load.info.tracks) };
         load.selection = { ...load.selection, video: null };
-      } else if (this.#media) {
-        const epoch = this.#epoch;
-        this.#publishMedia(
-          { ...this.#media, tracks: mark(this.#media.tracks) },
-          { ...this.#selected, video: null },
-        );
-        // trackschange 的 listener 可能已經 seek 或換檔。
-        if (this.#epoch !== epoch) return;
+      } else if (media) {
+        media = { ...media, tracks: mark(media.tracks) };
+        this.#publishMedia(media, { ...this.#selected, video: null });
+        if (!same()) return;
+      }
+      if (!beforeFirstFrame) {
+        const engineError = new EngineError(error.code, {
+          fatal: false,
+          position: this.currentTime,
+          message: error.message,
+          ...(error.detail && { detail: error.detail }),
+        });
+        this.#logError('warn', engineError);
+        this.dispatchEvent(new EngineErrorEvent({ error: engineError }));
+        if (!same()) return;
       }
     }
     this.#onVideoReady();
@@ -1770,22 +1850,27 @@ class EngineImpl extends EventTarget implements Engine {
 }
 
 /**
- * 繪製迴圈的排程：有 `requestAnimationFrame` 時每個 frame 一次，否則（Node 測試）約 60 Hz 的 timer。回傳取消的函式。
+ * 繪製迴圈的排程：有 `requestAnimationFrame` 時每個 frame 一次，rAF 超過 `HIDDEN_FRAME_MS` 沒有觸發（背景分頁）時由 timer
+ * 代替；沒有 rAF 時（Node 測試）約 60 Hz 的 timer。回傳取消的函式。
  */
 function frameScheduler(): (callback: () => void) => () => void {
-  if (typeof requestAnimationFrame === 'function') {
-    return (callback) => {
-      const id = requestAnimationFrame(callback);
-      return () => {
-        cancelAnimationFrame(id);
-      };
-    };
-  }
+  const raf = typeof requestAnimationFrame === 'function';
   return (callback) => {
-    const id = setTimeout(callback, 16);
-    return () => {
-      clearTimeout(id);
+    let done = false;
+    let id: number | null = null;
+    const cancel = () => {
+      done = true;
+      if (id !== null) cancelAnimationFrame(id);
+      clearTimeout(timer);
     };
+    const run = () => {
+      if (done) return;
+      cancel();
+      callback();
+    };
+    const timer = setTimeout(run, raf ? HIDDEN_FRAME_MS : 16);
+    if (raf) id = requestAnimationFrame(run);
+    return cancel;
   };
 }
 

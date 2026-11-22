@@ -10,6 +10,7 @@ import { createEngine, createEngineWith } from './engine.js';
 import { createWebMediaWorker } from './media-worker.js';
 import { detectPlatform } from './platform.js';
 import type { Engine, EngineOptions, LogEntry } from './types.js';
+import { documentVisibility } from './visibility.js';
 import { loadWasmAssets } from './wasm.js';
 
 const source = { kind: 'http', url: mediaUrl('audio/flac.flac') } as const;
@@ -50,6 +51,7 @@ function countingEngine(options: EngineOptions) {
       loadWasm: () => loadWasmAssets(),
       createWorker,
       createAudioOutput: createWebAudioOutput,
+      visibility: documentVisibility(),
     },
     options,
   );

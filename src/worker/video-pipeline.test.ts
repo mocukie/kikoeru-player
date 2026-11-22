@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import type { PacketLane } from './demuxer.js';
+import type { HoldableLane } from './demuxer.js';
+import { PacketQueue } from './packet-queue.js';
 import {
   FrameCredit,
   MAX_DECODE_QUEUE,
@@ -96,18 +97,55 @@ interface Packet {
   key: boolean;
 }
 
-/** 依序交出封包的 lane。 */
-function lane(packets: Packet[]): PacketLane<Packet> {
-  const queue = [...packets];
-  return {
-    next: (signal) => {
-      signal.throwIfAborted();
-      return Promise.resolve(queue.shift());
-    },
+/** 依序交出封包的 lane（真實的封包佇列，stream 1）；`end` 之前取完會等待。 */
+function liveLane(initial: Packet[] = []) {
+  const queue = new PacketQueue<Packet>(
+    [1],
+    { seconds: 2, bytes: 8 * 1024 * 1024, hardBytes: 64 * 1024 * 1024 },
+    () => 1,
+    (p) => ({ time: p.ms / 1000, duration: 1 / 30 }),
+  );
+  queue.push(1, initial);
+  let held = false;
+  const lane: HoldableLane<Packet> = {
+    next: (signal) => queue.next(1, signal),
     get drained() {
-      return queue.length === 0;
+      return queue.laneDrained(1);
+    },
+    hold: (value) => {
+      held = value;
+      queue.hold(1, value);
+    },
+    entries: () => queue.lanePackets(1).map((p) => ({ key: p.key, time: p.ms / 1000 })),
+    trim: (count) => {
+      queue.trim(1, count);
+    },
+    changed: (signal) => queue.changed(signal),
+  };
+  return {
+    lane,
+    queue,
+    get held() {
+      return held;
+    },
+    push: (list: Packet[]) => {
+      queue.push(1, list);
+    },
+    end: () => {
+      queue.end();
+    },
+    /** lane 中封包的時間（ms）。 */
+    get times() {
+      return queue.lanePackets(1).map((p) => Math.round(p.ms));
     },
   };
+}
+
+/** 依序交出封包、之後結束的 lane。 */
+function lane(packets: Packet[]): HoldableLane<Packet> {
+  const live = liveLane(packets);
+  live.end();
+  return live.lane;
 }
 
 /** `seconds` 秒、30 fps、每秒一個 keyframe 的封包，從 `from` 秒起。 */
@@ -125,15 +163,19 @@ const toChunk = (p: Packet): VideoChunk => ({
   data: new Uint8Array(1),
 });
 
-function setup() {
+/** `failFrom`：每個新建的 decoder 在這個 timestamp（µs）以後的 chunk 都失敗（壞掉的資料）。 */
+function setup(options: { failFrom?: number } = {}) {
   const decoders: FakeDecoder[] = [];
   const credit = new FrameCredit();
+  const state = { failFrom: options.failFrom ?? null };
   const decoding = new VideoDecoding<Packet, FakeFrame>({
     config,
     toChunk,
     credit,
     createDecoder: (init) => {
       const decoder = new FakeDecoder(init);
+      const failFrom = state.failFrom;
+      if (failFrom !== null) decoder.failOn = (chunk) => chunk.timestamp >= failFrom;
       decoders.push(decoder);
       return decoder;
     },
@@ -141,9 +183,15 @@ function setup() {
   const posted: { epoch: number; frame: FakeFrame }[] = [];
   const events: string[] = [];
   const failures: { error: Error; beforeFirstFrame: boolean }[] = [];
+  const retries: Error[] = [];
   const run = (
-    source: PacketLane<Packet>,
-    options: { startTime?: number; epoch?: number; signal?: AbortSignal } = {},
+    source: HoldableLane<Packet>,
+    options: {
+      startTime?: number;
+      epoch?: number;
+      signal?: AbortSignal;
+      played?: () => number | null;
+    } = {},
   ) => {
     const epoch = options.epoch ?? 1;
     return decoding.run({
@@ -159,6 +207,8 @@ function setup() {
         failures.push({ error, beforeFirstFrame });
         events.push(`fail ${String(epoch)}`);
       },
+      retry: (error) => retries.push(error),
+      ...(options.played && { played: options.played }),
     });
   };
   return {
@@ -167,7 +217,14 @@ function setup() {
     posted,
     events,
     failures,
+    retries,
     run,
+    get failFrom() {
+      return state.failFrom;
+    },
+    set failFrom(value: number | null) {
+      state.failFrom = value;
+    },
     get decoder() {
       const d = decoders.at(-1);
       if (!d) throw new Error('還沒有建立 decoder');
@@ -345,24 +402,45 @@ describe('VideoDecoding', () => {
     expect(failures).toEqual([true]);
   });
 
-  test('解出 frame 之後的解碼失敗：beforeFirstFrame 為 false；下一個 epoch 建立新的 decoder', async () => {
+  test('解出 frame 之後的解碼失敗：重新設定 decoder，從下一個 keyframe 繼續', async () => {
     const t = setup();
-    const running = t.run(lane(packets(1)));
-    t.decoder.failOn = (chunk) => chunk.timestamp >= 300_000;
+    const running = t.run(lane(packets(3)));
+    // 只有 1.5 秒那個封包是壞的。
+    t.decoder.failOn = (chunk) => chunk.timestamp === 1_500_000;
     const timer = setInterval(() => {
       closeAll(t.posted, t.credit);
     }, 0);
     await running;
     clearInterval(timer);
-    expect(t.failures).toMatchObject([{ beforeFirstFrame: false }]);
+    expect(t.failures).toEqual([]);
+    expect(t.retries).toHaveLength(1);
+    expect(t.events).toEqual(['end 1']);
+    expect(t.decoders).toHaveLength(2);
+    expect(t.decoders[1]?.decoded[0]).toMatchObject({ type: 'key', timestamp: 2_000_000 });
+    expect(t.posted.at(-1)?.frame.timestamp).toBe(Math.round((89 * 1e6) / 30));
+  });
 
+  test('重新設定之後還沒解出 frame 又失敗：放棄（beforeFirstFrame 為 false）；下一個 epoch 建立新的 decoder', async () => {
+    const t = setup({ failFrom: 300_000 });
+    const running = t.run(lane(packets(3)));
+    const timer = setInterval(() => {
+      closeAll(t.posted, t.credit);
+    }, 0);
+    await running;
+    clearInterval(timer);
+    expect(t.retries).toHaveLength(1);
+    expect(t.decoders).toHaveLength(2);
+    expect(t.failures).toMatchObject([{ beforeFirstFrame: false }]);
+    expect(t.events).toEqual(['fail 1']);
+
+    t.failFrom = null;
     const again = t.run(lane(packets(0.2, 1)), { startTime: 1, epoch: 2 });
     const timer2 = setInterval(() => {
       closeAll(t.posted, t.credit);
     }, 0);
     await again;
     clearInterval(timer2);
-    expect(t.decoders).toHaveLength(2);
+    expect(t.decoders).toHaveLength(3);
     expect(t.events.at(-1)).toBe('end 2');
   });
 
@@ -386,5 +464,145 @@ describe('VideoDecoding', () => {
     controller.abort();
     t.decoding.close();
     expect(t.decoder.state).toBe('closed');
+  });
+});
+
+describe('VideoDecoding 的背景（suspend／resume）', () => {
+  /** 主執行緒持續 close 收到的 frame，回傳停止的函式。 */
+  function consume(t: ReturnType<typeof setup>): () => void {
+    const timer = setInterval(() => {
+      closeAll(t.posted, t.credit);
+    }, 0);
+    return () => {
+      clearInterval(timer);
+    };
+  }
+
+  /** 等到 `predicate` 成立（每次讓出 macrotask）。 */
+  async function until(predicate: () => boolean): Promise<void> {
+    for (let i = 0; i < 200 && !predicate(); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(predicate()).toBe(true);
+  }
+
+  const µs = (frame: number) => Math.round((frame * 1e6) / 30);
+
+  test('suspend：關閉 decoder、不再送出 frame，Worker 內暫留的 frame close；知道播放位置時 lane 被 hold', async () => {
+    const t = setup();
+    const live = liveLane(packets(1));
+    const stop = consume(t);
+    const running = t.run(live.lane, { startTime: 0.5, played: () => 0 });
+    await until(() => t.posted.length > 0);
+    t.decoding.suspend();
+    const decoder = t.decoder;
+    expect(decoder.state).toBe('closed');
+    expect(t.decoding.openFrames).toBe(0);
+    const posted = t.posted.length;
+    live.push(packets(1, 1));
+    await settle();
+    expect(t.posted).toHaveLength(posted);
+    expect(t.decoders).toHaveLength(1);
+    expect(live.held).toBe(true);
+    stop();
+    closeAll(t.posted, t.credit);
+    expect(t.credit.open).toBe(0);
+    void running.catch(() => undefined);
+  });
+
+  test('suspend 中依播放位置丟掉之前的 GOP：保留 pts ≤ 播放位置的最後一個 keyframe 之後的封包', async () => {
+    const t = setup();
+    const live = liveLane(packets(0.5));
+    let played: number | null = null;
+    const stop = consume(t);
+    void t.run(live.lane, { played: () => played }).catch(() => undefined);
+    await until(() => t.posted.length > 3);
+    t.decoding.suspend();
+    // 還不知道播放位置：不丟。
+    live.push(packets(2.5, 0.5));
+    await settle();
+    expect(live.times[0]).toBeLessThanOrEqual(500);
+    expect(live.times.length).toBeGreaterThanOrEqual(15);
+    played = 2.2;
+    live.push(packets(1, 3));
+    await settle();
+    expect(live.times[0]).toBe(2000);
+    expect(live.times.at(-1)).toBe(Math.round(µs(119) / 1000));
+    stop();
+  });
+
+  test('resume：建立新的 decoder，從 pts ≤ 恢復位置的 keyframe 解碼，第一張送出的是恢復位置的 frame', async () => {
+    const t = setup();
+    const live = liveLane(packets(0.5));
+    let played: number | null = null;
+    const stop = consume(t);
+    const running = t.run(live.lane, { played: () => played });
+    await until(() => t.posted.length > 3);
+    t.decoding.suspend();
+    played = 1.2;
+    live.push(packets(3.5, 0.5));
+    live.end();
+    await settle();
+    const before = t.posted.length;
+    t.decoding.resume(2.5);
+    await running;
+    stop();
+    expect(t.decoders).toHaveLength(2);
+    // 1–2 秒的 GOP 整個略過，從 2 秒的 keyframe 開始解碼。
+    expect(t.decoders[1]?.decoded[0]).toMatchObject({ type: 'key', timestamp: 2_000_000 });
+    expect(t.posted[before]?.frame.timestamp).toBe(2_500_000);
+    expect(t.posted.at(-1)?.frame.timestamp).toBe(µs(119));
+    expect(t.events).toEqual(['end 1']);
+  });
+
+  test('短暫的背景（不到一個 GOP）：恢復時從已經送進 decoder 的 keyframe 重新解碼', async () => {
+    const t = setup();
+    const live = liveLane(packets(0.5));
+    const stop = consume(t);
+    const running = t.run(live.lane, { played: () => 0.2 });
+    await until(() => t.posted.length > 3);
+    t.decoding.suspend();
+    live.push(packets(1.5, 0.5));
+    live.end();
+    await settle();
+    const before = t.posted.length;
+    t.decoding.resume(0.4);
+    await running;
+    stop();
+    expect(t.decoders[1]?.decoded[0]).toMatchObject({ type: 'key', timestamp: 0 });
+    expect(t.posted[before]?.frame.timestamp).toBe(400_000);
+    expect(t.posted.at(-1)?.frame.timestamp).toBe(µs(59));
+  });
+
+  test('背景中開始的 run（背景中 load 或 seek）：resume 之前不建立 decoder；不知道播放位置時不 hold', async () => {
+    const t = setup();
+    t.decoding.suspend();
+    const live = liveLane(packets(2));
+    live.end();
+    const stop = consume(t);
+    const running = t.run(live.lane, { startTime: 0.5 });
+    await settle();
+    expect(t.decoders).toHaveLength(0);
+    expect(live.held).toBe(false);
+    t.decoding.resume(1.1);
+    await running;
+    stop();
+    expect(t.posted[0]?.frame.timestamp).toBe(1_100_000);
+  });
+
+  test('suspend 中被中止（seek）：以 signal 的 reason reject，lane 不再 hold', async () => {
+    const t = setup();
+    const live = liveLane(packets(0.5));
+    const controller = new AbortController();
+    const stop = consume(t);
+    const running = t.run(live.lane, { signal: controller.signal, played: () => 0 });
+    await until(() => t.posted.length > 0);
+    t.decoding.suspend();
+    await settle();
+    expect(live.held).toBe(true);
+    controller.abort(new DOMException('seek', 'AbortError'));
+    await expect(running).rejects.toMatchObject({ name: 'AbortError' });
+    expect(live.held).toBe(false);
+    stop();
   });
 });

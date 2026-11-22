@@ -126,4 +126,66 @@ describe('PacketQueue', () => {
     controller.abort(new DOMException('stop', 'AbortError'));
     await expect(aborted).rejects.toMatchObject({ name: 'AbortError' });
   });
+  describe('暫停解碼的 lane（hold）', () => {
+    test('hold 的 lane 不影響何時停止 demux：空著也不算交錯不良，超過 2 秒也不算滿', () => {
+      const q = queue([1, 2]);
+      q.hold(2, true);
+      q.push(1, packets(0, 19));
+      expect(q.full).toBe(false);
+      q.push(2, packets(0, 50));
+      expect(q.full).toBe(false);
+      q.push(1, packets(1.9, 1));
+      expect(q.full).toBe(true);
+      q.hold(2, false);
+      q.shift(1);
+      expect(q.full).toBe(true);
+    });
+
+    test('hold 的 bytes 不計入平常的上限，但計入硬上限', () => {
+      const q = queue([1, 2], 9 * MiB);
+      q.hold(2, true);
+      q.push(1, packets(0, 1));
+      q.push(2, packets(0, 4, 0.1, 2 * MiB));
+      expect(q.full).toBe(false);
+      expect(() => {
+        q.push(2, packets(0.4, 1, 0.1, 2 * MiB));
+      }).toThrow(expect.objectContaining({ code: 'MEMORY_LIMIT' }) as Error);
+    });
+
+    test('所有選用中的 lane 都 hold 時照平常的規則', () => {
+      const q = queue([2]);
+      q.hold(2, true);
+      q.push(2, packets(0, 20));
+      expect(q.full).toBe(true);
+    });
+
+    test('trim 丟掉 lane 前面的封包，unshift 放回前面；bytes 跟著變', () => {
+      const q = queue([1]);
+      const list = packets(0, 5);
+      q.push(1, list);
+      expect(q.lanePackets(1)).toEqual(list);
+      expect(q.headTime(1)).toBe(0);
+      q.trim(1, 2);
+      expect(q.bytes).toBe(3000);
+      expect(q.headTime(1)).toBeCloseTo(0.2, 9);
+      q.unshift(1, list.slice(0, 2));
+      expect(q.lanePackets(1)).toEqual(list);
+      expect(q.bytes).toBe(5000);
+      expect(queue([1]).headTime(1)).toBeNull();
+    });
+
+    test('changed：push、取出、trim、結束時醒來', async () => {
+      const q = queue([1]);
+      const signal = new AbortController().signal;
+      const pushed = q.changed(signal);
+      q.push(1, packets(0, 2));
+      await pushed;
+      const trimmed = q.changed(signal);
+      q.trim(1, 1);
+      await trimmed;
+      const ended = q.changed(signal);
+      q.end();
+      await ended;
+    });
+  });
 });

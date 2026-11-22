@@ -57,6 +57,7 @@
 | `multi-track.mkv` | 20 s | H.264 | 2 軌，見下表 | 另有 2 條內嵌字幕軌 |
 | `subtitle-formats.mkv` | 2 s | H.264 | AAC | 字幕 1：WebVTT，0 s 與 1 s 各一個 0.5 秒的 cue，文字為 `[embedded webvtt] <秒數>`；字幕 2：PGS（圖形字幕），同樣的時間顯示一個小方塊 |
 | `mov-text.mp4` | 2 s | H.264 | AAC | 字幕：mov_text，0 s 與 1 s 各一個 0.5 秒的 cue，文字為 `[embedded mov_text] <秒數>`；cue 之間有清空畫面的空 sample |
+| `video-only.mp4` | 3 s | H.264 | — | 沒有音軌（MP4，faststart） |
 | `external-audio-440.flac` | 20 s | — | FLAC，基準頻率 440 Hz | 外掛音軌，與 `multi-track.mkv` 同長 |
 
 `multi-track.mkv` 的軌道（依容器內順序）：

@@ -1,5 +1,5 @@
 // media Worker 的訊息處理：init、load（開檔與 probe）、start 與 seek（音訊供料、影片解碼與字幕 cue）、port（改接重建後的
-// worklet）、rate（變速）、frameclosed（影片 frame 的 backpressure）與 stats。
+// worklet）、rate（變速）、frameclosed（影片 frame 的 backpressure）、videosuspend（背景時暫停影片解碼）與 stats。
 // 主執行緒每次 load 都 terminate 舊的 Worker（ADR-0002），但 Worker 也處理同一個 Worker 內的 load 取代：
 // 前一個 load 的讀取被中止、instance 被丟棄。
 
@@ -18,7 +18,7 @@ import type {
 import { BufferPool, Demand } from './audio-pipeline.js';
 import { BufferTracker } from './buffer-tracker.js';
 import { initialByteRate } from './byte-rate.js';
-import { withDemux, type Demuxer, type PacketLane } from './demuxer.js';
+import { withDemux, type Demuxer, type HoldableLane } from './demuxer.js';
 import { crashReason, toWireError, WorkerError } from './errors.js';
 import type { WorkerHost } from './host.js';
 import { LibavMedia, type Instantiate, type LibavAssets } from './libav.js';
@@ -37,6 +37,12 @@ import {
   type VideoDecoderLike,
 } from './video-pipeline.js';
 import { createWebVideoDecoder, isVideoConfigSupported } from './webcodecs.js';
+
+/**
+ * 背景中估計播放位置時，從音訊取用的進度往前扣的秒數：音訊從封包佇列取出之後，還要經過解碼、filter graph 與 worklet 的
+ * ring buffer（桌面最多 400 ms，2 倍速時是 0.8 媒體秒）才被聽到。估計得太晚只會讓恢復時從下一個 keyframe 開始。
+ */
+const PLAYED_MARGIN_SECONDS = 2;
 
 export interface MediaWorkerDeps {
   /** 送給主執行緒；`frame` 的 `VideoFrame` 放在 `transfer`。 */
@@ -126,6 +132,8 @@ export class MediaWorker {
   /** `start` 選用的各軌；之後的 `seek` 沿用。`start` 之前為 undefined。 */
   #tracks: { audio: number | null; video: number | null; subtitle: number | null } | undefined =
     undefined;
+  /** 背景中暫停影片解碼（`videosuspend`）；沿用到之後的 load。 */
+  #videoSuspended = false;
   /** 還沒 close 的 `VideoFrame`（Worker 內暫留的加上送到主執行緒的），所有 load 共用。 */
   readonly #frames = new FrameCredit();
   #libavInstances = 0;
@@ -185,6 +193,9 @@ export class MediaWorker {
       case 'frameclosed':
         this.#frames.release(message.count);
         break;
+      case 'videosuspend':
+        this.#suspendVideo(message.suspended, message.time);
+        break;
       case 'stats':
         this.#deps.postMessage({ type: 'stats', id: message.id, stats: this.#stats() });
         break;
@@ -221,6 +232,21 @@ export class MediaWorker {
         seek: true,
       });
     }
+  }
+
+  /** 背景時關閉 decoder、暫停影片解碼；回到前景時從 `time` 之前的 keyframe 重新解碼。 */
+  #suspendVideo(suspended: boolean, time: number): void {
+    if (suspended === this.#videoSuspended) return;
+    this.#videoSuspended = suspended;
+    const video = this.#load?.video;
+    this.#log.log(
+      'info',
+      'video',
+      suspended ? '背景：關閉 VideoDecoder，只播聲音' : '回到前景：從 keyframe 重建 VideoDecoder',
+      { ...(!suspended && { time }), decoding: video != null },
+    );
+    if (suspended) video?.suspend();
+    else video?.resume(time);
   }
 
   #onWorkletMessage(message: WorkletToWorkerMessage): void {
@@ -431,11 +457,17 @@ export class MediaWorker {
         codec: message.audio === null ? null : media.raw.streams[message.audio]?.codec,
       });
       if (!audio) post({ type: 'eof', epoch: message.epoch }, []);
+      // 背景中以音訊取用的進度估計播放位置：音訊的 lane 空著時，demux 到的都已經被取用。
+      const audioStream = audio ? message.audio : null;
+      const played =
+        audioStream === null
+          ? null
+          : () => (demuxer.headTime(audioStream) ?? demuxer.end) - PLAYED_MARGIN_SECONDS;
       await withDemux(demuxer, signal, () =>
         Promise.all([
           audio?.run(),
           video && started.video
-            ? this.#runVideo(video, started.video, message, signal, audio !== null)
+            ? this.#runVideo(video, started.video, message, signal, played)
             : undefined,
         ]),
       );
@@ -487,20 +519,23 @@ export class MediaWorker {
       credit: this.#frames,
       createDecoder: this.#deps.createVideoDecoder ?? createWebVideoDecoder,
     });
+    if (this.#videoSuspended) load.video.suspend();
     return load.video;
   }
 
   /**
-   * 解碼一個 epoch 的影片，frame 以 transfer 送給主執行緒。decoder 失敗以 `videoerror` 回報（非致命）。demux 失敗時
-   * 影片只是停止（`videoend`），由音訊的供料在播完佇列中的封包後回報；沒有音訊時才由這裡回報。
+   * 解碼一個 epoch 的影片，frame 以 transfer 送給主執行緒。decoder 失敗而放棄時以 `videoerror` 回報（非致命），之後不再
+   * 選用這條影片軌。demux 失敗時影片只是停止（`videoend`），由音訊的供料在播完佇列中的封包後回報；沒有音訊時才由這裡回報。
+   * `played`：背景中估計的播放位置（有音訊時）。
    */
   async #runVideo(
     video: VideoDecoding<VideoChunk | null, VideoFrame>,
-    packets: PacketLane<VideoChunk | null>,
+    packets: HoldableLane<VideoChunk | null>,
     message: OutputRequest,
     signal: AbortSignal,
-    hasAudio: boolean,
+    played: (() => number) | null,
   ): Promise<void> {
+    const hasAudio = played !== null;
     const { epoch } = message;
     let result: 'end' | 'failed' | null = null;
     try {
@@ -515,13 +550,20 @@ export class MediaWorker {
         end: () => {
           this.#deps.postMessage({ type: 'videoend', epoch });
         },
+        retry: (error) => {
+          this.#log.log('warn', 'video', `影片解碼失敗，重新設定 decoder：${error.message}`, {
+            epoch,
+            stream: message.video,
+          });
+        },
+        ...(played && { played }),
         fail: (error, beforeFirstFrame) => {
-          // configure 或首個 keyframe 失敗：主執行緒不再選用這條影片軌，之後的 seek 也不 demux 它。
-          if (beforeFirstFrame && this.#tracks) this.#tracks = { ...this.#tracks, video: null };
+          // 主執行緒不再選用這條影片軌（只播音訊），之後的 seek 也不 demux 它。
+          if (this.#tracks) this.#tracks = { ...this.#tracks, video: null };
           this.#log.log(
             'warn',
             'video',
-            `影片解碼失敗${beforeFirstFrame ? '（configure 或首個 keyframe）' : ''}：${error.message}`,
+            `影片解碼失敗${beforeFirstFrame ? '（configure 或首個 keyframe）' : '（重新設定之後）'}，只播音訊：${error.message}`,
             { epoch, stream: message.video },
           );
           this.#deps.postMessage({

@@ -46,6 +46,15 @@ export interface EngineDeps {
    * 舊的由 Engine 斷開並關閉。
    */
   createAudioOutput(handlers: AudioOutputHandlers, config: AudioOutputConfig): AudioOutput;
+  /** 頁面是否在背景（`suspendVideoWhenHidden`）。 */
+  visibility: PageVisibility;
+}
+
+/** 頁面的可見性：`document.hidden` 與 `visibilitychange`。沒有 `document` 的環境永遠可見。 */
+export interface PageVisibility {
+  readonly hidden: boolean;
+  /** 可見性改變時呼叫 `listener`；回傳取消的函式。 */
+  subscribe(listener: () => void): () => void;
 }
 
 /** 音訊輸出的回呼。 */

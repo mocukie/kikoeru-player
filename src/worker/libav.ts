@@ -11,7 +11,7 @@ import {
   type AudioPipelineOptions,
   type DecodedAudio,
 } from './audio-pipeline.js';
-import { Demuxer, type DemuxerOptions, type PacketLane, type PacketReader } from './demuxer.js';
+import { Demuxer, type DemuxerOptions, type HoldableLane, type PacketReader } from './demuxer.js';
 import { crashReason, WorkerError } from './errors.js';
 import type { RawMedia, RawStream } from './probe.js';
 import type { ByteSource } from './source.js';
@@ -244,7 +244,7 @@ export class LibavMedia {
     demuxer: Demuxer<Packet>;
     audio: AudioPipeline<Packet> | null;
     /** 影片軌的 lane，封包已轉成 chunk（沒有時間戳的封包為 null）。 */
-    video: PacketLane<VideoChunk | null> | null;
+    video: HoldableLane<VideoChunk | null> | null;
   }> {
     const libav = this.#libav;
     const streams = [options.audio, options.video].filter((s): s is number => s !== null);
@@ -350,9 +350,10 @@ export class LibavMedia {
    * 影片軌的封包轉成 `VideoDecoder` 的 chunk：timestamp 是媒體時間軸上的 µs（沒有 pts 時用 dts，例如 AVI），
    * Annex B 的 keyframe 補上 extradata 的參數集。沒有時間戳的封包為 null。
    */
-  #videoLane(demuxer: Demuxer<Packet>, streamIndex: number): PacketLane<VideoChunk | null> {
+  #videoLane(demuxer: Demuxer<Packet>, streamIndex: number): HoldableLane<VideoChunk | null> {
     const lane = demuxer.lane(streamIndex);
     const toChunk = this.#videoChunks(streamIndex);
+    const keyFlag = this.#libav.AV_PKT_FLAG_KEY;
     return {
       next: async (signal) => {
         const packet = await lane.next(signal);
@@ -361,6 +362,18 @@ export class LibavMedia {
       get drained() {
         return lane.drained;
       },
+      hold: (held) => {
+        lane.hold(held);
+      },
+      entries: () =>
+        lane.packets().map((packet) => ({
+          key: ((packet.flags ?? 0) & keyFlag) !== 0,
+          time: this.#packetTime(packet),
+        })),
+      trim: (count) => {
+        lane.trim(count);
+      },
+      changed: (signal) => lane.changed(signal),
     };
   }
 

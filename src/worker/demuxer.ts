@@ -30,6 +30,25 @@ export interface PacketLane<P> {
   readonly drained: boolean;
 }
 
+/**
+ * 可以暫停取用的 lane（背景分頁時的影片）：hold 時它不影響 demux 何時停下，取用的一方以 `trim` 丟掉不再需要的封包，
+ * lane 才不會一直增長。
+ */
+export interface HoldableLane<P> extends PacketLane<P> {
+  hold(held: boolean): void;
+  /** lane 中各封包是否為 keyframe 與媒體時間（秒，沒有時間戳時為 null），依先進先出的順序。 */
+  entries(): { key: boolean; time: number | null }[];
+  /** 丟掉最前面的 `count` 個封包。 */
+  trim(count: number): void;
+  /** 等到 lane 或封包佇列有變化（demux 推進、取出、結束）；被中止時以 signal 的 reason reject。 */
+  changed(signal: AbortSignal): Promise<void>;
+}
+
+/** `Demuxer.lane()`：除了取用，也能 hold 並 trim（見 `HoldableLane`）；`packets()` 是 lane 中的封包，依先進先出的順序。 */
+export interface DemuxerLane<P> extends Omit<HoldableLane<P>, 'entries'> {
+  packets(): readonly P[];
+}
+
 export interface DemuxerOptions<P> {
   reader: PacketReader<P>;
   /** 選用中各條軌的 stream index；其他 stream 的封包丟掉。 */
@@ -96,13 +115,31 @@ export class Demuxer<P> {
     return this.#streams.has(stream) ? this.#packets.seconds(stream) : 0;
   }
 
-  lane(stream: number): PacketLane<P> {
+  /** 已 demux 的封包的結尾（媒體時間，秒）。 */
+  get end(): number {
+    return this.#end;
+  }
+
+  /** 一條軌在佇列中的下一個封包的媒體時間（秒）；沒有封包、沒有時間戳或不是選用中的軌時為 null。 */
+  headTime(stream: number): number | null {
+    return this.#streams.has(stream) ? this.#packets.headTime(stream) : null;
+  }
+
+  lane(stream: number): DemuxerLane<P> {
     const packets = this.#packets;
     return {
       next: (signal) => packets.next(stream, signal),
       get drained() {
         return packets.laneDrained(stream);
       },
+      hold: (held) => {
+        packets.hold(stream, held);
+      },
+      packets: () => packets.lanePackets(stream),
+      trim: (count) => {
+        packets.trim(stream, count);
+      },
+      changed: (signal) => packets.changed(signal),
     };
   }
 

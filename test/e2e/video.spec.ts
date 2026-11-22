@@ -1,4 +1,5 @@
-// Demo 頁的影片（#50）：白框對 beep 的同步（docs/testing.md「E2E」的自動同步斷言）。
+// Demo 頁的影片（#50、#51）：白框對 beep 的同步（docs/testing.md「E2E」的自動同步斷言），背景再回到前景之後的同步，以及
+// 純影片的媒體播到結尾。
 //
 // init script 載入 test/audio-capture.ts 錄下送到 destination 的聲音，並在每個 rAF 讀 Demo 頁 canvas 左上的 pixel，
 // 記下白框出現的時刻（`performance.now()`）。錄到的 beep 起點換算成被聽到的時刻（扣掉 Engine 回報的輸出延遲），
@@ -171,4 +172,80 @@ test('Demo 頁顯示影片的 videoSize 與 stats', async ({ page }) => {
   await expect(page.locator('#video-size')).toHaveText('180×320 rotation=270');
   await expect(page.locator('#log li').filter({ hasText: 'videoresize 180×320' })).toHaveCount(1);
   await expect(page.locator('#wasm-video-stats')).toContainText('video decoded');
+});
+
+/** 模擬分頁切到背景或回到前景（覆蓋 `document.hidden` 並發出 `visibilitychange`）。 */
+async function setHidden(page: Page, hidden: boolean): Promise<void> {
+  await page.evaluate((hidden) => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => (hidden ? 'hidden' : 'visible'),
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+}
+
+function decoded(page: Page): Promise<number> {
+  return page.evaluate(async () => {
+    const stats = await (window as unknown as E2EWindow).engine.getStats();
+    return stats.video?.decoded ?? NaN;
+  });
+}
+
+test('切到背景再回到前景：背景中停止解碼、聲音不中斷；回到前景後白框對 beep 仍 ≤ 1 個影片 frame + 1 個 rAF', async ({
+  page,
+}) => {
+  test.skip(!(await load(page, 'video/multi-track.mkv')), '瀏覽器不支援這個影片 codec');
+  await page.locator('#play').click();
+  await expect(page.locator('#state')).toHaveText('playing');
+  await expect.poll(() => currentTime(page)).toBeGreaterThan(1.3);
+
+  const hiddenAt = await page.evaluate(() => performance.now());
+  await setHidden(page, true);
+  await expect(page.locator('#log li').filter({ hasText: /visibilitychange hidden$/ })).toHaveCount(
+    1,
+  );
+  const decodedAtHide = await decoded(page);
+  const hiddenTime = await currentTime(page);
+  // 背景中跨過 2 個整秒以上，等到剛過整秒（白框與 beep 之後）才回到前景，留時間重新同步。
+  await expect
+    .poll(
+      async () => {
+        const time = await currentTime(page);
+        return time > hiddenTime + 2.2 && time % 1 > 0.2 && time % 1 < 0.6;
+      },
+      { timeout: 6000, intervals: [20] },
+    )
+    .toBe(true);
+  expect(await decoded(page)).toBe(decodedAtHide);
+  await expect(page.locator('#state')).toHaveText('playing');
+
+  const visibleAt = await page.evaluate(() => performance.now());
+  await setHidden(page, false);
+  const resumedTime = await currentTime(page);
+  await expect.poll(() => currentTime(page), { timeout: 6000 }).toBeGreaterThan(resumedTime + 3.3);
+
+  // 背景中的 beep 照常錄到（聲音不中斷）。
+  const found = await onsets(page, hiddenAt);
+  expect(found.beeps.filter((beep) => beep < visibleAt).length).toBeGreaterThanOrEqual(2);
+  expectWhiteBoxesOnBeeps(await onsets(page, visibleAt), 3);
+  expect(await decoded(page)).toBeGreaterThan(decodedAtHide);
+});
+
+test('純影片的媒體（沒有音軌）：以靜音推進時鐘，播到結尾並發出 ended', async ({ page }) => {
+  test.skip(!(await load(page, 'video/video-only.mp4')), '瀏覽器不支援這個影片 codec');
+  const tracks = await page.evaluate(
+    () => (window as unknown as E2EWindow).engine.media?.tracks.map((t) => t.kind) ?? [],
+  );
+  expect(tracks).toEqual(['video']);
+  await page.locator('#play').click();
+  await expect(page.locator('#state')).toHaveText('playing');
+  await expect(page.locator('#log li').filter({ hasText: /\sended$/ })).toHaveCount(1, {
+    timeout: 8000,
+  });
+  await expect(page.locator('#state')).toHaveText('ended');
+  expect(await currentTime(page)).toBeCloseTo(3, 1);
+  const stats = await page.evaluate(() => (window as unknown as E2EWindow).engine.getStats());
+  expect(stats.video?.decoded).toBe(90);
 });

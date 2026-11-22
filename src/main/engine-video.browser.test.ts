@@ -1,7 +1,7 @@
 // Engine 的影片繪製（#50）：真實的 media Worker、WebCodecs 與 2D canvas。CI 組的影片左上 64×64 的框在每整秒開始的
 // 3 個 frame 是白色，其餘時候是黑色（test/media/README.md）；讀 canvas 的 pixel 確認畫出的 frame 與方向。
 // Chromium 的 VideoFrame 是 I420、Firefox 是 BGRX，兩種格式都經過同一條 drawImage 路徑。
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { mediaUrl } from '../../test/media-worker-harness.js';
 import { createEngine } from './engine.js';
 import type { Engine, VideoSize } from './types.js';
@@ -12,7 +12,24 @@ afterEach(async () => {
   await engine?.destroy();
   engine = null;
   document.body.replaceChildren();
+  setHidden(null);
+  vi.restoreAllMocks();
 });
+
+/** 模擬分頁切到背景（true）或回到前景（false），並發出 `visibilitychange`；null 回到瀏覽器本身的值。 */
+function setHidden(hidden: boolean | null): void {
+  if (hidden === null) {
+    Reflect.deleteProperty(document, 'hidden');
+    Reflect.deleteProperty(document, 'visibilityState');
+    return;
+  }
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    get: () => (hidden ? 'hidden' : 'visible'),
+  });
+  document.dispatchEvent(new Event('visibilitychange'));
+}
 
 function canvas(): HTMLCanvasElement {
   const element = document.createElement('canvas');
@@ -131,4 +148,51 @@ test('播放：依音訊時鐘前進，stats 有解碼數；destroy 之後 openV
   expect(stats.resources.openVideoFrames).toBeLessThanOrEqual(12);
   await engine.destroy();
   expect((await engine.getStats()).resources.openVideoFrames).toBe(0);
+});
+
+test('背景（visibilitychange）：停止解碼、聲音繼續；回到前景後畫面在數個 frame 內對上音訊時鐘', async () => {
+  const target = canvas();
+  const { engine, supported } = await load('video/multi-track.mkv', target);
+  if (!supported) return;
+  await engine.play().catch(() => undefined);
+  if (engine.state !== 'playing') return;
+  await until(() => engine.currentTime > 1);
+
+  setHidden(true);
+  // Worker 依序處理：stats 的回覆在 videosuspend 之後，之後的解碼數不再增加。
+  const decodedAtHide = (await engine.getStats()).video?.decoded ?? NaN;
+  const hiddenAt = engine.currentTime;
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const hidden = await engine.getStats();
+  expect(hidden.video?.decoded).toBe(decodedAtHide);
+  // 只剩畫面上的那張。
+  expect(hidden.resources.openVideoFrames).toBeLessThanOrEqual(1);
+  expect(engine.state).toBe('playing');
+  expect(engine.currentTime).toBeGreaterThan(hiddenAt + 1);
+
+  // 回到前景：記下每次畫上的 frame 與當時的音訊時鐘。
+  const draws: { pts: number; clock: number }[] = [];
+  const drawImage = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'drawImage')
+    ?.value as (...args: unknown[]) => void;
+  vi.spyOn(CanvasRenderingContext2D.prototype, 'drawImage').mockImplementation(function (
+    this: CanvasRenderingContext2D,
+    ...args: unknown[]
+  ) {
+    const [image] = args;
+    if (image instanceof VideoFrame) {
+      draws.push({ pts: image.timestamp / 1e6, clock: engine.currentTime });
+    }
+    drawImage.apply(this, args);
+  });
+  const resumedAt = engine.currentTime;
+  setHidden(false);
+  await until(() => draws.length >= 10);
+  // 第一張是恢復位置附近的 frame（不是背景之前的）。
+  expect(draws[0]?.pts).toBeGreaterThan(resumedAt - 0.1);
+  // 數個 frame 之後：畫上的 frame 落在時鐘之前一個 frame 之內。
+  for (const draw of draws.slice(4)) {
+    expect(draw.clock - draw.pts).toBeGreaterThanOrEqual(-1e-3);
+    expect(draw.clock - draw.pts).toBeLessThan(1 / 30 + 1 / 60);
+  }
+  expect((await engine.getStats()).video?.decoded).toBeGreaterThan(decodedAtHide);
 });

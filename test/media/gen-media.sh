@@ -146,6 +146,8 @@ ff -f lavfi -i "$(video 2 320 180)" -f lavfi -i "$(stereo 2 880)" -i .work/short
 ff -f lavfi -i "$(video 2 320 180)" -f lavfi -i "$(stereo 2 880)" -i .work/short-mov-text.srt \
   -map 0:v -map 1:a -map 2 "${h264[@]}" -c:a aac -b:a 128k -c:s mov_text -movflags +faststart \
   video/mov-text.mp4
+# 純影片：沒有音軌，3 秒。
+ff -f lavfi -i "$(video 3 320 180)" "${h264[@]}" -movflags +faststart video/video-only.mp4
 # 外掛音軌：與 multi-track.mkv 同長，440 Hz。
 ff -f lavfi -i "$(stereo 20 440)" -c:a flac video/external-audio-440.flac
 
