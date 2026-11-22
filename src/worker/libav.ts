@@ -227,11 +227,17 @@ export class LibavMedia {
    * `seek` 時先跳到 `startTime` 往前 preroll 的 keyframe（有影片軌時，libavformat 以影片軌的 keyframe 為準），再 flush
    * 音訊的 decoder 與 filter graph；pipeline 解碼並丟掉起點之前的 sample，輸出的第一個 sample 落在 `startTime`
    *（ADR-0003）。不 seek 時接著 demuxer 目前的位置讀，只用於開檔後的第一次輸出。呼叫端要先停下前一個輸出。
+   *
+   * `audioOffset`（音軌 offset，秒）：音訊從來源的 `startTime − audioOffset` 開始（小於 0 時從頭開始，pipeline 在起點前
+   * 補靜音）。同時 demux 影片軌或字幕軌時跳到兩者中較早的位置，影片的 pipeline 丟掉起點之前的 frame。只 demux 音軌時，
+   * demux 的進度（`onDemux`）換算回媒體時間。
    */
   async startOutput(options: {
     audio: number | null;
     video: number | null;
     subtitle: { stream: number; onPackets: (packets: SubtitlePacket[]) => void } | null;
+    /** 音軌 offset（秒）；省略時為 0。 */
+    audioOffset?: number;
     seek: boolean;
     startTime: number;
     signal: AbortSignal;
@@ -278,13 +284,32 @@ export class LibavMedia {
       this.#decoder = decoder;
     }
     const audioDecoder = options.audio === null ? null : decoder;
+    const audioOffset = options.audioOffset ?? 0;
+    // 只 demux 音軌：demuxer 的時間是來源的時間（媒體時間 − offset）。
+    const audioOnly = audioDecoder !== null && options.video === null && subtitle === null;
     if (options.seek) {
       const codec = options.audio === null ? '' : (this.raw.streams[options.audio]?.codec ?? '');
       const preroll = audioDecoder ? await audioDecoder.preroll(codec) : 0;
+      const audioStart = options.startTime - audioOffset - preroll;
       // 落點在開頭附近時也往前跳：容器的第一個封包可能早於 0（例如 MP4 的 priming）。
-      await this.#seek(options.startTime - preroll, options.signal);
+      const target = !audioDecoder
+        ? options.startTime
+        : audioOnly
+          ? audioStart
+          : Math.min(options.startTime, audioStart);
+      await this.#seek(target, options.signal);
       await audioDecoder?.reset();
     }
+    const { onDemux } = options.demux;
+    const demuxOptions =
+      audioOnly && audioOffset !== 0 && onDemux
+        ? {
+            ...options.demux,
+            onDemux: (end: number, eof: boolean) => {
+              onDemux(end + audioOffset, eof);
+            },
+          }
+        : options.demux;
     const reader: PacketReader<Packet> = {
       read: async () => {
         const [result, packets] = await libav.ff_read_frame_multi(this.#fmt, this.#demuxPkt, {
@@ -309,7 +334,7 @@ export class LibavMedia {
       }),
     };
     const demuxer = new Demuxer<Packet>({
-      ...options.demux,
+      ...demuxOptions,
       reader,
       streams,
       ...(subtitle && {
@@ -326,7 +351,7 @@ export class LibavMedia {
           },
         },
       }),
-      startTime: options.startTime,
+      startTime: audioOnly ? options.startTime - audioOffset : options.startTime,
     });
     const audio = audioDecoder
       ? new AudioPipeline({
@@ -335,6 +360,7 @@ export class LibavMedia {
           fatal: demuxer.fatal,
           decoder: audioDecoder,
           startTime: options.startTime,
+          offset: audioOffset,
           signal: options.signal,
           createStretcher: (rate) => this.createStretcher(options.audioOptions.sampleRate, rate),
         })

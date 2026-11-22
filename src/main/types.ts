@@ -150,6 +150,7 @@ export type EngineState =
  * - `seek()` 取代尚未完成的 `seek()`（包括執行中的，它的讀取會被中止）。
  * - `selectTracks()` 同一 kind 只保留最後一個。
  * - `play()` 與 `pause()` 互相取代。
+ * - `addExternalAudio()`、`removeExternalAudio()`、`setAudioOffset()` 不互相取代，依呼叫順序執行。
  *
  * `volume`、`muted`、`playbackRate` 是同步屬性，不進指令佇列。
  *
@@ -254,8 +255,9 @@ export interface Engine extends EventTarget {
   /**
    * 以同一份媒體重新開檔，用於 session 失效等錯誤之後的接續；`'ready'` 以後的任何狀態與 `'error'` 都可呼叫。
    * 保留位置（`'error'` 時取 `error.position`）、`paused`、軌道選擇、外掛音軌、各音軌 offset、音量與速度；
-   * track id 不變。重新開檔後軌道的組成（軌道數、各軌的 kind 與 codec）與先前不同時 reject 致命的
-   * `EngineError('SOURCE_CHANGED')`，state 變為 `'error'`。
+   * track id 不變。重新開檔後軌道的組成（軌道數、各軌的 kind 與 codec，外掛音軌選用的音軌）與先前不同時 reject 致命的
+   * `EngineError('SOURCE_CHANGED')`，state 變為 `'error'`。外掛音軌也重新開檔，失敗時 reload 以該錯誤碼的致命
+   * `EngineError` reject（例如 `SOURCE_UNAUTHORIZED`），state 變為 `'error'`。
    *
    * 執行期間 state 為 `'loading'`，`media`、`tracks`、`selectedTracks` 維持原狀，期間的 `seek()` 改寫起點；
    * resolve 時 state 同 `load()`：`paused` 時為 `'ready'`，否則為 `'playing'`。最近一次 `load()` 沒有完成就失敗時
@@ -319,24 +321,47 @@ export interface Engine extends EventTarget {
   selectTracks(selection: Partial<TrackSelection>): Promise<void>;
 
   /**
-   * 以另一個來源加入外掛音軌，resolve 新的 `AudioTrack`（`origin: 'external'`）。
-   * 不會自動選用，要用 `selectTracks({ audio: track.id })` 切過去。
+   * 以另一個來源加入外掛音軌，resolve 新的 `AudioTrack`（`origin: 'external'`，id 例如 `'ext:5'`）並發出
+   * `trackschange`。來源在同一個 media Worker 內以自己的 libav instance 開檔，選用來源內第一條可播的音軌（有 default
+   * 旗標的優先），`streamIndex` 是它在來源內的 index；http 來源與主來源共用 Range 快取（`limits.cacheBytes`），被選用時
+   * 才讀取與預讀。外掛音軌的 0 點是它自己的第一個可播放 sample，對齊媒體時間軸的 0，再依 offset 位移。
+   *
+   * 不會自動選用，要用 `selectTracks({ audio: track.id })` 切過去。`options.offset` 是初始的音軌 offset（秒，預設 0，見
+   * `setAudioOffset()`）；`options.label` 是 `title`，省略時沿用來源記錄的標題。
    * 外掛音軌屬於當前媒體：下一次 `load()`／`unload()` 時一併移除，`reload()` 時保留。
    *
-   * 載入失敗時 reject 非致命的 `EngineError`，主媒體繼續播放。
+   * 載入失敗時 reject 非致命的 `EngineError`（錯誤碼同 `load()`，例如 `SOURCE_NOT_FOUND`；來源沒有可播的音軌時
+   * `CODEC_UNSUPPORTED`），主媒體繼續播放。
    * 每份媒體最多 4 條外掛音軌，超過時 reject 非致命的 `EngineError('MEMORY_LIMIT')`。
+   * `options.offset` 不是有限數時 reject `TypeError`；執行時沒有媒體（state 為 `'idle'` 或 `'error'`）則以
+   * `DOMException`（name `'InvalidStateError'`）reject；loading 期間呼叫時等 load 完成才執行。
    */
   addExternalAudio(
     source: Source,
     options?: { offset?: number; label?: string },
   ): Promise<AudioTrack>;
 
-  /** 移除 `addExternalAudio()` 加入的外掛音軌。 */
+  /**
+   * 移除 `addExternalAudio()` 加入的外掛音軌，丟掉它的 libav instance 並發出 `trackschange`。
+   * 它是選用中的音軌時先切回容器內的預設音軌（與 load 的初始選擇相同：偏好語言 → default 旗標 → 第一條可播的），
+   * 切換的方式與生效時機同 `selectTracks()`，生效時一起移除（只發出一次 `trackschange`）。
+   * `trackId` 不是外掛音軌時 reject `RangeError`；執行時沒有媒體則以 `DOMException`（name `'InvalidStateError'`）reject。
+   */
   removeExternalAudio(trackId: string): Promise<void>;
 
   /**
-   * 設定指定音軌的音軌 offset（秒），容器內與外掛音軌都適用；正值表示聲音較晚出現。
-   * 每條音軌各自記住；改的是目前選中的軌時會立即重新同步（短暫 seeking）。
+   * 設定指定音軌的音軌 offset（秒），容器內與外掛音軌都適用；正值表示聲音較晚出現。只要是有限數就接受。
+   * 在變速之前套用：媒體時間 `t` 播出來源的 `t − offset`；正值時起點前補靜音，負值時跳過來源的開頭。
+   * 音訊超出 `duration` 的部分截掉，比媒體短時之後以靜音推進到 `duration`。
+   *
+   * 每條音軌各自記住，之後選用該軌、seek 與 `reload()` 都沿用。改的是目前選中的軌時立即重新同步：從目前位置以新的
+   * offset 重新供料，state 短暫進入 `'seeking'`（同 `seek()`，完成時發出 `seeked`），完成後 `tracks` 才是新值並發出
+   * `trackschange`；其他軌立即更新並發出 `trackschange`。值與目前相同時什麼都不做。
+   * 容器內的音軌與影片軌在同一個 demuxer：offset 的絕對值很大時，封包佇列要多存這段時間的影片封包（或音訊封包），
+   * 超過硬上限時是致命的 `MEMORY_LIMIT`。
+   *
+   * `offset` 不是有限數時 reject `TypeError`；`trackId` 不是音軌時 reject `RangeError`；執行時沒有媒體則以
+   * `DOMException`（name `'InvalidStateError'`）reject。
    */
   setAudioOffset(trackId: string, offset: number): Promise<void>;
 

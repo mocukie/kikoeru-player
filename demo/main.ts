@@ -242,6 +242,7 @@ const trackList = element('track-list', HTMLUListElement);
 
 function describeTrack(track: Track): string {
   const parts = [track.id, track.codec];
+  if (track.origin === 'external') parts.push('外掛');
   if (track.language) parts.push(track.language);
   if (track.title) parts.push(`「${track.title}」`);
   if (track.kind === 'audio') {
@@ -249,6 +250,7 @@ function describeTrack(track: Track): string {
       `${String(track.sampleRate)} Hz ${track.channelLayout ?? `${String(track.channels)}ch`}`,
     );
     if (track.sampleFormat) parts.push(track.sampleFormat);
+    if (track.offset !== 0) parts.push(`offset ${String(track.offset)} s`);
   }
   if (track.kind === 'video')
     parts.push(`${String(track.codedWidth)}×${String(track.codedHeight)}`);
@@ -268,6 +270,7 @@ function renderTracks(tracks: readonly Track[], selected: Readonly<TrackSelectio
     select.value = selected[kind] ?? '';
     select.disabled = tracks.length === 0;
   }
+  renderOffsetTracks(tracks);
   trackList.replaceChildren(
     ...tracks.map((track) => {
       const item = document.createElement('li');
@@ -290,6 +293,67 @@ for (const [kind, select] of Object.entries(trackSelects) as [TrackKind, HTMLSel
     );
   });
 }
+
+// ───────────────────────────── 外掛音軌與音軌 offset ─────────────────────────────
+
+/**
+ * 外掛音軌的來源是測試媒體（`#external-media`）或 URL；`#offset-track` 列出所有音軌，供 setAudioOffset() 與
+ * removeExternalAudio()。E2E 以 log 的 `addExternalAudio(…) resolve`、`setAudioOffset(…) resolve` 等待。
+ */
+const externalMediaSelect = element('external-media', HTMLSelectElement);
+const externalUrlInput = element('external-url', HTMLInputElement);
+const externalOffsetInput = element('external-offset', HTMLInputElement);
+const offsetTrackSelect = element('offset-track', HTMLSelectElement);
+const offsetValueInput = element('offset-value', HTMLInputElement);
+/** 每條音軌目前的 offset，選了某條軌時填進 `#offset-value`。 */
+const trackOffsets = new Map<string, number>();
+
+function renderOffsetTracks(tracks: readonly Track[]): void {
+  const previous = offsetTrackSelect.value;
+  const audio = tracks.filter((t) => t.kind === 'audio');
+  trackOffsets.clear();
+  for (const track of audio) trackOffsets.set(track.id, track.offset);
+  offsetTrackSelect.replaceChildren(...audio.map((t) => new Option(describeTrack(t), t.id)));
+  if (audio.some((t) => t.id === previous)) offsetTrackSelect.value = previous;
+  offsetTrackSelect.disabled = audio.length === 0;
+  showOffset();
+}
+
+function showOffset(): void {
+  offsetValueInput.value = String(trackOffsets.get(offsetTrackSelect.value) ?? 0);
+}
+
+offsetTrackSelect.addEventListener('change', showOffset);
+
+/** 數字欄位的值；空白或不是數字時為 NaN（Engine 以 TypeError reject，log 裡看得到）。 */
+function numberOf(input: HTMLInputElement): number {
+  return input.value.trim() === '' ? NaN : Number(input.value);
+}
+
+element('add-external', HTMLElement).addEventListener('click', () => {
+  const url =
+    externalUrlInput.value.trim() ||
+    new URL(`/media/${externalMediaSelect.value}`, location.href).href;
+  const offset = numberOf(externalOffsetInput);
+  const label = fileName(url);
+  command(`addExternalAudio(${label}, { offset: ${String(offset)} })`, () =>
+    engine.addExternalAudio({ kind: 'http', url }, { offset, label }).then((track) => track.id),
+  );
+});
+
+element('set-offset', HTMLElement).addEventListener('click', () => {
+  const id = offsetTrackSelect.value;
+  const offset = numberOf(offsetValueInput);
+  command(`setAudioOffset(${JSON.stringify(id)}, ${String(offset)})`, () =>
+    engine.setAudioOffset(id, offset),
+  );
+});
+
+element('remove-external', HTMLElement).addEventListener('click', () => {
+  const id = offsetTrackSelect.value;
+  command(`removeExternalAudio(${JSON.stringify(id)})`, () => engine.removeExternalAudio(id));
+});
+
 renderTracks([], { audio: null, video: null, subtitle: null });
 
 // ───────────────────────────── 內嵌字幕 ─────────────────────────────
@@ -701,6 +765,9 @@ async function listMedia(): Promise<void> {
       mediaSelect.append(group);
     }
     group.append(new Option(path, path, false, path === 'audio/flac.flac'));
+    externalMediaSelect.append(
+      new Option(path, path, false, path === 'video/external-audio-440.flac'),
+    );
   }
 }
 

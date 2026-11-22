@@ -2,6 +2,7 @@
 
 import type {
   HostTypes,
+  ProbedAudioTrack,
   ProbedMedia,
   RetryPolicy,
   WireError,
@@ -18,6 +19,8 @@ export type MainToWorkerMessage<H extends HostTypes> =
   | WorkerStartMessage
   | WorkerSeekMessage
   | WorkerSelectMessage
+  | WorkerAddAudioMessage<H>
+  | WorkerRemoveAudioMessage
   | WorkerPortMessage<H>
   | WorkerRateMessage
   | WorkerFrameClosedMessage
@@ -79,6 +82,16 @@ export interface WorkerStartMessage {
   time: number;
   /** 選用音軌的 stream index；null 表示不輸出音訊：Worker 立即送出 `eof`，worklet 以靜音推進時鐘。 */
   audio: number | null;
+  /**
+   * `audio` 所在的外掛音軌（`addaudio` 的 `id`）；省略時 `audio` 是主來源的 stream。外掛音軌在它自己的 libav instance
+   * demux 與解碼，主來源只 demux 影片軌與字幕軌（沒有影片軌時字幕也不送）。
+   */
+  audioSource?: string;
+  /**
+   * 音軌 offset（秒），省略時為 0：在 stretcher 之前套用 `sourceTime = mediaTime − offset`，正值時起點前補靜音，負值時
+   * 跳過來源開頭。音訊從 `time − offset` demux（小於 0 時從頭開始）；外掛音軌的 0 點是它自己的第一個可播放 sample。
+   */
+  audioOffset?: number;
   /** 選用影片軌的 stream index（probe 時 supported 的軌）；null 表示不解碼影片。 */
   video: number | null;
   /** 選用字幕軌的 stream index（probe 時 supported 的軌）；null 表示不送 cue。 */
@@ -108,10 +121,35 @@ export interface WorkerSelectMessage {
   time: number;
   /** 選用音軌的 stream index；null 表示不輸出音訊（同 `start`）。 */
   audio: number | null;
+  /** 同 `start`。 */
+  audioSource?: string;
+  /** 同 `start`；改 offset 也經由 `select`。 */
+  audioOffset?: number;
   /** 選用影片軌的 stream index；null 表示不解碼影片。 */
   video: number | null;
   /** 選用字幕軌的 stream index；null 表示不送 cue。 */
   subtitle: number | null;
+}
+
+/**
+ * 加入外掛音軌（`addExternalAudio()`）：在同一個 Worker 內為 `source` 開一個新的 libav instance 並 probe，回覆
+ * `audioprobe`（選用第一條可播的音軌，有 default 旗標的優先）或 `audioerror`（非致命；沒有可播的音軌時
+ * `CODEC_UNSUPPORTED`）。http 來源與主來源共用 Range 快取。不帶 epoch：外掛音軌屬於這個 Worker 的媒體，不隨 seek 改變；
+ * 被 `start`／`select` 選用之前不讀取（不預讀）。
+ */
+export interface WorkerAddAudioMessage<H extends HostTypes> {
+  type: 'addaudio';
+  /** 主執行緒指派的 id（外掛音軌的 track id），之後的 `audioSource`、`removeaudio` 以它指定。 */
+  id: string;
+  source: WireSource<H>;
+}
+
+/**
+ * 移除外掛音軌：中止它的讀取、丟掉它的 instance。主執行緒先換掉選用中的音軌再送出；仍被選用時之後的輸出不再有音訊。
+ */
+export interface WorkerRemoveAudioMessage {
+  type: 'removeaudio';
+  id: string;
 }
 
 /**
@@ -173,6 +211,8 @@ export interface WorkerStatsRequestMessage {
 export type WorkerToMainMessage<H extends HostTypes = HostTypes> =
   | WorkerReadyMessage
   | WorkerProbeMessage
+  | WorkerAudioProbeMessage
+  | WorkerAudioErrorMessage
   | WorkerErrorMessage
   | WorkerCrashMessage
   | WorkerStatsMessage
@@ -197,6 +237,20 @@ export interface WorkerProbeMessage {
   type: 'probe';
   epoch: number;
   media: ProbedMedia;
+}
+
+/** `addaudio` 的 probe 結果：外掛音軌選用的那條音軌（`streamIndex` 是它在外掛來源內的 index）。 */
+export interface WorkerAudioProbeMessage {
+  type: 'audioprobe';
+  id: string;
+  track: ProbedAudioTrack;
+}
+
+/** `addaudio` 開檔或 probe 失敗（instance 已經丟掉）。主執行緒以非致命的錯誤 reject `addExternalAudio()`。 */
+export interface WorkerAudioErrorMessage {
+  type: 'audioerror';
+  id: string;
+  error: WireError;
 }
 
 /** Worker 內可分類的錯誤；fatal 時主執行緒進入 `'error'`。 */
@@ -295,7 +349,10 @@ export interface WorkerStatsMessage {
 
 /** media Worker 內的計數，主執行緒彙整進 `getStats()`。 */
 export interface WorkerStats {
-  /** 目前存在的 libav instance 數：建立 instance 時加一，被取代或 open／probe 失敗而丟棄時減一。 */
+  /**
+   * 目前存在的 libav instance 數（主來源與外掛音軌各一個）：建立 instance 時加一，被取代、移除或 open／probe 失敗而
+   * 丟棄時減一。
+   */
   libavInstances: number;
   /** Range 快取，公開的 `EngineStats.cache` 沿用這個型別；沒有 http 來源時 bytes 等為 0。 */
   cache: {

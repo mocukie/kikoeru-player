@@ -141,14 +141,14 @@ class PcmQueue {
   }
 
   /**
-   * 加入一段資料，mono 複製成 stereo。有時間戳時依它對齊：比前一段的結尾晚就在中間補靜音，早就丟掉重疊的部分；
-   * 10 ms 以內的抖動視為連續。
+   * 加入一段資料，mono 複製成 stereo。有時間戳時依它對齊：比前一段的結尾（第一段是起點）晚就在中間補靜音，早就丟掉
+   * 重疊的部分；10 ms 以內的抖動視為連續。起點前補靜音的是音軌 offset 為正（或音訊比起點晚開始）的情況。
    */
   push(planes: readonly Float32Array[], time: number | null): void {
     const left = planes[0];
     if (!left) return;
     const right = planes[1] ?? left;
-    if (time !== null && this.#started) {
+    if (time !== null) {
       // 有時間戳時，遺失的範圍由時間戳決定，取代壞封包預留的靜音。
       this.#pendingSilence = 0;
       if (time - this.#endTime > GAP_SECONDS) {
@@ -256,6 +256,11 @@ export interface AudioPipelineOptions<P> {
   sampleRate: number;
   /** 從這個媒體時間（秒）開始輸出，之前的 sample 丟掉。 */
   startTime: number;
+  /**
+   * 音軌 offset（秒），預設 0：decoder 給的時間是來源的時間，`mediaTime = sourceTime + offset`（ADR-0004 之前的
+   * 「音訊輸出排程與變速」#13）。在 stretcher 之前套用。
+   */
+  offset?: number;
   /** 開始時的播放速度（不變調）；之後以 `setRate()` 改變。 */
   rate: number;
   /** 速度不是 1 時建立 stretcher。 */
@@ -411,6 +416,9 @@ export class AudioPipeline<P> {
   }
 
   #push(decoded: readonly DecodedAudio[]): void {
-    for (const { planes, time } of decoded) this.#queue.push(planes, time);
+    const offset = this.#options.offset ?? 0;
+    for (const { planes, time } of decoded) {
+      this.#queue.push(planes, time === null ? null : time + offset);
+    }
   }
 }

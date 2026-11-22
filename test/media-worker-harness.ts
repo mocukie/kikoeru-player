@@ -247,6 +247,24 @@ export class WorkerDriver {
     return this.collect(epoch, options.frames);
   }
 
+  /** 加入外掛音軌並等到 `audioprobe` 或 `audioerror`（以 Error reject，帶 WireError 的欄位）。 */
+  async addAudio(
+    id: string,
+    source: Extract<MainToWorkerMessage<BrowserHost>, { type: 'addaudio' }>['source'],
+  ): Promise<ProbedAudioTrack> {
+    const from = this.messages.length;
+    this.post({ type: 'addaudio', id, source });
+    const match = (m: WorkerToMainMessage<BrowserHost>) =>
+      (m.type === 'audioprobe' || m.type === 'audioerror') && m.id === id;
+    await this.#until(() => this.messages.slice(from).some(match));
+    const reply = this.messages.slice(from).find(match);
+    if (reply?.type === 'audioerror') {
+      throw Object.assign(new Error(reply.error.message), reply.error);
+    }
+    if (reply?.type !== 'audioprobe') throw new Error('unreachable');
+    return reply.track;
+  }
+
   /** `epoch` 收到的 cue，依收到的順序。 */
   cues(epoch: number): WireCue[] {
     return this.messages.flatMap((m) => (m.type === 'cues' && m.epoch === epoch ? m.cues : []));

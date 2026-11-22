@@ -35,10 +35,4 @@ describe('createEngine', () => {
     expect(() => createEngine({ audioBuffer: { targetMs: 100 } })).not.toThrow();
     expect(() => createEngine({ audioBuffer: { targetMs: 500 } })).toThrow(RangeError);
   });
-
-  it('尚未實作的成員丟出錯誤並指出成員名稱', () => {
-    const engine = createEngine();
-
-    expect(() => engine.setAudioOffset('a:1', 0)).toThrow(/setAudioOffset/);
-  });
 });

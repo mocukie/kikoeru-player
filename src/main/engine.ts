@@ -1,6 +1,7 @@
 // createEngine() 與 Engine 的實作：指令佇列、狀態機與狀態鏡像。
 
 import type {
+  ProbedAudioTrack,
   ProbedMedia,
   WireCue,
   WireError,
@@ -37,7 +38,6 @@ import {
   VideoResizeEvent,
 } from './events.js';
 import { errorScope, fromWorkerTime, Logger } from './log.js';
-import { notImplemented } from './not-implemented.js';
 import { resolveEngineOptions, type ResolvedEngineOptions } from './options.js';
 import { createWebMediaWorker } from './media-worker.js';
 import { detectPlatform } from './platform.js';
@@ -88,7 +88,7 @@ export function createEngineWith(deps: EngineDeps, options?: EngineOptions): Eng
   return new EngineImpl(deps, resolveEngineOptions(options, deps.platform));
 }
 
-type CommandKind = 'load' | 'unload' | 'play' | 'pause' | 'seek' | 'select';
+type CommandKind = 'load' | 'unload' | 'play' | 'pause' | 'seek' | 'select' | 'external' | 'offset';
 
 const trackKinds: readonly TrackKind[] = ['audio', 'video', 'subtitle'];
 
@@ -100,6 +100,8 @@ const WATCHDOG_MS = 1000;
 const STARVED_MS = 250;
 /** 因網路不足進入 buffering 之後，bufferAhead 要到這麼多秒才恢復（「記憶體上限的數值」#23）。 */
 const RESUME_AHEAD_SECONDS = 3;
+/** 每份媒體最多的外掛音軌數（「記憶體上限的數值」#23）。 */
+const MAX_EXTERNAL_AUDIO = 4;
 /** `playbackRate` 的範圍（ADR-0004）。 */
 const MIN_RATE = 0.5;
 const MAX_RATE = 2;
@@ -279,6 +281,10 @@ class EngineImpl extends EventTarget implements Engine {
   #loadContext: LoadContext | null = null;
   /** 最近一次 `load()` 的來源與選項，`reload()` 以它重新開檔。 */
   #lastLoad: { source: Source; options: LoadOptions } | null = null;
+  /** 當前媒體的外掛音軌的來源（track id → 來源）；`reload()` 以它在新的 Worker 重新加入。load、unload 時清掉。 */
+  readonly #externals = new Map<string, Source>();
+  /** Worker 對 `addaudio` 的回覆（id → 結果），由等待它的指令取走。 */
+  readonly #externalResults = new Map<string, { track: ProbedAudioTrack } | { error: WireError }>();
   #isDestroyed = false;
   #destroying: Promise<void> | null = null;
 
@@ -544,14 +550,44 @@ class EngineImpl extends EventTarget implements Engine {
       request,
     );
   }
-  addExternalAudio(): Promise<AudioTrack> {
-    return notImplemented('addExternalAudio()');
+  addExternalAudio(
+    source: Source,
+    options: { offset?: number; label?: string } = {},
+  ): Promise<AudioTrack> {
+    if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    const offset = options.offset ?? 0;
+    if (!Number.isFinite(offset)) {
+      return Promise.reject(
+        new TypeError(`addExternalAudio() 的 offset 必須是有限數，收到 ${String(offset)}`),
+      );
+    }
+    this.#log.log('debug', 'command', 'addExternalAudio', {
+      source: source.kind,
+      ...(source.kind === 'http' && { url: String(source.url) }),
+      offset,
+    });
+    return this.#queue.enqueue('external', (signal) =>
+      this.#runAddExternalAudio(source, offset, options.label, signal),
+    );
   }
-  removeExternalAudio(): Promise<void> {
-    return notImplemented('removeExternalAudio()');
+  removeExternalAudio(trackId: string): Promise<void> {
+    if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    this.#log.log('debug', 'command', 'removeExternalAudio', { trackId });
+    return this.#queue.enqueue('external', (signal) =>
+      this.#runRemoveExternalAudio(trackId, signal),
+    );
   }
-  setAudioOffset(): Promise<void> {
-    return notImplemented('setAudioOffset()');
+  setAudioOffset(trackId: string, offset: number): Promise<void> {
+    if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
+    if (!Number.isFinite(offset)) {
+      return Promise.reject(
+        new TypeError(`setAudioOffset() 的 offset 必須是有限數，收到 ${String(offset)}`),
+      );
+    }
+    this.#log.log('debug', 'command', 'setAudioOffset', { trackId, offset });
+    return this.#queue.enqueue('offset', (signal) =>
+      this.#runSetAudioOffset(trackId, offset, signal),
+    );
   }
   unload(): Promise<void> {
     if (this.#isDestroyed) return Promise.reject(this.#destroyedError());
@@ -687,6 +723,8 @@ class EngineImpl extends EventTarget implements Engine {
   ): Promise<MediaInfo> {
     this.#terminateWorker();
     if (!reloadOf) {
+      // 外掛音軌屬於上一份媒體。
+      this.#externals.clear();
       // reload() 不沿用這次 load 的 signal。
       const rest = { ...options };
       delete rest.signal;
@@ -747,6 +785,9 @@ class EngineImpl extends EventTarget implements Engine {
         [port],
       );
       worker.post({ type: 'load', epoch, source: toWireSource(source) });
+      // reload：外掛音軌以同一個 id 在新的 Worker 重新開啟。
+      const externals = reloadOf ? [...this.#externals] : [];
+      for (const [id, external] of externals) this.#requestExternal(worker, id, external);
       // 背景中 load：一開始就不解碼影片。
       if (this.#videoSuspended) worker.post({ type: 'videosuspend', suspended: true, time: 0 });
 
@@ -757,6 +798,26 @@ class EngineImpl extends EventTarget implements Engine {
         // reload：軌道與 track id 沿用，組成不同就不能接續。
         if (!sameTrackStructure(reloadOf.info.tracks, probed.tracks)) {
           throw this.#fatal('SOURCE_CHANGED', '重新開檔後軌道的組成與先前不同');
+        }
+        for (const [id] of externals) {
+          const result = await this.#externalResult(id, signal);
+          signal.throwIfAborted();
+          if ('error' in result) {
+            const { code, message, detail } = result.error;
+            throw new EngineError(code, {
+              fatal: true,
+              position: this.currentTime,
+              message: `外掛音軌重新開檔失敗：${message}`,
+              ...(detail && { detail }),
+            });
+          }
+          const before = reloadOf.info.tracks.find((t) => t.id === id);
+          if (
+            before?.codec !== result.track.codec ||
+            before.streamIndex !== result.track.streamIndex
+          ) {
+            throw this.#fatal('SOURCE_CHANGED', `重新開檔後外掛音軌 '${id}' 的組成與先前不同`);
+          }
         }
         tracks = reloadOf.info.tracks;
         load.selection = reloadOf.selection;
@@ -798,7 +859,7 @@ class EngineImpl extends EventTarget implements Engine {
         type: 'start',
         epoch: this.#epoch,
         time: load.startTime,
-        audio: audioTrack?.streamIndex ?? null,
+        ...audioOutput(audioTrack?.kind === 'audio' ? audioTrack : undefined),
         video: videoTrack?.streamIndex ?? null,
         subtitle: subtitleTrack?.streamIndex ?? null,
       });
@@ -918,7 +979,12 @@ class EngineImpl extends EventTarget implements Engine {
    * 新的影片軌 configure 或首個 keyframe 失敗時：該軌改為不支援、發出 trackschange，換回原本生效的軌，reject 非致命的
    * `CODEC_UNSUPPORTED`。
    */
-  async #switchTracks(next: TrackSelection, signal: AbortSignal): Promise<void> {
+  async #switchTracks(
+    next: TrackSelection,
+    signal: AbortSignal,
+    /** 生效時一起公布的軌道變化（例如移除外掛音軌）。 */
+    change: (media: MediaInfo) => MediaInfo = (media) => media,
+  ): Promise<void> {
     const switching: Switching = { next: { ...next }, failed: null };
     this.#switching = switching;
     try {
@@ -939,7 +1005,8 @@ class EngineImpl extends EventTarget implements Engine {
       // 關掉影片：畫面上的 frame 留到生效時才清掉（videoSize 回到 null）。
       if (switching.next.video === null) this.#video.setTrack(null);
       if (this.#epoch !== epoch) return;
-      this.#publishMedia(this.#media, switching.next);
+      const media = this.#media;
+      this.#publishMedia(media && change(media), switching.next);
       if (this.#epoch !== epoch) return;
       this.#flushPendingCues();
     } finally {
@@ -976,6 +1043,129 @@ class EngineImpl extends EventTarget implements Engine {
     await this.#until(() => this.#outputReady(), signal);
   }
 
+  /**
+   * 加入外掛音軌：Worker 在同一個 Worker 內為來源開新的 libav instance 並 probe。成功時加入 `tracks`（不選用）並發出
+   * trackschange；失敗與超過上限都是非致命的錯誤，主媒體不受影響。
+   */
+  async #runAddExternalAudio(
+    source: Source,
+    offset: number,
+    label: string | undefined,
+    signal: AbortSignal,
+  ): Promise<AudioTrack> {
+    this.#assertMedia();
+    const count = this.#tracks.filter((t) => t.origin === 'external').length;
+    if (count >= MAX_EXTERNAL_AUDIO) {
+      throw new EngineError('MEMORY_LIMIT', {
+        fatal: false,
+        position: this.currentTime,
+        message: `每份媒體最多 ${String(MAX_EXTERNAL_AUDIO)} 條外掛音軌`,
+      });
+    }
+    const id = `ext:${String(++this.#trackSeq)}`;
+    const probed = await this.#openExternal(id, source, signal);
+    this.#externals.set(id, source);
+    const track: AudioTrack = {
+      ...probed,
+      id,
+      origin: 'external',
+      offset,
+      ...(label !== undefined && { title: label }),
+    };
+    const media = this.#media;
+    if (media) this.#publishMedia({ ...media, tracks: [...media.tracks, track] }, this.#selected);
+    return track;
+  }
+
+  /**
+   * 移除外掛音軌。選用中（或正在輸出）時先切回容器內的預設音軌，生效時一起公布移除（一次 trackschange）；之後才讓
+   * Worker 丟掉它的 instance（Worker 已經不再輸出它）。
+   */
+  async #runRemoveExternalAudio(trackId: string, signal: AbortSignal): Promise<void> {
+    this.#assertMedia();
+    const track = this.#tracks.find((t) => t.id === trackId);
+    if (track?.kind !== 'audio' || track.origin !== 'external') {
+      throw new RangeError(`沒有 id 為 '${trackId}' 的外掛音軌`);
+    }
+    const without = (media: MediaInfo): MediaInfo => ({
+      ...media,
+      tracks: media.tracks.filter((t) => t.id !== trackId),
+    });
+    if (this.#audioTrackId === trackId || this.#selected.audio === trackId) {
+      await this.#switchTracks({ ...this.#selected, audio: this.#defaultAudio() }, signal, without);
+      // trackschange 的 listener 可能已經換檔（Worker 已經 terminate）。
+      signal.throwIfAborted();
+    } else if (this.#media) {
+      this.#publishMedia(without(this.#media), this.#selected);
+    }
+    this.#externals.delete(trackId);
+    this.#worker?.post({ type: 'removeaudio', id: trackId });
+  }
+
+  /** 容器內的預設音軌：與 load 的初始選擇相同（偏好語言 → default 旗標 → 第一條可播的）。 */
+  #defaultAudio(): string | null {
+    const container = this.#tracks.filter((t) => t.origin === 'container');
+    const preferred = this.#lastLoad?.options.preferredLanguages;
+    return selectInitialTracks(container, undefined, {
+      audio: preferred?.audio ?? this.#options.preferredLanguages.audio,
+      subtitle: [],
+    }).audio;
+  }
+
+  /** 請 Worker 開啟外掛音軌的來源並等它的 probe；失敗時丟非致命的 `EngineError`。 */
+  async #openExternal(id: string, source: Source, signal: AbortSignal): Promise<ProbedAudioTrack> {
+    const worker = this.#worker;
+    if (!worker) throw new DOMException('沒有 media Worker', 'InvalidStateError');
+    this.#requestExternal(worker, id, source);
+    const result = await this.#externalResult(id, signal);
+    if ('track' in result) return result.track;
+    const { code, message, detail } = result.error;
+    throw new EngineError(code, {
+      fatal: false,
+      position: this.currentTime,
+      message,
+      ...(detail && { detail }),
+    });
+  }
+
+  /** 請 Worker 以 `id` 開啟外掛音軌的來源；結果由 `#externalResult()` 取得。 */
+  #requestExternal(worker: MediaWorker, id: string, source: Source): void {
+    this.#externalResults.delete(id);
+    worker.post({ type: 'addaudio', id, source: toWireSource(source) });
+  }
+
+  /** 等 Worker 對 `addaudio` 的回覆並取走它。 */
+  async #externalResult(
+    id: string,
+    signal: AbortSignal,
+  ): Promise<{ track: ProbedAudioTrack } | { error: WireError }> {
+    const result = await this.#waitFor(() => this.#externalResults.get(id) ?? null, signal);
+    this.#externalResults.delete(id);
+    return result;
+  }
+
+  /**
+   * 改音軌 offset：選用中（Worker 正在輸出）的軌以新的 epoch 從目前位置重新供料，state 短暫進入 seeking，輸出備妥之後才
+   * 公布新的 offset（trackschange）；其他軌只記下並公布。
+   */
+  async #runSetAudioOffset(trackId: string, offset: number, signal: AbortSignal): Promise<void> {
+    this.#assertMedia();
+    const track = this.#tracks.find((t) => t.id === trackId);
+    if (track?.kind !== 'audio') throw new RangeError(`沒有 id 為 '${trackId}' 的音軌`);
+    if (track.offset === offset) return;
+    const withOffset = (tracks: readonly Track[]): Track[] =>
+      tracks.map((t) => (t.id === trackId && t.kind === 'audio' ? { ...t, offset } : t));
+    if (this.#audioTrackId === trackId) {
+      this.#applySelection(this.#outputSelection(), withOffset(this.#tracks));
+      this.#setState('seeking', 'command');
+      await this.#until(() => this.#state !== 'seeking', signal);
+      // seeked 的 listener 可能已經換檔。
+      signal.throwIfAborted();
+    }
+    const media = this.#media;
+    if (media) this.#publishMedia({ ...media, tracks: withOffset(media.tracks) }, this.#selected);
+  }
+
   /** 這個 epoch 的輸出已備妥：worklet 回報過（被要求播放時要等到 playing），影片也備妥（或不再等）。 */
   #outputReady(): boolean {
     const last = this.#lastOutput;
@@ -984,10 +1174,12 @@ class EngineImpl extends EventTarget implements Engine {
     );
   }
 
-  /** 讓 Worker 從目前位置以新的 epoch 輸出 `selection` 的各軌；影片軌換了就重新等第一張 frame。 */
-  #applySelection(selection: TrackSelection): void {
-    const find = (id: string | null) =>
-      id === null ? undefined : this.#tracks.find((t) => t.id === id);
+  /**
+   * 讓 Worker 從目前位置以新的 epoch 輸出 `selection` 的各軌；影片軌換了就重新等第一張 frame。`tracks` 是軌道（含音軌
+   * offset）的來源，預設為已公布的。
+   */
+  #applySelection(selection: TrackSelection, tracks: readonly Track[] = this.#tracks): void {
+    const find = (id: string | null) => (id === null ? undefined : tracks.find((t) => t.id === id));
     const audio = find(selection.audio);
     const video = find(selection.video);
     const subtitle = find(selection.subtitle);
@@ -1006,7 +1198,7 @@ class EngineImpl extends EventTarget implements Engine {
       type: 'select',
       epoch,
       time,
-      audio: audio?.streamIndex ?? null,
+      ...audioOutput(audio?.kind === 'audio' ? audio : undefined),
       video: video?.streamIndex ?? null,
       subtitle: subtitle?.streamIndex ?? null,
     });
@@ -1036,6 +1228,7 @@ class EngineImpl extends EventTarget implements Engine {
     this.#terminateWorker();
     this.#loadContext = null;
     this.#lastLoad = null;
+    this.#externals.clear();
     this.#resetMediaState();
     this.#stopVideo();
     const epoch = ++this.#epoch;
@@ -1102,6 +1295,12 @@ class EngineImpl extends EventTarget implements Engine {
           case 'probe':
             if (this.#loadContext && message.epoch === this.#epoch)
               this.#loadContext.probed = message.media;
+            break;
+          case 'audioprobe':
+            this.#externalResults.set(message.id, { track: message.track });
+            break;
+          case 'audioerror':
+            this.#externalResults.set(message.id, { error: message.error });
             break;
           case 'error': {
             if (message.epoch !== this.#epoch) return;
@@ -1944,6 +2143,7 @@ class EngineImpl extends EventTarget implements Engine {
       this.#liveWorkers--;
     }
     this.#worker = null;
+    this.#externalResults.clear();
     for (const resolve of this.#statsRequests.values()) resolve(null);
     this.#statsRequests.clear();
   }
@@ -2072,6 +2272,22 @@ function frameScheduler(): (callback: () => void) => () => void {
     const timer = setTimeout(run, raf ? HIDDEN_FRAME_MS : 16);
     if (raf) id = requestAnimationFrame(run);
     return cancel;
+  };
+}
+
+/**
+ * `start`／`select` 的音訊欄位：外掛音軌帶 `audioSource`（它的 track id），offset 不是 0 時帶 `audioOffset`。
+ */
+function audioOutput(track: AudioTrack | undefined): {
+  audio: number | null;
+  audioSource?: string;
+  audioOffset?: number;
+} {
+  if (!track) return { audio: null };
+  return {
+    audio: track.streamIndex,
+    ...(track.origin === 'external' && { audioSource: track.id }),
+    ...(track.offset !== 0 && { audioOffset: track.offset }),
   };
 }
 

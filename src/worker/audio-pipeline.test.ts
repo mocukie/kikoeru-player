@@ -146,6 +146,8 @@ function setup(
     batches?: FakePacket[][];
     decoder?: FakeDecoder;
     startTime?: number;
+    /** 音軌 offset（秒）。 */
+    offset?: number;
     epoch?: number;
     queueLimits?: PacketQueueLimits;
     onDemux?: (end: number) => void;
@@ -178,6 +180,7 @@ function setup(
     decoder: options.decoder ?? new FakeDecoder(),
     sampleRate: RATE,
     startTime,
+    ...(options.offset !== undefined && { offset: options.offset }),
     rate: options.rate ?? 1,
     createStretcher: stretch.create,
     epoch,
@@ -343,6 +346,50 @@ describe('供料', () => {
     demand.need(epoch, 4096);
     await expect(running).rejects.toMatchObject({ name: 'AbortError' });
     expect(posted).toEqual([]);
+  });
+});
+
+describe('音軌 offset', () => {
+  // sourceTime = mediaTime − offset：來源 t 秒的 sample 在媒體時間 t + offset 播出。
+  const batches = () => Array.from({ length: 30 }, () => [{ frames: 2048 }]);
+
+  test('正值：起點前補靜音，來源的第一個 sample 在媒體時間 offset', async () => {
+    const { demand, pcm, epoch } = setup({ batches: batches(), offset: 0.25 });
+    demand.need(epoch, 0.5 * RATE);
+    await settle();
+    const left = concatLeft(pcm());
+    expect(pcm()[0]?.time).toBe(0);
+    expect(left.subarray(0, 0.25 * RATE).every((x) => x === 0)).toBe(true);
+    // 來源的第 1 個 frame（值 1）落在媒體時間 0.25 之後一個 frame。
+    expect(left[0.25 * RATE + 1]).toBe(1);
+  });
+
+  test('負值：跳過來源開頭，媒體時間 0 是來源的 -offset', async () => {
+    const { demand, pcm, epoch } = setup({ batches: batches(), offset: -0.25 });
+    demand.need(epoch, 2048);
+    await settle();
+    const [chunk] = pcm();
+    expect(chunk?.time).toBeCloseTo(0, 9);
+    expect(chunk?.channels[0]?.[0]).toBe(0.25 * RATE);
+  });
+
+  test('seek 到來源起點之前（起點 − offset < 0）：從來源開頭解碼，到來源的 0 點之前補靜音', async () => {
+    const { demand, pcm, epoch } = setup({ batches: batches(), startTime: 0.1, offset: 0.3 });
+    demand.need(epoch, 0.4 * RATE);
+    await settle();
+    const left = concatLeft(pcm());
+    expect(pcm()[0]?.time).toBe(0.1);
+    expect(left.subarray(0, 0.2 * RATE).every((x) => x === 0)).toBe(true);
+    expect(left[0.2 * RATE + 7]).toBe(7);
+  });
+
+  test('seek 之後：媒體時間 t 送出來源 t − offset 的 sample', async () => {
+    const { demand, pcm, epoch } = setup({ batches: batches(), startTime: 0.5, offset: 0.2 });
+    demand.need(epoch, 2048);
+    await settle();
+    const [chunk] = pcm();
+    expect(chunk?.time).toBe(0.5);
+    expect(chunk?.channels[0]?.[0]).toBe(0.3 * RATE);
   });
 });
 

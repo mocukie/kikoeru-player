@@ -1,12 +1,16 @@
-// media Worker 的訊息處理：init、load（開檔與 probe）、start、seek 與 select（音訊供料、影片解碼與字幕 cue）、port（改接重建後的
-// worklet）、rate（變速）、frameclosed（影片 frame 的 backpressure）、videosuspend（背景時暫停影片解碼）與 stats。
+// media Worker 的訊息處理：init、load（開檔與 probe）、addaudio／removeaudio（外掛音軌）、start、seek 與 select（音訊供料、
+// 影片解碼與字幕 cue）、port（改接重建後的 worklet）、rate（變速）、frameclosed（影片 frame 的 backpressure）、videosuspend
+//（背景時暫停影片解碼）與 stats。每個來源（主來源、每條外掛音軌）各一個 libav instance，各自 demux，讀取互不阻塞。
 // 主執行緒每次 load 都 terminate 舊的 Worker（ADR-0002），但 Worker 也處理同一個 Worker 內的 load 取代：
 // 前一個 load 的讀取被中止、instance 被丟棄。
 
 import type {
   MainToWorkerMessage,
+  ProbedAudioTrack,
   ProbedTrack,
   RetryPolicy,
+  WorkerAddAudioMessage,
+  WorkerBufferMessage,
   WorkerLimits,
   WorkerLoadMessage,
   WorkerPortMessage,
@@ -15,7 +19,7 @@ import type {
   WorkerToWorkletMessage,
   WorkletToWorkerMessage,
 } from '../protocol/index.js';
-import { BufferPool, Demand } from './audio-pipeline.js';
+import { BufferPool, Demand, type AudioPipeline } from './audio-pipeline.js';
 import { BufferTracker } from './buffer-tracker.js';
 import { initialByteRate } from './byte-rate.js';
 import { withDemux, type Demuxer, type HoldableLane } from './demuxer.js';
@@ -77,18 +81,69 @@ interface Environment {
   rate: number;
 }
 
+/** stats 與背景估計播放位置讀取的 demuxer 狀態。 */
+type DemuxerView = Pick<Demuxer<unknown>, 'seconds' | 'bytes' | 'headTime' | 'end'>;
+
+/** 目前輸出的 demuxer 與選用的軌（各來源的 pipeline 建立之後才填上）。 */
+interface CurrentOutput {
+  demuxers: DemuxerView[];
+  audio: { demuxer: DemuxerView; stream: number } | null;
+  video: { demuxer: DemuxerView; stream: number } | null;
+  setRate: ((rate: number) => void) | null;
+}
+
+/** 輸出的音軌：來源（null 是主來源，否則是外掛音軌的 id）、它在來源內的 stream index 與音軌 offset。 */
+interface AudioSelection {
+  source: string | null;
+  stream: number;
+  offset: number;
+}
+
+/** 選用的各軌：`start`／`select` 決定，之後的 `seek`、`port` 沿用。 */
+interface Selection {
+  /** null 表示不輸出音訊。 */
+  audio: AudioSelection | null;
+  /** 選用影片軌的 stream index；null 表示不解碼影片。 */
+  video: number | null;
+  /** 選用字幕軌的 stream index；null 表示不送 cue。 */
+  subtitle: number | null;
+}
+
 /** 一個 epoch 的輸出：`start` 或 `seek`。 */
 interface OutputRequest {
   epoch: number;
   time: number;
-  /** 選用音軌的 stream index；null 表示不輸出音訊。 */
-  audio: number | null;
+  /** null 表示不輸出音訊。 */
+  audio: AudioSelection | null;
   /** 選用影片軌的 stream index；null 表示不解碼影片。 */
   video: number | null;
   /** 選用字幕軌的 stream index；null 表示不送 cue。 */
   subtitle: number | null;
   /** 先 seek 到 `time`；false 時接著 demuxer 目前的位置（開檔後的開頭）讀。 */
   seek: boolean;
+}
+
+/** 一個來源與它的 libav instance（主來源的 `Load` 與外掛音軌的 `External` 共通的部分）。 */
+interface SourceInstance {
+  controller: AbortController;
+  /** 開檔完成後才有。 */
+  media: LibavMedia | null;
+  /** 開好的來源；http 時經過 Range 快取（`CachedSource`）。 */
+  source: ByteSource | null;
+  /** probe 之後才有。 */
+  tracker: BufferTracker | null;
+  /** 開檔、probe 中。輸出等它完成。 */
+  opening: Promise<void>;
+  /** 已建立（或正在建立）libav instance，計入 `libavInstances`。 */
+  hasInstance: boolean;
+  disposed: boolean;
+}
+
+/** 一條外掛音軌：它的來源與 instance。被選用時才 demux（才讀取、預讀）。 */
+interface External extends SourceInstance {
+  id: string;
+  /** 選用的音軌（probe 之後才有）。 */
+  track: ProbedAudioTrack | null;
 }
 
 /** 一次 load：一個來源與它的 libav instance。 */
@@ -126,16 +181,16 @@ export class MediaWorker {
   #output: AbortController | null = null;
   /** 前一個 start 的供料，結束（含被中止）時 resolve；同一個 demuxer 上的下一個 start 等它停下。 */
   #outputDone: Promise<void> = Promise.resolve();
-  /** 目前輸出的 demuxer 與選用的軌，供 stats 的封包佇列與 `rate`。 */
-  #current: {
-    demuxer: Demuxer<unknown>;
-    audio: number | null;
-    video: number | null;
-    setRate: ((rate: number) => void) | null;
-  } | null = null;
+  /** 目前輸出的 demuxer（主來源與外掛音軌各一個）與選用的軌，供 stats 的封包佇列與 `rate`。 */
+  #current: CurrentOutput | null = null;
   /** `start` 選用的各軌；之後的 `seek` 沿用。`start` 之前為 undefined。 */
-  #tracks: { audio: number | null; video: number | null; subtitle: number | null } | undefined =
-    undefined;
+  #tracks: Selection | undefined = undefined;
+  /** 外掛音軌（id → instance），屬於這個 Worker 的媒體。 */
+  readonly #externals = new Map<string, External>();
+  /**
+   * 目前輸出的各來源最後回報的資料備妥進度（還沒回報時為 null）；全部都回報了這個 epoch 才合併成一個 `buffer` 送出。
+   */
+  #buffers = new Map<BufferTracker, WorkerBufferMessage | null>();
   /** 背景中暫停影片解碼（`videosuspend`）；沿用到之後的 load。 */
   #videoSuspended = false;
   /** 還沒 close 的 `VideoFrame`（Worker 內暫留的加上送到主執行緒的），所有 load 共用。 */
@@ -180,20 +235,36 @@ export class MediaWorker {
       case 'load':
         this.#startLoad(message);
         break;
-      case 'start':
-        this.#tracks = { audio: message.audio, video: message.video, subtitle: message.subtitle };
-        // 開檔後 demuxer 在開頭；從其他位置開始要先 seek。
-        this.#startOutput({ ...message, seek: message.time > 0 });
+      case 'addaudio':
+        this.#addAudio(message);
         break;
+      case 'removeaudio': {
+        const external = this.#externals.get(message.id);
+        if (external) this.#disposeExternal(external);
+        // 主執行緒先換掉選用中的音軌才移除；仍被選用時之後的輸出不再有音訊。
+        if (this.#tracks?.audio?.source === message.id) {
+          this.#tracks = { ...this.#tracks, audio: null };
+        }
+        break;
+      }
+      case 'start': {
+        this.#tracks = selectionOf(message);
+        const { epoch, time } = message;
+        // 開檔後 demuxer 在開頭；從其他位置開始要先 seek。
+        this.#startOutput({ epoch, time, ...this.#tracks, seek: time > 0 });
+        break;
+      }
       case 'seek':
         if (this.#tracks === undefined) break;
         this.#startOutput({ ...message, ...this.#tracks, seek: true });
         break;
-      case 'select':
+      case 'select': {
         if (this.#tracks === undefined) break;
-        this.#tracks = { audio: message.audio, video: message.video, subtitle: message.subtitle };
-        this.#startOutput({ ...message, seek: true });
+        this.#tracks = selectionOf(message);
+        const { epoch, time } = message;
+        this.#startOutput({ epoch, time, ...this.#tracks, seek: true });
         break;
+      }
       case 'rate':
         this.#log.log('debug', 'audio', '改變播放速度', { rate: message.rate });
         if (this.#env) this.#env.rate = message.rate;
@@ -278,6 +349,8 @@ export class MediaWorker {
       this.#log.log('debug', 'worker', '前一個 load 被取代', { epoch: this.#load.epoch });
       this.#dispose(this.#load);
     }
+    // 外掛音軌屬於上一份媒體。
+    for (const external of this.#externals.values()) this.#disposeExternal(external);
     const load: Load = {
       epoch: message.epoch,
       controller: new AbortController(),
@@ -296,41 +369,55 @@ export class MediaWorker {
     load.opening = this.#open(load, message.source);
   }
 
+  /**
+   * 開啟來源（http 經過共用的 Range 快取）並建立 libav instance、開檔 probe。`holder.source` 與 `hasInstance` 在途中就記下，
+   * 失敗或被中止時由呼叫端 dispose。
+   */
+  async #openInstance(
+    holder: SourceInstance,
+    wire: WorkerLoadMessage<WorkerHost>['source'],
+  ): Promise<{ opened: ByteSource; media: LibavMedia }> {
+    const { signal } = holder.controller;
+    const env = this.#requireEnv();
+    const open =
+      this.#deps.openSource ??
+      ((wire, signal, retry) =>
+        openSource(wire, signal, {
+          retry,
+          cache: env.cache,
+          log: this.#log,
+          onRequestError: (error) => {
+            if (!holder.disposed) {
+              this.#deps.postMessage({ type: 'readerror', error: toWireError(error) });
+            }
+          },
+        }));
+    const opened = await open(wire, signal, env.retry);
+    if (signal.aborted) {
+      opened.close?.();
+      signal.throwIfAborted();
+    }
+    holder.source = opened;
+    // demux 讀取的位置與當時的 demux 進度用來修正位元組率。
+    const source: ByteSource = {
+      size: opened.size,
+      read: (offset, length, readSignal) => {
+        holder.tracker?.onRead(offset);
+        return opened.read(offset, length, readSignal);
+      },
+    };
+    holder.hasInstance = true;
+    this.#libavInstances++;
+    const media = await LibavMedia.open(env.assets, source, signal);
+    signal.throwIfAborted();
+    return { opened, media };
+  }
+
   async #open(load: Load, wire: WorkerLoadMessage<WorkerHost>['source']): Promise<void> {
     const { signal } = load.controller;
     try {
       const env = this.#requireEnv();
-      const open =
-        this.#deps.openSource ??
-        ((wire, signal, retry) =>
-          openSource(wire, signal, {
-            retry,
-            cache: env.cache,
-            log: this.#log,
-            onRequestError: (error) => {
-              if (this.#load === load) {
-                this.#deps.postMessage({ type: 'readerror', error: toWireError(error) });
-              }
-            },
-          }));
-      const opened = await open(wire, signal, env.retry);
-      if (signal.aborted) {
-        opened.close?.();
-        signal.throwIfAborted();
-      }
-      load.source = opened;
-      // demux 讀取的位置與當時的 demux 進度用來修正位元組率。
-      const source: ByteSource = {
-        size: opened.size,
-        read: (offset, length, readSignal) => {
-          load.tracker?.onRead(offset);
-          return opened.read(offset, length, readSignal);
-        },
-      };
-      load.hasInstance = true;
-      this.#libavInstances++;
-      const media = await LibavMedia.open(env.assets, source, signal);
-      signal.throwIfAborted();
+      const { opened, media } = await this.#openInstance(load, wire);
       const isSupported = this.#deps.isVideoConfigSupported ?? isVideoConfigSupported;
       const probed = await withPlatformSupport(toProbedMedia(media.raw), media.raw, isSupported);
       signal.throwIfAborted();
@@ -339,7 +426,7 @@ export class MediaWorker {
       }
       load.media = media;
       load.tracks = probed.tracks;
-      load.tracker = new BufferTracker({
+      const tracker: BufferTracker = new BufferTracker({
         source: opened,
         size: opened.size,
         duration: probed.duration,
@@ -352,9 +439,10 @@ export class MediaWorker {
         }),
         readaheadSeconds: env.limits.readaheadSeconds,
         post: (message) => {
-          if (this.#load === load) this.#deps.postMessage(message);
+          this.#onBuffer(tracker, message);
         },
       });
+      load.tracker = tracker;
       this.#log.log('info', 'demux', `開檔完成：${probed.format}`, {
         epoch: load.epoch,
         duration: probed.duration,
@@ -368,6 +456,125 @@ export class MediaWorker {
       this.#dispose(load);
       if (!superseded) this.#reportError(load.epoch, error);
     }
+  }
+
+  /** 外掛音軌：開第二個（第三個…）instance 並 probe，回覆 `audioprobe` 或 `audioerror`。同一個 id 已經存在時取代它。 */
+  #addAudio(message: WorkerAddAudioMessage<WorkerHost>): void {
+    const previous = this.#externals.get(message.id);
+    if (previous) this.#disposeExternal(previous);
+    this.#log.log('debug', 'worker', '加入外掛音軌', {
+      id: message.id,
+      source: message.source.kind,
+    });
+    const external: External = {
+      id: message.id,
+      controller: new AbortController(),
+      media: null,
+      source: null,
+      tracker: null,
+      track: null,
+      opening: Promise.resolve(),
+      hasInstance: false,
+      disposed: false,
+    };
+    this.#externals.set(message.id, external);
+    external.opening = this.#openExternal(external, message.source);
+  }
+
+  async #openExternal(
+    external: External,
+    wire: WorkerAddAudioMessage<WorkerHost>['source'],
+  ): Promise<void> {
+    const { signal } = external.controller;
+    try {
+      const env = this.#requireEnv();
+      const { opened, media } = await this.#openInstance(external, wire);
+      const probed = toProbedMedia(media.raw);
+      const audio = probed.tracks.filter(
+        (t): t is ProbedAudioTrack => t.kind === 'audio' && t.supported,
+      );
+      const track = audio.find((t) => t.default) ?? audio[0];
+      if (!track) throw new WorkerError('CODEC_UNSUPPORTED', '外掛音軌的來源沒有可以播放的音軌');
+      external.media = media;
+      external.track = track;
+      const tracker: BufferTracker = new BufferTracker({
+        source: opened,
+        size: opened.size,
+        // demux 的進度已換算成媒體時間（加上 offset），不以來源的長度截斷；主執行緒以媒體的 duration 截斷。
+        duration: NaN,
+        byteRate: initialByteRate({
+          size: probed.size,
+          duration: probed.duration,
+          bitRates: [media.raw.streams[track.streamIndex]?.bitRate ?? 0],
+        }),
+        readaheadSeconds: env.limits.readaheadSeconds,
+        post: (message) => {
+          this.#onBuffer(tracker, message);
+        },
+      });
+      external.tracker = tracker;
+      this.#log.log('info', 'demux', `外掛音軌開檔完成：${probed.format}`, {
+        id: external.id,
+        duration: probed.duration,
+        stream: track.streamIndex,
+        codec: track.codec,
+      });
+      this.#deps.postMessage({ type: 'audioprobe', id: external.id, track });
+    } catch (error) {
+      const superseded = signal.aborted;
+      this.#disposeExternal(external);
+      if (superseded) return;
+      // 外掛音軌失敗不影響主媒體：instance 已丟掉，以非致命的錯誤回報（wasm 記憶體用完時是 MEMORY_LIMIT）。
+      const wire = toWireError(error);
+      const code = crashReason(error) === 'out-of-memory' ? 'MEMORY_LIMIT' : wire.code;
+      this.#log.log('warn', 'demux', `外掛音軌開檔失敗：${wire.message}`, {
+        id: external.id,
+        code,
+      });
+      this.#deps.postMessage({
+        type: 'audioerror',
+        id: external.id,
+        error: { ...wire, code, fatal: false },
+      });
+    }
+  }
+
+  #disposeExternal(external: External): void {
+    if (external.disposed) return;
+    external.disposed = true;
+    external.controller.abort();
+    external.source?.close?.();
+    external.media = null;
+    if (external.hasInstance) this.#libavInstances--;
+    if (this.#externals.get(external.id) === external) this.#externals.delete(external.id);
+    if (external.tracker) this.#buffers.delete(external.tracker);
+  }
+
+  /**
+   * 一個來源的資料備妥進度：目前輸出的各來源都回報了同一個 epoch 才合併送出。還沒讀到結尾的來源取最早的終點（都到了
+   * 結尾時取最晚的），`fetching` 只要有一個在抓取就是 true。
+   */
+  #onBuffer(tracker: BufferTracker, message: WorkerBufferMessage): void {
+    if (!this.#buffers.has(tracker)) return;
+    this.#buffers.set(tracker, message);
+    const reported: WorkerBufferMessage[] = [];
+    for (const m of this.#buffers.values()) {
+      if (m?.epoch !== message.epoch) return;
+      reported.push(m);
+    }
+    if (reported.length === 1) {
+      this.#deps.postMessage(message);
+      return;
+    }
+    const open = reported.filter((m) => !m.eof);
+    const ends = (open.length > 0 ? open : reported).map((m) => m.end);
+    this.#deps.postMessage({
+      type: 'buffer',
+      epoch: message.epoch,
+      end: open.length > 0 ? Math.min(...ends) : Math.max(...ends),
+      eof: open.length === 0,
+      fetching: reported.some((m) => m.fetching),
+    });
   }
 
   /**
@@ -387,6 +594,12 @@ export class MediaWorker {
     // seek 時進行中的網路請求（含預讀）一起中止：卡住的請求要換新的才能恢復。開檔後的第一次輸出不 seek，
     // demuxer 接著讀，不必中止。
     if (message.seek) load.source?.abort?.();
+    // 外掛音軌的輸出一律先 seek，所以每次都中止；沒選用的也因此不再預讀。開檔中的不動（讀取屬於 probe）。
+    for (const external of this.#externals.values()) {
+      if (!external.media) continue;
+      external.media.abortReads();
+      external.source?.abort?.();
+    }
     const output = new AbortController();
     this.#output = output;
     this.#demand.setEpoch(message.epoch);
@@ -408,82 +621,151 @@ export class MediaWorker {
       const post = (m: WorkerToWorkletMessage, transfer: Transferable[]) => {
         env.port.postMessage(m, transfer);
       };
-      const tracker = load.tracker;
+      const { epoch } = message;
       const startTime = Math.max(0, message.time);
-      tracker?.start(message.epoch, startTime);
-      if (message.audio === null && message.video === null) {
+      const selected = message.audio;
+      // 外掛音軌：等它開檔完成（主執行緒在 probe 之後才選用它）；被移除或失敗時不輸出音訊。
+      const external =
+        selected?.source == null ? null : (this.#externals.get(selected.source) ?? null);
+      if (external) await external.opening;
+      signal.throwIfAborted();
+      const externalMedia = external?.media ?? null;
+      const mainAudio = selected?.source === null ? selected : null;
+      const externalAudio = externalMedia ? selected : null;
+      // 主來源只在輸出它的音軌或影片軌時 demux（沒有影片軌時字幕也不送）。
+      const demuxMain = mainAudio !== null || message.video !== null;
+      this.#buffers = new Map();
+      if (demuxMain && load.tracker) {
+        load.tracker.start(epoch, startTime);
+        this.#buffers.set(load.tracker, null);
+      }
+      if (externalAudio && external?.tracker) {
+        external.tracker.start(epoch, startTime);
+        this.#buffers.set(external.tracker, null);
+      }
+      if (!demuxMain && !externalAudio) {
         // 不輸出音訊：worklet 以靜音推進時鐘。
-        post({ type: 'eof', epoch: message.epoch }, []);
+        post({ type: 'eof', epoch }, []);
         return;
       }
       // 前一個輸出已經停下：換了影片軌（或不再輸出影片）才能關掉舊軌的 decoder。
       if (message.video === null) this.#closeVideo(load);
       const video = message.video === null ? null : this.#videoDecoding(load, message.video);
       const { limits } = env;
-      const started = await media.startOutput({
-        audio: message.audio,
-        video: video ? message.video : null,
-        subtitle: this.#subtitleOutput(load, message, output),
-        seek: message.seek,
-        startTime,
-        signal,
-        demux: {
-          epoch: message.epoch,
-          queueLimits: {
-            seconds: NORMAL_QUEUE_SECONDS,
-            bytes: NORMAL_QUEUE_BYTES,
-            hardBytes: limits.packetQueueBytes,
-          },
-          onDemux: (end, eof) => {
-            tracker?.onDemux(message.epoch, end, eof);
-          },
-          log: this.#log,
+      const demux = (tracker: BufferTracker | null) => ({
+        epoch,
+        queueLimits: {
+          seconds: NORMAL_QUEUE_SECONDS,
+          bytes: NORMAL_QUEUE_BYTES,
+          hardBytes: limits.packetQueueBytes,
         },
-        audioOptions: {
-          sampleRate: env.sampleRate,
-          rate: env.rate,
-          epoch: message.epoch,
-          demand: this.#demand,
-          pool: this.#pool,
-          post,
-          log: this.#log,
+        onDemux: (end: number, eof: boolean) => {
+          tracker?.onDemux(epoch, end, eof);
         },
+        log: this.#log,
       });
-      signal.throwIfAborted();
-      const { demuxer, audio } = started;
-      this.#current = {
-        demuxer: demuxer as Demuxer<unknown>,
-        audio: audio ? message.audio : null,
-        video: started.video ? message.video : null,
-        setRate: audio
-          ? (rate) => {
-              audio.setRate(rate);
-            }
-          : null,
+      const audioOptions = {
+        sampleRate: env.sampleRate,
+        rate: env.rate,
+        epoch,
+        demand: this.#demand,
+        pool: this.#pool,
+        post,
+        log: this.#log,
       };
-      // 建立 pipeline 期間（seek）收到的 rate。
-      audio?.setRate(env.rate);
+      const audioSelection = externalAudio ?? mainAudio;
+      const audioOffset = audioSelection?.offset ?? 0;
       this.#log.log('debug', 'audio', '開始供料', {
-        epoch: message.epoch,
-        audio: message.audio,
+        epoch,
+        audio: audioSelection?.stream ?? null,
+        ...(externalAudio && { audioSource: external?.id }),
+        ...(audioOffset !== 0 && { audioOffset }),
         video: message.video,
-        codec: message.audio === null ? null : media.raw.streams[message.audio]?.codec,
+        codec:
+          audioSelection === null
+            ? null
+            : (externalAudio ? externalMedia : media)?.raw.streams[audioSelection.stream]?.codec,
       });
-      if (!audio) post({ type: 'eof', epoch: message.epoch }, []);
-      // 背景中以音訊取用的進度估計播放位置：音訊的 lane 空著時，demux 到的都已經被取用。
-      const audioStream = audio ? message.audio : null;
-      const played =
-        audioStream === null
-          ? null
-          : () => (demuxer.headTime(audioStream) ?? demuxer.end) - PLAYED_MARGIN_SECONDS;
-      await withDemux(demuxer, signal, () =>
-        Promise.all([
-          audio?.run(),
-          video && started.video
-            ? this.#runVideo(video, started.video, message, signal, played)
-            : undefined,
-        ]),
-      );
+      if (!audioSelection) post({ type: 'eof', epoch }, []);
+      const current: CurrentOutput = {
+        demuxers: [],
+        audio: null,
+        video: null,
+        setRate: null,
+      };
+      this.#current = current;
+      /** 音訊的 pipeline 建立之後：記下它的 demuxer（stats、背景的播放位置）並套用建立期間收到的 rate。 */
+      const onAudio = (
+        audio: AudioPipeline<unknown> | null,
+        demuxer: DemuxerView,
+        selection: AudioSelection,
+      ) => {
+        if (!audio) return;
+        current.audio = { demuxer, stream: selection.stream };
+        current.setRate = (rate) => {
+          audio.setRate(rate);
+        };
+        audio.setRate(env.rate);
+      };
+      // 背景中以音訊取用的進度估計播放位置：音訊的 lane 空著時，demux 到的都已經被取用。音訊的 pipeline 還沒建立時
+      // 以起點估計。
+      const played = audioSelection
+        ? () => {
+            const lane = current.audio;
+            const time = lane ? (lane.demuxer.headTime(lane.stream) ?? lane.demuxer.end) : null;
+            return (time === null ? startTime : time + audioOffset) - PLAYED_MARGIN_SECONDS;
+          }
+        : null;
+      // 主來源與外掛音軌各自 seek、demux：兩個 instance 的 Asyncify 互不影響，一邊的讀取掛起不擋另一邊。
+      const runMain = async () => {
+        const main = await media.startOutput({
+          audio: mainAudio?.stream ?? null,
+          audioOffset: mainAudio?.offset ?? 0,
+          video: video ? message.video : null,
+          subtitle: this.#subtitleOutput(load, message, output),
+          seek: message.seek,
+          startTime,
+          signal,
+          demux: demux(load.tracker),
+          audioOptions,
+        });
+        signal.throwIfAborted();
+        current.demuxers.push(main.demuxer);
+        if (mainAudio) onAudio(main.audio, main.demuxer, mainAudio);
+        if (main.video && message.video !== null) {
+          current.video = { demuxer: main.demuxer, stream: message.video };
+        }
+        await withDemux(main.demuxer, signal, () =>
+          Promise.all([
+            main.audio?.run(),
+            video && main.video
+              ? this.#runVideo(video, main.video, message, signal, played)
+              : undefined,
+          ]),
+        );
+      };
+      // 外掛音軌一律 seek 到 time − offset（不依賴 demuxer 目前的位置）。
+      const runExternal = async (from: LibavMedia, selection: AudioSelection) => {
+        const ext = await from.startOutput({
+          audio: selection.stream,
+          audioOffset: selection.offset,
+          video: null,
+          subtitle: null,
+          seek: true,
+          startTime,
+          signal,
+          demux: demux(external?.tracker ?? null),
+          audioOptions,
+        });
+        signal.throwIfAborted();
+        current.demuxers.push(ext.demuxer);
+        onAudio(ext.audio, ext.demuxer, selection);
+        await withDemux(ext.demuxer, signal, () => ext.audio?.run() ?? Promise.resolve());
+      };
+      await Promise.all([
+        demuxMain ? runMain() : undefined,
+        externalMedia && externalAudio ? runExternal(externalMedia, externalAudio) : undefined,
+      ]);
     } catch (error) {
       // 被取代：中止的讀取或 libav 回傳的任何錯誤都不回報。
       if (this.#output !== output) return;
@@ -636,7 +918,11 @@ export class MediaWorker {
 
   #stats(): WorkerStats {
     const env = this.#env;
-    const source = this.#load?.source?.stats?.();
+    const externals = [...this.#externals.values()];
+    // 主來源與外掛音軌的預讀、網路合計。
+    const sources = [this.#load?.source, ...externals.map((e) => e.source)].flatMap(
+      (s) => s?.stats?.() ?? [],
+    );
     const current = this.#current;
     const video = this.#load?.video ?? null;
     return {
@@ -644,24 +930,26 @@ export class MediaWorker {
       cache: {
         bytes: env?.cache.bytes ?? 0,
         limitBytes: env?.cache.limitBytes ?? 0,
-        aheadBytes: source?.aheadBytes ?? 0,
-        readaheadTarget: source?.readaheadTarget ?? 0,
-        fetching: source?.fetching ?? false,
+        aheadBytes: sum(sources.map((s) => s.aheadBytes)),
+        readaheadTarget: sum(sources.map((s) => s.readaheadTarget)),
+        fetching: sources.some((s) => s.fetching),
         hits: env?.cache.hits ?? 0,
         misses: env?.cache.misses ?? 0,
       },
       network: {
-        bytesLoaded: source?.bytesLoaded ?? 0,
-        inflight: source?.inflight ?? [],
+        bytesLoaded: sum(sources.map((s) => s.bytesLoaded)),
+        inflight: sources.flatMap((s) => s.inflight),
       },
       packetQueue: {
-        audioSeconds: current?.audio != null ? current.demuxer.seconds(current.audio) : 0,
-        videoSeconds: current?.video != null ? current.demuxer.seconds(current.video) : 0,
-        bytes: current?.demuxer.bytes ?? 0,
+        audioSeconds: current?.audio ? current.audio.demuxer.seconds(current.audio.stream) : 0,
+        videoSeconds: current?.video ? current.video.demuxer.seconds(current.video.stream) : 0,
+        bytes: sum(current?.demuxers.map((d) => d.bytes) ?? []),
       },
-      wasmHeapBytes: this.#load?.media?.heapBytes ?? 0,
+      wasmHeapBytes: sum(
+        [this.#load?.media, ...externals.map((e) => e.media)].map((m) => m?.heapBytes ?? 0),
+      ),
       video:
-        current?.video != null && video
+        current?.video && video
           ? { ...video.stats, decoded: (this.#load?.decodedBefore ?? 0) + video.stats.decoded }
           : null,
       openVideoFrames: video?.openFrames ?? 0,
@@ -689,4 +977,30 @@ export class MediaWorker {
     if (!this.#env) throw new WorkerError('INTERNAL', 'media Worker 還沒有收到 init');
     return this.#env;
   }
+}
+
+/** `start`／`select` 的選擇。 */
+function selectionOf(message: {
+  audio: number | null;
+  audioSource?: string;
+  audioOffset?: number;
+  video: number | null;
+  subtitle: number | null;
+}): Selection {
+  return {
+    audio:
+      message.audio === null
+        ? null
+        : {
+            source: message.audioSource ?? null,
+            stream: message.audio,
+            offset: message.audioOffset ?? 0,
+          },
+    video: message.video,
+    subtitle: message.subtitle,
+  };
+}
+
+function sum(values: readonly number[]): number {
+  return values.reduce((total, value) => total + value, 0);
 }

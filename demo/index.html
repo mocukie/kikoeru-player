@@ -205,6 +205,26 @@
       selectedTracks（生效之後才變）。</small
     >
     <ul id="track-list"></ul>
+    <div class="row">
+      <label for="external-media">外掛音軌</label>
+      <select id="external-media"></select>
+      <input id="external-url" type="url" placeholder="或 URL（填了就優先使用）" />
+      <label for="external-offset">offset（秒）</label>
+      <input id="external-offset" type="number" step="0.001" value="0" />
+      <button id="add-external" type="button">addExternalAudio</button>
+    </div>
+    <div class="row">
+      <label for="offset-track">音軌</label>
+      <select id="offset-track"></select>
+      <label for="offset-value">offset（秒）</label>
+      <input id="offset-value" type="number" step="0.001" value="0" />
+      <button id="set-offset" type="button">setAudioOffset</button>
+      <button id="remove-external" type="button">removeExternalAudio</button>
+    </div>
+    <small
+      >外掛音軌加入後出現在上面的音軌選單（不自動選用）；offset
+      正值表示聲音較晚出現。下拉選單選了音軌時，offset 欄位顯示它目前的值。</small
+    >
 
     <h2>影片</h2>
     <canvas id="video" width="320" height="180"></canvas>
