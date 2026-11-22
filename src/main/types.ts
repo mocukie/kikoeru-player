@@ -162,7 +162,10 @@ export interface Engine extends EventTarget {
   readonly paused: boolean;
   /**
    * 目前聽到的位置（秒）。播放中依音訊時鐘內插，已扣除輸出延遲：以 `AudioContext.getOutputTimestamp()` 換算為主，
-   * 取不到（不支援或回傳 0）時依序用 `outputLatency`、`baseLatency`。
+   * 取不到（不支援或回傳 0）時依序用 `outputLatency`、`baseLatency`。例外：AudioContext 開始輸出後約 0.15 秒內只扣
+   * `baseLatency`，避開 Firefox 第一次查詢輸出延遲時可能發生的死鎖（#76）。context 在 load 時就開始輸出時不受影響；
+   * 在那之內就開始播放時（例如第一次 `play()` 才解鎖 context），開始播放後約 0.15 秒內的 `currentTime` 會比聽到的聲音超前
+   * 一個輸出延遲。
    * pause 的淡出結束、buffering 時，停在時鐘停住的位置；剛停住的一個輸出延遲內聽到的還是之前的 sample，
    * 所以會再前進一小段才停住，不會超前聽到的聲音。
    */

@@ -40,7 +40,7 @@ Demo 頁的「測試媒體」來自 `test/media/out/`：`pnpm media:gen` 產生 
 ### Firefox
 
 - [ ] 真實喇叭與藍牙耳機之間切換輸出裝置時，播放繼續、`currentTime` 不跳。
-- [ ] **背景播放模組與 AudioContext 同時輸出**：勾選「背景播放模組」（預設），反覆 play、pause、seek：beep 仍對準 `currentTime`、沒有斷續（靜音 anchor 與 `AudioContext` 同時播放）。
+- [ ] **背景播放模組與 AudioContext 同時輸出**：勾選「背景播放模組」（預設），反覆 play、pause、seek：beep 仍對準 `currentTime`、沒有斷續（靜音 anchor 與 `AudioContext` 同時播放）。重新整理後從 `ready` 按 play 重複約 15 次，頁面都沒有卡住（#76；開始播放的那一刻 anchor 與 `AudioContext` 同時開始）。
 - [ ] 連續播放 30 分鐘以上（手動組 `pnpm media:gen:manual` 的長檔）不中斷、不漂移。
 
 ### Safari
