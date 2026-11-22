@@ -15,7 +15,7 @@
 
 ## Consequences
 
-- 「現在聽到的位置」以 `getOutputTimestamp()` 換算為主，取不到時依序用 `currentTime − outputLatency`、`currentTime − baseLatency`。WebKit 與 Firefox 的 `contextTime` 是否已經扣掉裝置延遲，要靠實機驗證；如果沒有扣，就在該瀏覽器上自己扣。v1 不提供裝置層級的延遲補償。
+- 「現在聽到的位置」以 `getOutputTimestamp()` 換算為主，取不到時依序用 `currentTime − outputLatency`、`currentTime − baseLatency`。WebKit 與 Firefox 的 `contextTime` 是否已經扣掉裝置延遲，要靠實機驗證；如果沒有扣，就在該瀏覽器上自己扣。v1 不提供裝置層級的延遲補償。AudioContext 開始 render 滿約 150 ms（在那之前就開始播放時，改為開始播放滿約 150 ms）之前不讀 `getOutputTimestamp()`、`outputLatency`，只用 `baseLatency`，到時由音訊輸出先讀一次 `outputLatency`：Gecko 第一次查詢輸出延遲時持有 graph 的 monitor 同步呼叫 cubeb，碰上同時開始的另一個音訊串流（背景播放模組的 anchor）時會死鎖（#76），延後到串流都已啟動之後再查，之後 Gecko 使用快取。
 - worklet 向 Worker 供料是事件驅動的：每個 render quantum 檢查 ring 的水位（加上已要求、還沒收到的 frame），低於 `refillMs`（flush 或 starved 之後是 `targetMs`）時送出增量的 `need`，要求補到 `targetMs`。#35 原本寫的「約每 50 ms 回報消耗量與水位」沒有採用：Worker 只需要知道還要送多少，定期回報在水位充足時全是多餘的訊息，而以增量要求加上「已要求」的計數，不會因為回報與供料的時間差而重複要求。給主執行緒的水位與 underrun 次數改由約每 250 ms 一次的 clock（以及每次狀態回報之前的 clock）帶著，供 `getStats().audio` 使用。
 - underrun 時 worklet 淡出，進入 starved，等 ring 補回目標水位才淡入。starved 超過約 250 ms 才進入 `buffering`；更短的只計入 `getStats().audio.underruns`。
 - media Worker 維護 time map：輸出依速度分段，PCM chunk 帶第一個 frame 的媒體時間與速度（不跨段），worklet 以它推進時鐘並在速度改變的那個 frame 送出 clock，`currentTime` 以 clock 的速度內插。沒有 PCM（`eof` 之後的靜音）時，worklet 以主執行緒告訴它的速度推進。`atempo` 的輸出以 window 為單位疊接，聲音相對 time map 有最多約一個 window 的偏移（靜音之後的起點尤其明顯），E2E 的容差另外訂定。

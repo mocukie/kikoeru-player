@@ -327,3 +327,173 @@ test('setGain：以 setTargetAtTime 平滑地改變音量', async () => {
   expect(left.at(-1)).toBeCloseTo(0.125, 3);
   expect(countBetween(steady, 0.125 + 1e-3, 0.5 - 1e-3)).toBeGreaterThan(audio.sampleRate / 200);
 });
+
+type LatencyApi = 'getOutputTimestamp' | 'outputLatency';
+
+/** 讀取延遲相關 API 的紀錄：哪一個，以及讀取當下的 context 時間。 */
+interface LatencyRead {
+  api: LatencyApi;
+  contextTime: number;
+}
+
+/**
+ * 在包住 `getOutputTimestamp()` 與 `outputLatency` 的情況下執行 `body`，記下每次讀取；`zeroReads` 次之前的
+ * `outputLatency` 回傳 0（扮演 Gecko 還查不到延遲）。結束時還原。
+ */
+async function withLatencySpy(
+  body: (reads: LatencyRead[]) => Promise<void>,
+  zeroReads = 0,
+): Promise<void> {
+  const reads: LatencyRead[] = [];
+  const proto = AudioContext.prototype;
+  // 原本的方法與 getter 之後以 call() 帶入正確的 this。
+  // eslint-disable-next-line @typescript-eslint/unbound-method
+  const getOutputTimestamp = proto.getOutputTimestamp;
+  const latency = Object.getOwnPropertyDescriptor(proto, 'outputLatency');
+  proto.getOutputTimestamp = function (this: AudioContext) {
+    reads.push({ api: 'getOutputTimestamp', contextTime: this.currentTime });
+    return getOutputTimestamp.call(this);
+  };
+  if (latency?.get) {
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const get = latency.get;
+    let latencyReads = 0;
+    Object.defineProperty(proto, 'outputLatency', {
+      ...latency,
+      get(this: AudioContext) {
+        reads.push({ api: 'outputLatency', contextTime: this.currentTime });
+        const value = get.call(this) as number;
+        return latencyReads++ < zeroReads ? 0 : value;
+      },
+    });
+  }
+  try {
+    await body(reads);
+  } finally {
+    proto.getOutputTimestamp = getOutputTimestamp;
+    if (latency) Object.defineProperty(proto, 'outputLatency', latency);
+  }
+}
+
+/** `resume()` 音訊輸出，並在它同步呼叫的 `AudioContext.resume()` 內取得 context。 */
+function resumeContext(audio: AudioOutput): AudioContext {
+  const proto = AudioContext.prototype;
+  // eslint-disable-next-line @typescript-eslint/unbound-method
+  const resume = proto.resume;
+  const contexts: AudioContext[] = [];
+  proto.resume = function (this: AudioContext) {
+    contexts.push(this);
+    return resume.call(this);
+  };
+  try {
+    // 測試結束時 close() 可能早於 resume 完成（Firefox 會 reject）；結果不重要。
+    audio.resume().catch(() => undefined);
+  } finally {
+    proto.resume = resume;
+  }
+  const [context] = contexts;
+  if (!context) throw new Error('resume() 沒有呼叫 AudioContext.resume()');
+  return context;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// #76：Gecko 第一次查詢輸出延遲時，碰上同時開始的另一個音訊串流會死鎖。以下的「預熱」是音訊輸出第一次讀 outputLatency。
+test('context 開始 render 後約 150 ms 內不讀 getOutputTimestamp()／outputLatency，聽到的位置只扣 baseLatency', () =>
+  withLatencySpy(async (reads) => {
+    const audio = open();
+    const context = resumeContext(audio);
+    let checked = 0;
+    const deadline = performance.now() + 3000;
+    // 一直換算到預熱為止。
+    while (reads.length === 0) {
+      if (performance.now() > deadline) throw new Error('等待逾時');
+      // Chromium 的 currentTime 在同一個 task 內也可能前進一個 render quantum：以前後兩次讀到的值夾住。
+      const { sampleRate, baseLatency } = context;
+      const before = context.currentTime;
+      const heard = audio.heardFrame();
+      const after = context.currentTime;
+      if (heard !== null) {
+        expect(heard).toBeGreaterThanOrEqual(Math.max(0, before - baseLatency) * sampleRate - 1e-6);
+        expect(heard).toBeLessThanOrEqual(Math.max(0, after - baseLatency) * sampleRate + 1e-6);
+        expect(Math.abs(audio.outputLatency() - baseLatency)).toBeLessThanOrEqual(128 / sampleRate);
+        checked++;
+      }
+      await sleep(20);
+    }
+    // 換算了約 150 ms（每 20 ms 一次）。
+    expect(checked).toBeGreaterThan(4);
+    expect(reads[0]).toMatchObject({ api: 'outputLatency' });
+    expect(reads[0]?.contextTime).toBeGreaterThan(0.12);
+  }));
+
+test('context 開始 render 約 150 ms 後，沒有人換算也先預熱；之後換算改用 getOutputTimestamp()', () =>
+  withLatencySpy(async (reads) => {
+    const audio = open();
+    resumeContext(audio);
+    await until(() => reads.length > 0, 3000);
+    expect(reads[0]).toMatchObject({ api: 'outputLatency' });
+    // 讀取時 context 已經 render 了約 150 ms（看到 render 開始最多晚一次 50 ms 的輪詢）。
+    expect(reads[0]?.contextTime).toBeGreaterThan(0.12);
+    expect(reads[0]?.contextTime).toBeLessThan(0.5);
+
+    audio.heardFrame();
+    expect(reads.map((r) => r.api)).toContain('getOutputTimestamp');
+  }));
+
+for (const [trigger, start] of [
+  [
+    '換算聽到的位置',
+    (audio: AudioOutput) => {
+      expect(audio.heardFrame()).not.toBeNull();
+    },
+  ],
+  [
+    '送出 play',
+    (audio: AudioOutput) => {
+      audio.post({ type: 'play', epoch: 1 });
+    },
+  ],
+] as const) {
+  test(`預熱之前開始播放（${trigger}）：開始播放滿約 150 ms 才預熱`, () =>
+    withLatencySpy(async (reads) => {
+      const audio = open();
+      const context = resumeContext(audio);
+      // render 約 100 ms 時開始播放，扮演在預熱之前開始播放（同時 anchor 也開始）。
+      // 只看 render 開始的話，預熱最晚在 render 約 200 ms 時（150 ms 加上一次 50 ms 的輪詢）。
+      await until(() => context.currentTime > 0.1, 5000);
+      expect(reads).toEqual([]);
+      start(audio);
+      const startedAt = context.currentTime;
+
+      await until(() => reads.length > 0, 3000);
+      expect(reads[0]).toMatchObject({ api: 'outputLatency' });
+      expect(reads[0]?.contextTime).toBeGreaterThan(startedAt + 0.12);
+    }));
+}
+
+test('預熱讀到 0 時（Gecko 不快取 0）稍後再讀，讀到非 0 之前換算不讀 getOutputTimestamp()', () =>
+  withLatencySpy(async (reads) => {
+    const audio = open();
+    resumeContext(audio);
+    // 一直換算，直到第 3 次讀 outputLatency（前 2 次是 0）之後。
+    await until(() => {
+      audio.heardFrame();
+      return reads.some((r) => r.api === 'getOutputTimestamp');
+    }, 3000);
+    const firstTimestamp = reads.findIndex((r) => r.api === 'getOutputTimestamp');
+    expect(reads.slice(0, firstTimestamp).map((r) => r.api)).toEqual([
+      'outputLatency',
+      'outputLatency',
+      'outputLatency',
+    ]);
+  }, 2));
+
+test('預熱之前 disconnect()：之後不再預熱', () =>
+  withLatencySpy(async (reads) => {
+    const audio = open();
+    resumeContext(audio);
+    audio.disconnect();
+    await sleep(500);
+    expect(reads).toEqual([]);
+  }));

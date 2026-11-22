@@ -101,9 +101,14 @@ export interface AudioOutput {
   /**
    * 此刻聽到的 sample 的 context frame（與 worklet 的 `currentFrame` 同一條軸）：以 `getOutputTimestamp()` 換算為主，
    * 取不到時依序用 `outputLatency`、`baseLatency`（見 `heardContextTime()`）。context 還沒開始時為 null。
+   * 真實的音訊輸出在 context 開始 render 後約 150 ms 才第一次讀 `getOutputTimestamp()`、`outputLatency`（預熱，#76），
+   * 在那之前只扣 `baseLatency`；預熱之前的呼叫視為開始播放，預熱延到它之後。
    */
   heardFrame(): number | null;
-  /** 輸出延遲（秒）：sample 進入 audio graph 到被聽到的時間；`getStats().audio.outputLatencyMs` 的來源。 */
+  /**
+   * 輸出延遲（秒）：sample 進入 audio graph 到被聽到的時間；`getStats().audio.outputLatencyMs` 的來源。換算方式與
+   * 預熱同 `heardFrame()`。
+   */
   outputLatency(): number;
   /**
    * worklet 後面的 `GainNode` 的值（音量與靜音）。`smooth` 時以 `setTargetAtTime`（time constant 約 10 ms）趨近，
