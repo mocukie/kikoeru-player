@@ -65,6 +65,16 @@ feat: add http source with range requests
 
 `pnpm verify` 只跑 Chromium；CI 另外要求 Firefox 通過。CI 的 Firefox 失敗時，用 `pnpm verify:docker` 在本機重現（見[測試規範「本機與 CI」](docs/testing.md#本機與-ci)）。
 
+### 多 ticket 的 spec（`/implement-spec`）
+
+`/implement-spec` 把主 issue（spec）與它全部子 issue（ticket）收在一條 integration branch 與一個 PR。以下各點取代上節的對應步驟，其餘照上節。orchestrator 派工時，在 implementer 與 merger subagent 的 prompt 指向本節。
+
+- **integration branch**：從最新 `origin/main` 建立，以 spec 的 issue number 命名，例如 `feat/80-engine-v2`。整個 spec 只開這一個 PR：base 為 `main`，body 每行一個 `Closes #<n>`，涵蓋 spec 與每張 ticket。第一張 ticket squash 進來後開 draft PR；全部 ticket 完成、code review 的修正也併入且 `pnpm verify` 通過後，才標成 ready for review。
+- **ticket branch**：以 integration branch 的 tip 為基底，命名 `<前綴>/<ticket number>-<描述>`，只存在本機，交付方式是 squash 進 integration branch。完成前先把 integration branch 的 tip merge 進 ticket branch，並跑過這張 ticket 相關的測試。
+- **squash merge**：merger 以 `git merge --squash <ticket branch>` 併入 integration branch，再提交成一個符合「Commit message」規範的 commit，說明段寫上 `#<ticket number>`；integration branch 上因此每張 ticket 一個 commit。之後以 `git branch -D` 刪除該 ticket branch。integration branch 合入 `main` 仍照上節用 merge commit。
+- **frontier**：依已 squash 進 integration branch 的 ticket 計算。GitHub 的 `blocked_by` 要等 blocker close 才更新，而 ticket 在 PR 合併時才 close，run 進行中不可靠。
+- **worktree**：worktree 不含 gitignored 的 `node_modules/`、`wasm/dist/` 與 `test/media/out/`。implementer 在 worktree 開始前依 [README「環境」](README.md#環境)備齊，或從主 checkout 複製後兩者，否則 browser mode 與 E2E 會在開始前停下。
+
 ### 語言
 
 - 文件、issue 與 code comment 使用中文（繁體）。
@@ -84,7 +94,7 @@ feat: add http source with range requests
 ### 實作 issue 的交接
 
 - 主 issue 與它的子 issue，title 都以同一個短代號開頭，例如 `[engine-v1] HTTP 來源與 Range 快取`。代號用簡短的英文 kebab-case，每個主 issue 一個，新 feature 開主 issue 時一併決定。
-- 一張 issue 對應一個 branch 和一個 PR，PR body 寫 `Closes #<n>`。branch 命名見上方「Branch」。
+- 一張 issue 對應一個 branch 和一個 PR，PR body 寫 `Closes #<n>`。branch 命名見上方「Branch」。以 `/implement-spec` 實作整個 spec 時見上方「多 ticket 的 spec」。
 - issue 與文件不一致時以 [README 文件索引](README.md#文件索引)中的權威文件為準；發現文件有錯時，在同一個 PR 修改文件並在 PR description 說明。
 - 實作 issue 不在 README 加入功能敘述；公開 API 的行為寫在型別的 TSDoc。
 
