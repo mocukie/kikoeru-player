@@ -194,6 +194,96 @@ describe('外掛音軌的輸出', () => {
     expect(driver.messages.filter((m) => m.type === 'error' || m.type === 'crash')).toEqual([]);
   });
 
+  test('外掛音軌＋影片、背景播到遠超主來源停住的位置：回到前景直接 seek 主來源且不中斷音訊', async () => {
+    const { driver } = await withExternal();
+    driver.post({ type: 'videosuspend', suspended: true, time: 0 });
+    driver.post({
+      type: 'start',
+      epoch: 1,
+      time: 0,
+      audio: 0,
+      audioSource: 'ext:1',
+      video: 0,
+      subtitle: null,
+    });
+    // 外掛音軌在背景播到 12 秒，主來源的影片 demuxer 停在 2 秒附近。
+    const before = await driver.collect(1, 12 * RATE);
+    expect(before.left).toHaveLength(12 * RATE);
+    expect(driver.frames.filter((f) => f.epoch === 1)).toHaveLength(0);
+    // 回到前景於 12 秒：主來源直接 seek 到 12 秒並輸出該位置附近的 frame，音訊同 epoch 照常續播。
+    driver.post({ type: 'videosuspend', suspended: false, time: 12 });
+    await expect.poll(() => driver.frames.filter((f) => f.epoch === 1).length).toBeGreaterThan(0);
+    expect(driver.frames.find((f) => f.epoch === 1)?.time).toBeCloseTo(12, 1);
+    const after = await driver.collect(1, 2 * RATE);
+    expect(after.time).toBeCloseTo(12, 3);
+    expect(after.left.length).toBeGreaterThanOrEqual(2 * RATE);
+    expect(driver.messages.filter((m) => m.type === 'error' || m.type === 'crash')).toEqual([]);
+  });
+
+  test('HTTP 主來源＋外掛音軌在背景播放：凍結的主來源不拖累 buffer 進度', async () => {
+    const driver = await WorkerDriver.init(inPage(), { limits: { readaheadSeconds: 1 } });
+    await driver.load({ kind: 'http', url: new URL(`/media/${MAIN}`, location.href).href });
+    await driver.addAudio('ext:1', {
+      kind: 'http',
+      url: new URL(`/media/${EXTERNAL}`, location.href).href,
+    });
+    driver.post({ type: 'videosuspend', suspended: true, time: 0 });
+    driver.post({
+      type: 'start',
+      epoch: 1,
+      time: 0,
+      audio: 0,
+      audioSource: 'ext:1',
+      video: 0,
+      subtitle: null,
+    });
+    await driver.collect(1, 10 * RATE);
+    const latest = driver.messages.findLast((m) => m.type === 'buffer' && m.epoch === 1);
+    expect(latest?.type === 'buffer' ? latest.end : 0).toBeGreaterThanOrEqual(10);
+  });
+
+  test('HTTP 主來源搭配 bytes 外掛音軌：有或沒有影片軌時 buffer 終點都不是 NaN', async () => {
+    const driver = await WorkerDriver.init(inPage());
+    const media = await driver.load({
+      kind: 'http',
+      url: new URL(`/media/${MAIN}`, location.href).href,
+    });
+    await driver.addAudio('ext:1', await bytes(EXTERNAL));
+    // 只播本機外掛音軌（不選影片）。
+    driver.post({
+      type: 'start',
+      epoch: 1,
+      time: 0,
+      audio: 0,
+      audioSource: 'ext:1',
+      video: null,
+      subtitle: null,
+    });
+    await driver.collect(1, RATE);
+    const extOnly = driver.messages.filter((m) => m.type === 'buffer').filter((m) => m.epoch === 1);
+    expect(extOnly.length).toBeGreaterThan(0);
+    expect(extOnly.every((m) => !Number.isNaN(m.end))).toBe(true);
+    expect(extOnly.at(-1)).toMatchObject({ end: Infinity, eof: true });
+
+    // HTTP 影片 + 本機外掛音軌：兩邊都 eof 時合併結果仍是有限數（不是 NaN）。
+    driver.post({
+      type: 'select',
+      epoch: 2,
+      time: 0,
+      audio: 0,
+      audioSource: 'ext:1',
+      video: 0,
+      subtitle: null,
+    });
+    await driver.collect(2, RATE);
+    await expect
+      .poll(() => driver.messages.findLast((m) => m.type === 'buffer' && m.epoch === 2 && m.eof))
+      .toBeDefined();
+    const merged = driver.messages.filter((m) => m.type === 'buffer').filter((m) => m.epoch === 2);
+    expect(merged.every((m) => !Number.isNaN(m.end))).toBe(true);
+    expect(merged.at(-1)?.end).toBeCloseTo(media.duration, 1);
+  });
+
   test('seek 到外掛音軌的 0 點之前：從來源開頭解碼，到 0 點之前都是靜音', async () => {
     const { driver } = await withExternal();
     driver.post({

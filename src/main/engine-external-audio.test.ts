@@ -644,4 +644,33 @@ describe('競態', () => {
     await second;
     expect(l.engine.tracks[0]).toMatchObject({ offset: -0.5 });
   });
+
+  it('HTTP 主來源收到 end: Infinity（本機外掛音軌）：buffered 夾到媒體 duration，duration 未知時不輸出 Infinity', async () => {
+    const l = await loaded();
+    const [start] = l.worker.messages('start');
+    l.worker.reply({
+      type: 'buffer',
+      epoch: start?.epoch ?? NaN,
+      end: Infinity,
+      eof: true,
+      fetching: false,
+    });
+    expect(l.engine.buffered).toEqual([{ start: 0, end: media.duration }]);
+
+    const unknown = l.engine.load(source);
+    const next = l.deps.workers.last;
+    await next.probe({ ...media, duration: NaN });
+    const nextStart = await next.next('start');
+    frame(next, 0, nextStart.epoch);
+    l.deps.audio.reply({ type: 'paused' });
+    await unknown;
+    next.reply({
+      type: 'buffer',
+      epoch: nextStart.epoch,
+      end: Infinity,
+      eof: true,
+      fetching: false,
+    });
+    expect(l.engine.buffered).toEqual([]);
+  });
 });

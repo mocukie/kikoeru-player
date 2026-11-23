@@ -291,4 +291,48 @@ describe('播放中解碼失敗，退回只播音訊', () => {
     deps.audio.reply({ type: 'playing' });
     expect(await seeking).toBe(3);
   });
+
+  it('trackschange 的 listener 內改選另一條影片軌：不會提前解除新軌的影片等待', async () => {
+    const twoVideos: ProbedMedia = {
+      ...videoMedia(),
+      tracks: [
+        ...videoMedia().tracks,
+        {
+          kind: 'video',
+          streamIndex: 2,
+          codec: 'vp9',
+          codecString: 'vp09.00.20.08',
+          supported: true,
+          codedWidth: 640,
+          codedHeight: 360,
+          display: { width: 640, height: 360, rotation: 0 },
+          default: false,
+          forced: false,
+        },
+      ],
+    };
+    const { engine, deps, worker } = await playing({ media: twoVideos });
+    const backup = engine.tracks.find((t) => t.kind === 'video' && t.streamIndex === 2);
+    expect(backup).toBeDefined();
+    const switching: Promise<void>[] = [];
+    engine.addEventListener(
+      'trackschange',
+      () => {
+        if (backup) switching.push(engine.selectTracks({ video: backup.id }));
+      },
+      { once: true },
+    );
+    decodeFailed(worker);
+    const select = await worker.next('select');
+    expect(select).toMatchObject({ video: 2 });
+    // worklet 在新軌還沒收到 frame 之前應維持 pause（等待新軌首張 frame），不應被舊的 #onVideoReady() 提前送出 play。
+    expect(
+      deps.audio.received.findLast((m) => m.type === 'play' || m.type === 'pause'),
+    ).toMatchObject({ type: 'pause' });
+    frame(worker, 1, select.epoch);
+    expect(deps.audio.received.at(-1)).toMatchObject({ type: 'play', epoch: select.epoch });
+    deps.audio.reply({ type: 'playing', epoch: select.epoch });
+    await switching[0];
+    expect(engine.selectedTracks.video).toBe(backup?.id);
+  });
 });

@@ -594,11 +594,12 @@ describe('主來源音軌的 decoder 開不起來（不是換軌）', () => {
     return { engine, deps, worker, loading, start, errors };
   }
 
-  it('有可播的影片軌：該音軌標為不支援（codec），以新的 epoch、audio: null 重新 start，load 成功、只播影片', async () => {
+  it('有可播的影片軌：該音軌標為不支援（codec），以新的 epoch、audio: null 送出 select，load 成功、只播影片', async () => {
     const { engine, deps, worker, loading, start, errors } = await failOnLoad();
-    const restart = await worker.next('start', 2);
+    const restart = await worker.next('select');
     expect(restart.epoch).toBeGreaterThan(start.epoch);
     expect(restart).toMatchObject({ audio: null, video: 1, time: 0 });
+    expect(worker.messages('start')).toHaveLength(1);
     frame(worker, 0, restart.epoch);
     deps.audio.reply({ type: 'paused' });
     const info = await loading;
@@ -615,7 +616,7 @@ describe('主來源音軌的 decoder 開不起來（不是換軌）', () => {
     expect(engine.error).toBeNull();
     // App 可以自己換到另一條音軌。
     const selecting = engine.selectTracks({ audio: id.audioZh });
-    const select = await worker.next('select');
+    const select = await worker.next('select', 2);
     expect(select).toMatchObject({ audio: 2, video: 1 });
     frame(worker, 0, select.epoch);
     deps.audio.reply({ type: 'paused' });
@@ -628,11 +629,12 @@ describe('主來源音軌的 decoder 開不起來（不是換軌）', () => {
     await expect(loading).rejects.toMatchObject({ code: 'CODEC_UNSUPPORTED', fatal: true });
     expect(engine.state).toBe('error');
     expect(worker.messages('start')).toHaveLength(1);
+    expect(worker.messages('select')).toHaveLength(0);
   });
 
   it('退回途中 load() 換檔：舊的 load 以 AbortError reject，新的 load 照常完成', async () => {
     const { engine, deps, worker, loading } = await failOnLoad();
-    await worker.next('start', 2);
+    await worker.next('select');
     const rejected = loading.catch((error: unknown) => error);
     const next = engine.load(source);
     expect(await rejected).toMatchObject({ name: 'AbortError' });
@@ -652,11 +654,12 @@ describe('主來源音軌的 decoder 開不起來（不是換軌）', () => {
 
   it('退回途中 destroy：load 以 AbortError reject，不再送出 start', async () => {
     const { engine, worker, loading } = await failOnLoad();
-    await worker.next('start', 2);
+    await worker.next('select');
     const rejected = loading.catch((error: unknown) => error);
     await engine.destroy();
     expect(await rejected).toMatchObject({ name: 'AbortError' });
-    expect(worker.messages('start')).toHaveLength(2);
+    expect(worker.messages('start')).toHaveLength(1);
+    expect(worker.messages('select')).toHaveLength(1);
   });
 
   it('已經發布媒體之後：標為不支援並發出 trackschange，以 audio: null 重新輸出，發出非致命的 CODEC_UNSUPPORTED', async () => {
@@ -682,6 +685,41 @@ describe('主來源音軌的 decoder 開不起來（不是換軌）', () => {
     expect(engine.error).toBeNull();
   });
 
+  it('已經發布媒體之後、trackschange 的 listener 內改選另一條音軌：不被 audio: null 覆寫', async () => {
+    const { engine, deps, worker } = await loaded();
+    const fallback: Promise<void>[] = [];
+    engine.addEventListener(
+      'trackschange',
+      () => {
+        fallback.push(engine.selectTracks({ audio: id.audioZh }));
+      },
+      { once: true },
+    );
+    const [start] = worker.messages('start');
+    worker.reply({ type: 'audiofailed', epoch: start?.epoch ?? NaN, source: null, error: failure });
+    expect(worker.messages('select')).toHaveLength(1);
+    expect(worker.messages('select')[0]).toMatchObject({ audio: 2, video: 1 });
+    frame(worker, 0);
+    deps.audio.reply({ type: 'paused' });
+    await fallback[0];
+    expect(engine.selectedTracks).toEqual({ audio: id.audioZh, video: id.video1, subtitle: null });
+  });
+
+  it('只換影片軌途中原本的音軌失敗：更新換軌中的選擇為 audio: null，保留新的影片軌', async () => {
+    const { engine, deps, worker } = await loaded();
+    const selecting = engine.selectTracks({ video: id.video2 });
+    const first = await worker.next('select');
+    expect(first).toMatchObject({ audio: 0, video: 3 });
+    worker.reply({ type: 'audiofailed', epoch: first.epoch, source: null, error: failure });
+    const retry = await worker.next('select', 2);
+    expect(retry).toMatchObject({ audio: null, video: 3 });
+    frame(worker, 0, retry.epoch);
+    deps.audio.reply({ type: 'paused' });
+    await selecting;
+    expect(engine.selectedTracks).toEqual({ audio: null, video: id.video2, subtitle: null });
+    expect(engine.tracks.find((t) => t.id === id.audioJa)?.supported).toBe(false);
+  });
+
   it('已經發布媒體之後、trackschange 的 listener 內 destroy：不再重新輸出，也不發出 error', async () => {
     const { engine, worker } = await loaded();
     const errors: EngineError[] = [];
@@ -692,6 +730,30 @@ describe('主來源音軌的 decoder 開不起來（不是換軌）', () => {
     await settle();
     expect(worker.messages('select')).toEqual([]);
     expect(errors).toEqual([]);
+  });
+});
+
+describe('load 後只換音軌不殘留影片畫面等待', () => {
+  it('load 時影片首張 frame 晚於起點，load 完成後只換音軌不等 2 秒逾時即 resolve', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const deps = createFakeDeps();
+    const engine = createEngineWith(deps);
+    const loading = engine.load(source);
+    const worker = deps.workers.last;
+    await worker.probe(media);
+    const start = await worker.next('start');
+    // 起點是 0，第一張 frame 晚於時鐘（1 秒），尚未畫出。
+    frame(worker, 1, start.epoch);
+    deps.audio.reply({ type: 'paused' });
+    await loading;
+    expect(engine.videoSize).toBeNull();
+
+    const selecting = engine.selectTracks({ audio: id.audioZh });
+    const select = await worker.next('select');
+    frame(worker, 1, select.epoch);
+    deps.audio.reply({ type: 'paused' });
+    await selecting;
+    expect(engine.selectedTracks.audio).toBe(id.audioZh);
   });
 });
 

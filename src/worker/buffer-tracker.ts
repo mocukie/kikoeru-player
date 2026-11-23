@@ -91,7 +91,16 @@ export class BufferTracker {
     const { duration, size } = this.#options;
     const epoch = this.#epoch;
     const source = this.#cached;
-    if (!source) return { type: 'buffer', epoch, end: duration, eof: true, fetching: false };
+    if (!source) {
+      // bytes／blob 整個在本機；未指定 duration（外掛音軌、另開 instance）時以 Infinity 表示不限制合併後的終點。
+      return {
+        type: 'buffer',
+        epoch,
+        end: Number.isFinite(duration) ? duration : Infinity,
+        eof: true,
+        fetching: false,
+      };
+    }
     const ahead = source.aheadBytes;
     const position = source.position;
     const eof = this.#demuxEof || (position !== null && position + ahead >= size);

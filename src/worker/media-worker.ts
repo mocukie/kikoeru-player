@@ -95,10 +95,22 @@ type DemuxerView = Pick<Demuxer<unknown>, 'seconds' | 'bytes'>;
 
 /** 目前輸出的 demuxer 與選用的軌（各來源的 pipeline 建立之後才填上）。 */
 interface CurrentOutput {
-  demuxers: DemuxerView[];
+  epoch: number;
+  mainDemuxer: DemuxerView | null;
+  separateDemuxer: DemuxerView | null;
   audio: { demuxer: DemuxerView; stream: number; pipeline: AudioPipeline<unknown> } | null;
   video: { demuxer: DemuxerView; stream: number } | null;
   setRate: ((rate: number) => void) | null;
+  /**
+   * 主來源只解碼影片（音軌在獨立 instance）時的主來源 tracker：背景暫停期間主來源 demuxer 停在 +2 秒，合併進度時
+   * 忽略它，避免拖累正在播放的獨立音軌的 `buffered` 與 buffering 恢復。
+   */
+  frozenTracker: BufferTracker | null;
+  /**
+   * 主來源只解碼影片（音軌在獨立 instance）且回到前景時：若主來源 demux 進度落後於恢復位置 `time`，重開主來源並直接
+   * seek 到 `time`（不中斷獨立音軌），回傳 true；不需重開時回傳 false。
+   */
+  resumeMainVideo: ((time: number) => boolean) | null;
 }
 
 /** 輸出的音軌：來源（null 是主來源，否則是外掛音軌的 id）、它在來源內的 stream index 與音軌 offset。 */
@@ -275,10 +287,11 @@ export class MediaWorker {
         break;
       }
       case 'start': {
+        const started = this.#tracks !== undefined;
         this.#tracks = selectionOf(message);
         const { epoch, time } = message;
-        // 開檔後 demuxer 在開頭；從其他位置開始要先 seek。
-        this.#startOutput({ epoch, time, ...this.#tracks, seek: time > 0 });
+        // 開檔後 demuxer 在開頭；從其他位置開始（或已經 start 過）要先 seek。
+        this.#startOutput({ epoch, time, ...this.#tracks, seek: started || time > 0 });
         break;
       }
       case 'seek':
@@ -355,8 +368,14 @@ export class MediaWorker {
       suspended ? '背景：關閉 VideoDecoder，只播聲音' : '回到前景：從 keyframe 重建 VideoDecoder',
       { ...(!suspended && { time }), decoding: video != null },
     );
-    if (suspended) video?.suspend();
-    else video?.resume(time);
+    if (suspended) {
+      video?.suspend();
+      if (this.#current) this.#emitBuffer(this.#current.epoch);
+      return;
+    }
+    const restarted = this.#current?.resumeMainVideo?.(time) ?? false;
+    video?.resume(time);
+    if (!restarted && this.#current) this.#emitBuffer(this.#current.epoch);
   }
 
   #onWorkletMessage(message: WorkletToWorkerMessage): void {
@@ -560,11 +579,25 @@ export class MediaWorker {
   }
 
   /**
-   * 主來源音軌的 decoder 開不起來：停止這次輸出並以非致命的 `audiofailed` 回報。換音軌時由主執行緒換回原本的軌，不是換軌
-   * 時由主執行緒把該軌標為不支援、以 `audio: null` 重新 start（只播影片）；Worker 不自行改成只輸出影片。
+   * 主來源音軌的 decoder 開不起來：停止這個 epoch 的輸出並以非致命的 `audiofailed` 回報。換音軌時由主執行緒換回原本的軌，
+   * 不是換軌時由主執行緒把該軌標為不支援、以 `audio: null` 重新輸出（只播影片）；Worker 不自行改成只輸出影片。
    */
-  #audioDecoderFailed(epoch: number, error: AudioDecoderError): void {
+  #audioDecoderFailed(
+    load: Load,
+    epoch: number,
+    output: AbortController,
+    error: AudioDecoderError,
+  ): void {
     this.#log.log('warn', 'audio', error.message, { epoch });
+    if (this.#tracks?.audio?.source === null) {
+      this.#tracks = { ...this.#tracks, audio: null };
+    }
+    if (this.#output === output) {
+      // 這個 epoch 的主來源輸出停止（含另開 instance 失敗時正在 demux 影片的 runMain）。
+      this.#stopOutput();
+      load.media?.abortReads();
+      load.source?.abort?.();
+    }
     this.#deps.postMessage({
       type: 'audiofailed',
       epoch,
@@ -715,21 +748,36 @@ export class MediaWorker {
   #onBuffer(tracker: BufferTracker, message: WorkerBufferMessage): void {
     if (!this.#buffers.has(tracker)) return;
     this.#buffers.set(tracker, message);
+    this.#emitBuffer(message.epoch);
+  }
+
+  #emitBuffer(epoch: number): void {
+    const frozen =
+      this.#videoSuspended && this.#buffers.size > 1
+        ? (this.#current?.frozenTracker ?? null)
+        : null;
     const reported: WorkerBufferMessage[] = [];
-    for (const m of this.#buffers.values()) {
-      if (m?.epoch !== message.epoch) return;
+    for (const [tracker, m] of this.#buffers) {
+      if (tracker === frozen) continue;
+      if (m?.epoch !== epoch) return;
       reported.push(m);
     }
+    if (reported.length === 0) return;
     if (reported.length === 1) {
-      this.#deps.postMessage(message);
+      const [only] = reported;
+      if (only) this.#deps.postMessage(only);
       return;
     }
     const open = reported.filter((m) => !m.eof);
-    const ends = (open.length > 0 ? open : reported).map((m) => m.end);
+    const finite = (open.length > 0 ? open : reported)
+      .map((m) => m.end)
+      .filter((end) => Number.isFinite(end));
+    const end =
+      finite.length === 0 ? Infinity : open.length > 0 ? Math.min(...finite) : Math.max(...finite);
     this.#deps.postMessage({
       type: 'buffer',
-      epoch: message.epoch,
-      end: open.length > 0 ? Math.min(...ends) : Math.max(...ends),
+      epoch,
+      end,
       eof: open.length === 0,
       fetching: reported.some((m) => m.fetching),
     });
@@ -878,11 +926,16 @@ export class MediaWorker {
         post({ type: 'eof', epoch }, []);
         audioEnd();
       }
+      const separateVideo = separate !== null && video !== null;
       const current: CurrentOutput = {
-        demuxers: [],
+        epoch,
+        mainDemuxer: null,
+        separateDemuxer: null,
         audio: null,
         video: null,
         setRate: null,
+        frozenTracker: separateVideo ? load.tracker : null,
+        resumeMainVideo: null,
       };
       this.#current = current;
       /** 音訊的 pipeline 建立之後：記下它與它的 demuxer（stats、背景的播放位置）並套用建立期間收到的 rate。 */
@@ -920,48 +973,98 @@ export class MediaWorker {
           : undefined;
       // 主來源與外掛音軌各自 seek、demux：兩個 instance 的 Asyncify 互不影響，一邊的讀取掛起不擋另一邊。
       const runMain = async () => {
-        const main = await media
-          .startOutput({
-            audio: mainDemuxAudio?.stream ?? null,
-            audioOffset: mainDemuxAudio?.offset ?? 0,
-            video: video ? message.video : null,
-            subtitle,
-            seek: message.seek,
-            startTime,
-            signal,
-            demux: demux(load.tracker, paceSubtitles),
-            audioOptions,
-          })
-          .catch((error: unknown) => {
-            if (signal.aborted || !(error instanceof AudioDecoderError)) throw error;
-            this.#audioDecoderFailed(epoch, error);
-            return null;
-          });
-        if (!main) return;
-        signal.throwIfAborted();
-        current.demuxers.push(main.demuxer);
-        if (mainDemuxAudio) onAudio(main.audio, main.demuxer, mainDemuxAudio);
-        if (main.video && message.video !== null) {
-          current.video = { demuxer: main.demuxer, stream: message.video };
+        let mainStart = startTime;
+        let mainSeek = message.seek;
+        const resume: { target: number | null } = { target: null };
+        let mainAbort: AbortController | null = null;
+        let activeDemuxer: Pick<Demuxer<unknown>, 'end'> | null = null;
+        if (separateVideo) {
+          current.resumeMainVideo = (time: number) => {
+            if (signal.aborted) return false;
+            const target = Math.max(0, time);
+            const demuxEnd = activeDemuxer?.end ?? mainStart;
+            // 主來源的 demux 進度已經涵蓋恢復位置時，直接從 backlog／lane 解碼，不必重新 seek。
+            if (target <= demuxEnd) return false;
+            resume.target = target;
+            mainAbort?.abort();
+            load.media?.abortReads();
+            load.source?.abort?.();
+            return true;
+          };
         }
-        await withDemux(main.demuxer, signal, async () => {
-          // 只為字幕 demux：沒有供料，demux（依播放進度節流）到結尾（或失敗）才停。
-          if (!main.audio && !main.video) return main.demuxer.settled(signal);
-          await Promise.all([
-            main.audio?.run().then(audioEnd),
-            video && main.video
-              ? this.#runVideo(
-                  video,
-                  main.video,
-                  message,
-                  // 背景中影片不取封包，硬上限仍須立即中止等候並回報。
-                  AbortSignal.any([signal, main.demuxer.fatal]),
-                  played,
-                  !main.audio,
-                )
-              : undefined,
-          ]);
-        });
+        try {
+          for (;;) {
+            const local = new AbortController();
+            mainAbort = local;
+            activeDemuxer = null;
+            const mainSignal = AbortSignal.any([signal, local.signal]);
+            let fatal: AbortSignal | null = null;
+            try {
+              const main = await media.startOutput({
+                audio: mainDemuxAudio?.stream ?? null,
+                audioOffset: mainDemuxAudio?.offset ?? 0,
+                video: video ? message.video : null,
+                subtitle,
+                seek: mainSeek,
+                startTime: mainStart,
+                signal: mainSignal,
+                demux: demux(load.tracker, paceSubtitles),
+                audioOptions,
+              });
+              mainSignal.throwIfAborted();
+              activeDemuxer = main.demuxer;
+              fatal = main.demuxer.fatal;
+              current.mainDemuxer = main.demuxer;
+              if (mainDemuxAudio) onAudio(main.audio, main.demuxer, mainDemuxAudio);
+              if (main.video && message.video !== null) {
+                current.video = { demuxer: main.demuxer, stream: message.video };
+              }
+              await withDemux(main.demuxer, mainSignal, async () => {
+                // 只為字幕 demux：沒有供料，demux（依播放進度節流）到結尾（或失敗）才停。
+                if (!main.audio && !main.video) return main.demuxer.settled(mainSignal);
+                await Promise.all([
+                  main.audio?.run().then(audioEnd),
+                  video && main.video
+                    ? this.#runVideo(
+                        video,
+                        main.video,
+                        { ...message, time: mainStart },
+                        // 背景中影片不取封包，硬上限仍須立即中止等候並回報。
+                        AbortSignal.any([mainSignal, main.demuxer.fatal]),
+                        played,
+                        !main.audio,
+                      )
+                    : undefined,
+                ]);
+              });
+              return;
+            } catch (error) {
+              // 回到前景時重開主來源：只在不是 epoch 中止、也不是主來源 fatal（例如 MEMORY_LIMIT）時重跑。
+              if (
+                !signal.aborted &&
+                !fatal?.aborted &&
+                local.signal.aborted &&
+                resume.target !== null
+              ) {
+                mainStart = resume.target;
+                mainSeek = true;
+                resume.target = null;
+                if (load.tracker) {
+                  load.tracker.start(epoch, mainStart);
+                  this.#buffers.set(load.tracker, null);
+                }
+                continue;
+              }
+              if (!signal.aborted && error instanceof AudioDecoderError) {
+                this.#audioDecoderFailed(load, epoch, output, error);
+                return;
+              }
+              throw error;
+            }
+          }
+        } finally {
+          current.resumeMainVideo = null;
+        }
       };
       // 另一個 instance 的音軌（外掛音軌，或 offset 很大的容器內音軌）一律 seek 到 time − offset（不依賴 demuxer 目前的
       // 位置）。外掛音軌失敗（崩潰以外）不影響主來源：丟掉它，這個 epoch 的音訊以靜音結束，由主執行緒移除它。
@@ -979,7 +1082,7 @@ export class MediaWorker {
             audioOptions,
           });
           signal.throwIfAborted();
-          current.demuxers.push(ext.demuxer);
+          current.separateDemuxer = ext.demuxer;
           onAudio(ext.audio, ext.demuxer, selection);
           await withDemux(ext.demuxer, signal, async () => {
             if (!ext.audio) return;
@@ -989,8 +1092,11 @@ export class MediaWorker {
         } catch (error) {
           if (signal.aborted || crashReason(error) !== null) throw error;
           if (holder === external) this.#failExternal(external, epoch, error);
-          else if (error instanceof AudioDecoderError) this.#audioDecoderFailed(epoch, error);
-          else throw error;
+          else if (error instanceof AudioDecoderError) {
+            this.#audioDecoderFailed(load, epoch, output, error);
+          } else {
+            throw error;
+          }
         }
       };
       await Promise.all([demuxMain ? runMain() : undefined, separate && runSeparate(separate)]);
@@ -1175,7 +1281,7 @@ export class MediaWorker {
       packetQueue: {
         audioSeconds: current?.audio ? current.audio.demuxer.seconds(current.audio.stream) : 0,
         videoSeconds: current?.video ? current.video.demuxer.seconds(current.video.stream) : 0,
-        bytes: sum(current?.demuxers.map((d) => d.bytes) ?? []),
+        bytes: (current?.mainDemuxer?.bytes ?? 0) + (current?.separateDemuxer?.bytes ?? 0),
       },
       wasmHeapBytes: sum(
         [this.#load?.media, this.#load?.separate?.media, ...externals.map((e) => e.media)].map(

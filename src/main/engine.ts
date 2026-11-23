@@ -379,7 +379,7 @@ class EngineImpl extends EventTarget implements Engine {
     if (buffer?.epoch !== this.#epoch) return [];
     const start = this.currentTime;
     const end = Number.isNaN(this.#duration) ? buffer.end : Math.min(buffer.end, this.#duration);
-    return end > start ? [{ start, end }] : [];
+    return Number.isFinite(end) && end > start ? [{ start, end }] : [];
   }
   get media(): MediaInfo | null {
     return this.#media;
@@ -846,7 +846,7 @@ class EngineImpl extends EventTarget implements Engine {
       const videoTrack = tracks.find(
         (t): t is VideoTrack => t.kind === 'video' && t.id === load.selection.video,
       );
-      if (videoTrack) this.#startVideo(videoTrack);
+      if (videoTrack) this.#startVideo(videoTrack, false);
       this.#postStart(worker, load, tracks);
 
       // worklet 回報後，#applyOutput() 結束 load、發布媒體並離開 loading。
@@ -860,8 +860,13 @@ class EngineImpl extends EventTarget implements Engine {
     }
   }
 
-  /** 以 `load.selection` 從 `load.startTime` 開始輸出（目前的 epoch）。 */
-  #postStart(worker: MediaWorker, load: LoadContext, tracks: readonly Track[]): void {
+  /** 以 `load.selection` 從 `load.startTime` 開始輸出（目前的 epoch）；loading 中退回重開時改送 `select`（強制 seek）。 */
+  #postStart(
+    worker: MediaWorker,
+    load: LoadContext,
+    tracks: readonly Track[],
+    type: 'start' | 'select' = 'start',
+  ): void {
     const audioTrack = tracks.find((t) => t.id === load.selection.audio);
     const videoTrack = tracks.find((t) => t.kind === 'video' && t.id === load.selection.video);
     const subtitleTrack = tracks.find(
@@ -870,7 +875,7 @@ class EngineImpl extends EventTarget implements Engine {
     this.#audioTrackId = audioTrack?.id ?? null;
     this.#subtitleTrackId = subtitleTrack?.id ?? null;
     worker.post({
-      type: 'start',
+      type,
       epoch: this.#epoch,
       time: load.startTime,
       ...audioSelectionFields(audioTrack?.kind === 'audio' ? audioTrack : undefined),
@@ -1206,7 +1211,7 @@ class EngineImpl extends EventTarget implements Engine {
         t.id === trackId ? { ...t, supported: false, unsupportedReason: 'codec' } : t,
       );
     if (load?.info && worker) {
-      // 還在 loading：媒體在 load 完成時一起發布。
+      // 還在 loading：媒體在 load 完成時一起發布。改送 select 確保 Worker 強制 seek（清除前次讀取與位置）。
       load.info = { ...load.info, tracks: mark(load.info.tracks) };
       load.selection = { ...load.selection, audio: null };
       if (!load.info.tracks.some((t) => t.supported && t.kind !== 'subtitle')) {
@@ -1215,7 +1220,7 @@ class EngineImpl extends EventTarget implements Engine {
       }
       this.#epoch++;
       this.#flushAudio(load.startTime);
-      this.#postStart(worker, load, load.info.tracks);
+      this.#postStart(worker, load, load.info.tracks, 'select');
       return;
     }
     if (!media || trackId === null) {
@@ -1227,9 +1232,14 @@ class EngineImpl extends EventTarget implements Engine {
       this.#fail(this.#fatal('CODEC_UNSUPPORTED', '沒有可以播放的音軌或影片軌'));
       return;
     }
+    const switching = this.#switching;
+    // 換其他軌（例如只換影片軌）途中原本的音軌失敗：換軌生效時也不選用它，並以換軌中的選擇重新輸出。
+    if (switching) switching.next = { ...switching.next, audio: null };
+    const epoch = this.#epoch;
     this.#publishMedia(media, { ...this.#selected, audio: null });
     if (!same()) return;
-    this.#applySelection(this.#selected);
+    // trackschange 的 listener 可能已經換軌或 seek（遞增了 epoch）：不再以舊選擇蓋掉新的輸出。
+    if (this.#epoch === epoch) this.#applySelection(switching ? switching.next : this.#selected);
     const engineError = fromWireError(error, {
       fatal: false,
       position: this.currentTime,
@@ -1305,7 +1315,7 @@ class EngineImpl extends EventTarget implements Engine {
     const subtitle = find(selection.subtitle);
     const time = this.currentTime;
     if ((video?.id ?? null) !== (this.#video.track?.id ?? null)) {
-      if (video?.kind === 'video') this.#startVideo(video);
+      if (video?.kind === 'video') this.#startVideo(video, true);
       else this.#video.stop();
     }
     this.#audioTrackId = audio?.id ?? null;
@@ -2035,7 +2045,8 @@ class EngineImpl extends EventTarget implements Engine {
     this.#lastOutput = null;
     if (this.#loadContext) this.#loadContext.flushedAt = position;
     this.#audio?.post({ type: 'flush', epoch: this.#epoch, position });
-    if (this.#video.beginEpoch(this.#epoch)) this.#syncWorklet();
+    const wasPending = this.#video.pending;
+    if (this.#video.beginEpoch(this.#epoch) !== wasPending) this.#syncWorklet();
   }
 
   // ───────────────────────────── 字幕 ─────────────────────────────
@@ -2060,9 +2071,9 @@ class EngineImpl extends EventTarget implements Engine {
 
   // ───────────────────────────── 影片 ─────────────────────────────
 
-  /** 開始解碼 `track`（送出 `start` 之前）：等第一張 frame（worklet 先停住），並開始繪製迴圈。背景中不等、不畫。 */
-  #startVideo(track: VideoTrack): void {
-    this.#video.start(track);
+  /** 開始解碼 `track`（送出 `start`／`select` 之前）：等第一張 frame（worklet 先停住），並開始繪製迴圈。背景中不等、不畫。 */
+  #startVideo(track: VideoTrack, awaitPicture: boolean): void {
+    this.#video.start(track, awaitPicture);
     this.#syncWorklet();
   }
 
@@ -2130,6 +2141,7 @@ class EngineImpl extends EventTarget implements Engine {
       this.#notify();
       return;
     }
+    const epoch = this.#epoch;
     if (track) {
       // 換軌中生效的影片軌失敗：照常退回只播音訊，換軌生效時也不選用影片。
       if (switching) switching.next = { ...switching.next, video: null };
@@ -2171,7 +2183,8 @@ class EngineImpl extends EventTarget implements Engine {
         if (!same()) return;
       }
     }
-    this.#onVideoReady();
+    // listener 可能已經換軌或 seek（遞增了 epoch）：不再解除新 epoch 的影片等待。
+    if (this.#epoch === epoch) this.#onVideoReady();
   }
 
   /** 音訊已備妥、影片還沒：`VIDEO_READY_TIMEOUT_MS` 後不再等。 */

@@ -99,12 +99,17 @@ export class VideoOutput {
     this.#renderer.attach(canvas);
   }
 
-  /** 開始解碼 `track`：等第一張 frame，並開始繪製迴圈。背景中不等、不畫。 */
-  start(track: VideoTrack): void {
+  /**
+   * 開始解碼 `track`：等第一張 frame，並開始繪製迴圈。背景中不等、不畫。
+   * `awaitPicture`：換影片軌時為 true，等到新軌的 frame 真的畫出（或逾時）才解除 `awaitingPicture`；
+   * `load()`／`reload()` 不使用 `awaitingPicture`，設為 false，避免首張 frame 晚於起點時殘留到之後只換音軌或字幕軌的
+   * `selectTracks()`。
+   */
+  start(track: VideoTrack, awaitPicture = true): void {
     this.#track = track;
     this.#renderer.setTrack(track);
     this.#pending = !this.#suspended;
-    this.#setAwaitingPicture(!this.#suspended);
+    this.#setAwaitingPicture(awaitPicture && !this.#suspended);
     this.#runLoop(!this.#suspended);
   }
 
