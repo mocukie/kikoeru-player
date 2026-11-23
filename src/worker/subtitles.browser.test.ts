@@ -154,10 +154,22 @@ describe('multi-track.mkv', () => {
     expect(driver.messages.some((m) => m.type === 'cues')).toBe(false);
   });
 
-  test('音軌與影片軌都不選、只選字幕軌：音訊立即 eof，字幕照常送出', async () => {
+  test('音軌與影片軌都不選、只選字幕軌：音訊立即 eof，demux 依主執行緒轉送的播放位置節流，字幕隨播放送出', async () => {
     const { driver, media } = await open('video/multi-track.mkv');
     const srt = subtitle(media, 'subrip');
     await driver.decode(null, { subtitle: srt.streamIndex });
+    const latest = () => Math.max(-1, ...driver.cues(1).map((c) => Math.round(c.start)));
+    // 還沒有播放位置（暫停中）：demux 超前起點 NORMAL_QUEUE_SECONDS（2 秒）之後就停下，不讀到結尾。這個檔案的進度軌
+    // （位元率最低的音軌）以靜音為主，一次讀取（32 KiB）就涵蓋約 10 秒。
+    await expect.poll(() => driver.cues(1).length).toBeGreaterThan(0);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(latest()).toBeLessThan(19);
+    // 過期 epoch 的播放位置不算。
+    driver.post({ type: 'position', epoch: 0, time: 20 });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(latest()).toBeLessThan(19);
+    // 播放前進：cue 跟著送出。
+    driver.post({ type: 'position', epoch: 1, time: 18 });
     await expect.poll(() => driver.cues(1).length).toBe(20);
     expectSchedule(driver.cues(1), range(0, 20));
   });

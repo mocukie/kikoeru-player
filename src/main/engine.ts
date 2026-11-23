@@ -746,6 +746,8 @@ class EngineImpl extends EventTarget implements Engine {
     this.#video.stop();
     // reload：畫面上的 frame 留到新的 frame 畫出。
     if (!reloadOf) this.#video.reset(epoch);
+    // videoresize 的 listener 可能已經換檔（新的 load 取代了這個）：不再寫入任何狀態。
+    signal.throwIfAborted();
     this.#currentTime = startTime;
     if (!reloadOf) this.#publishMedia(null, noSelection);
     signal.throwIfAborted();
@@ -841,24 +843,11 @@ class EngineImpl extends EventTarget implements Engine {
       }
       // worklet 以 duration 截掉多的音訊、在 eof 之後補靜音並判定 ended；Worker 開始供料之前送到。
       audio.post({ type: 'duration', epoch: this.#epoch, duration: probed.duration });
-      const audioTrack = tracks.find((t) => t.id === load.selection.audio);
       const videoTrack = tracks.find(
         (t): t is VideoTrack => t.kind === 'video' && t.id === load.selection.video,
       );
-      const subtitleTrack = tracks.find(
-        (t) => t.kind === 'subtitle' && t.supported && t.id === load.selection.subtitle,
-      );
       if (videoTrack) this.#startVideo(videoTrack);
-      this.#audioTrackId = audioTrack?.id ?? null;
-      this.#subtitleTrackId = subtitleTrack?.id ?? null;
-      worker.post({
-        type: 'start',
-        epoch: this.#epoch,
-        time: load.startTime,
-        ...audioSelectionFields(audioTrack?.kind === 'audio' ? audioTrack : undefined),
-        video: videoTrack?.streamIndex ?? null,
-        subtitle: subtitleTrack?.streamIndex ?? null,
-      });
+      this.#postStart(worker, load, tracks);
 
       // worklet 回報後，#applyOutput() 結束 load、發布媒體並離開 loading。
       await this.#until(() => this.#loadContext !== load, signal);
@@ -869,6 +858,25 @@ class EngineImpl extends EventTarget implements Engine {
       if (!signal.aborted) this.#fail(this.#toEngineError(error));
       throw error;
     }
+  }
+
+  /** 以 `load.selection` 從 `load.startTime` 開始輸出（目前的 epoch）。 */
+  #postStart(worker: MediaWorker, load: LoadContext, tracks: readonly Track[]): void {
+    const audioTrack = tracks.find((t) => t.id === load.selection.audio);
+    const videoTrack = tracks.find((t) => t.kind === 'video' && t.id === load.selection.video);
+    const subtitleTrack = tracks.find(
+      (t) => t.kind === 'subtitle' && t.supported && t.id === load.selection.subtitle,
+    );
+    this.#audioTrackId = audioTrack?.id ?? null;
+    this.#subtitleTrackId = subtitleTrack?.id ?? null;
+    worker.post({
+      type: 'start',
+      epoch: this.#epoch,
+      time: load.startTime,
+      ...audioSelectionFields(audioTrack?.kind === 'audio' ? audioTrack : undefined),
+      video: videoTrack?.streamIndex ?? null,
+      subtitle: subtitleTrack?.streamIndex ?? null,
+    });
   }
 
   #seekWhileLoading(load: LoadContext, time: number): Promise<number> {
@@ -1176,8 +1184,59 @@ class EngineImpl extends EventTarget implements Engine {
       this.#onExternalFailed(source, error);
       return;
     }
-    // 不是換軌（例如 load 的第一個輸出）：沒有可以退回的音軌。
-    this.#fail(fromWireError(error, { fatal: true, position: this.currentTime }));
+    // 不是換軌（例如 load 的第一個輸出）：這條音軌改為不支援，退回只播影片。
+    this.#onMainAudioFailed(trackId, error);
+  }
+
+  /**
+   * 主來源的音軌 probe 時判定可播，decoder 卻開不起來（不是換軌時）：該軌改為不支援（`'codec'`），不選用音軌、以新的
+   * epoch 重新輸出影片與字幕（worklet 以靜音推進時鐘，與純影片媒體相同），不自動改選另一條音軌。沒有其他可播的音軌或
+   * 影片軌時與 probe 時就沒有可播的軌一樣，以致命的 `CODEC_UNSUPPORTED` 結束。loading 中的退回不發出 `error`（與影片在
+   * 第一張 frame 之前失敗相同）；已經發布媒體之後另外發出 `trackschange` 與非致命的 `CODEC_UNSUPPORTED`。
+   */
+  #onMainAudioFailed(trackId: string | null, error: WireError): void {
+    const load = this.#loadContext;
+    let media = this.#media;
+    const worker = this.#worker;
+    // listener 內換檔、unload 或 destroy 之後，這份媒體的退回就不再繼續。
+    const same = () =>
+      !this.#destroyedDuring() && this.#loadContext === load && this.#media === media;
+    const mark = (tracks: readonly Track[]): Track[] =>
+      tracks.map((t) =>
+        t.id === trackId ? { ...t, supported: false, unsupportedReason: 'codec' } : t,
+      );
+    if (load?.info && worker) {
+      // 還在 loading：媒體在 load 完成時一起發布。
+      load.info = { ...load.info, tracks: mark(load.info.tracks) };
+      load.selection = { ...load.selection, audio: null };
+      if (!load.info.tracks.some((t) => t.supported && t.kind !== 'subtitle')) {
+        this.#fail(this.#fatal('CODEC_UNSUPPORTED', '沒有可以播放的音軌或影片軌'));
+        return;
+      }
+      this.#epoch++;
+      this.#flushAudio(load.startTime);
+      this.#postStart(worker, load, load.info.tracks);
+      return;
+    }
+    if (!media || trackId === null) {
+      this.#fail(fromWireError(error, { fatal: true, position: this.currentTime }));
+      return;
+    }
+    media = { ...media, tracks: mark(media.tracks) };
+    if (!media.tracks.some((t) => t.supported && t.kind !== 'subtitle')) {
+      this.#fail(this.#fatal('CODEC_UNSUPPORTED', '沒有可以播放的音軌或影片軌'));
+      return;
+    }
+    this.#publishMedia(media, { ...this.#selected, audio: null });
+    if (!same()) return;
+    this.#applySelection(this.#selected);
+    const engineError = fromWireError(error, {
+      fatal: false,
+      position: this.currentTime,
+      detail: { trackId },
+    });
+    this.#logError('warn', engineError);
+    this.dispatchEvent(new EngineErrorEvent({ error: engineError }));
   }
 
   /** 容器內的預設音軌：與 load 的初始選擇相同（偏好語言 → default 旗標 → 第一條可播的）。 */
@@ -1296,6 +1355,8 @@ class EngineImpl extends EventTarget implements Engine {
     this.#video.stop();
     const epoch = ++this.#epoch;
     this.#video.reset(epoch);
+    // videoresize 的 listener 可能已經換檔：新的 load 已經 flush 並發布了它的狀態。
+    if (this.#epoch !== epoch) return;
     this.#flushAudio(0);
     this.#publishMedia(null, noSelection);
     if (this.#epoch !== epoch) return;
@@ -1434,6 +1495,8 @@ class EngineImpl extends EventTarget implements Engine {
         }
         this.#clock = message;
         this.#currentTime = message.position;
+        // Worker 以它節流只為字幕的 demux（WorkerPositionMessage）。
+        this.#worker?.post({ type: 'position', epoch: message.epoch, time: message.position });
         this.#ringFrames = message.buffered;
         this.#underruns = message.underruns;
         break;
@@ -2141,10 +2204,12 @@ class EngineImpl extends EventTarget implements Engine {
     this.#video.stop();
     // 停掉 ring 內剩下的聲音。
     const epoch = ++this.#epoch;
-    this.#video.reset(epoch);
     this.#flushAudio(position);
     this.#queue.fail(error);
     this.#setState('error', reason);
+    // reset 經 videoresize 同步呼叫 listener，listener 可能換檔（佇列在 enqueue 內同步開始執行）：放在狀態都更新完之後，
+    // 換檔之後不再 reset 或發出舊的錯誤。
+    if (this.#epoch === epoch) this.#video.reset(epoch);
     if (this.#epoch === epoch) this.dispatchEvent(new EngineErrorEvent({ error }));
   }
 

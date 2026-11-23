@@ -529,10 +529,12 @@ describe('影片的降級', () => {
     await sleep(50);
     const received = driver.frames.length;
 
-    // 音訊播到 15 秒：影片的封包只留播放位置附近的（沒有修正時會從背景開始的位置一路累積到 17 秒）。
+    // 音訊播到 15 秒：影片的封包只留播放位置附近的（沒有修正時會從背景開始的位置一路累積到 17 秒）。播放位置以已經
+    // 送給 worklet 的音訊估計，留下的是估計位置往前 2 秒（PLAYED_MARGIN_SECONDS）之前的 keyframe 到 demux 的進度（約
+    // 6 秒）。
     await driver.collect(1, 14 * 48_000);
     const stats = await driver.stats();
-    expect(stats.packetQueue.videoSeconds).toBeLessThan(6);
+    expect(stats.packetQueue.videoSeconds).toBeLessThan(8);
     expect(stats.openVideoFrames).toBe(0);
     expect(driver.frames).toHaveLength(received);
     expect(recording.decoders).toHaveLength(1);

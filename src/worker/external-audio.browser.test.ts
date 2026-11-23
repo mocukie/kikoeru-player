@@ -170,6 +170,30 @@ describe('外掛音軌的輸出', () => {
     await expect.poll(() => driver.cues(1).map((c) => Math.round(c.start))).toContain(19);
   });
 
+  test('offset 為正、背景中：影片的封包不被丟到 offset 附近，回到前景時從實際的播放位置繼續畫面', async () => {
+    const { driver } = await withExternal();
+    driver.post({ type: 'videosuspend', suspended: true, time: 0 });
+    driver.post({
+      type: 'start',
+      epoch: 1,
+      time: 0,
+      audio: 0,
+      audioSource: 'ext:1',
+      audioOffset: 10,
+      video: 0,
+      subtitle: null,
+    });
+    // 起點前的 10 秒靜音只播了 2 秒。PcmQueue 一收到第一個封包就有 10 秒的靜音，外掛音軌的 lane 停在來源的 0 秒附近，
+    // 以它估計播放位置會是 10 − 2 = 8 秒。
+    await driver.collect(1, 2 * RATE);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    driver.post({ type: 'videosuspend', suspended: false, time: 2 });
+    await expect.poll(() => driver.frames.filter((f) => f.epoch === 1).length).toBeGreaterThan(0);
+    // 第一張是恢復位置（2 秒）的 frame，不是 8 秒附近的 keyframe。
+    expect(driver.frames.find((f) => f.epoch === 1)?.time).toBeCloseTo(2, 3);
+    expect(driver.messages.filter((m) => m.type === 'error' || m.type === 'crash')).toEqual([]);
+  });
+
   test('seek 到外掛音軌的 0 點之前：從來源開頭解碼，到 0 點之前都是靜音', async () => {
     const { driver } = await withExternal();
     driver.post({

@@ -258,6 +258,71 @@ describe('競態', () => {
   });
 });
 
+describe('videoresize(null) 的 listener 內換檔（重入）', () => {
+  /** 下一個 `videoresize(null)` 時以 `startTime` load（一次）；回傳取得那個 load 的 Promise 的函式。 */
+  function loadOnClear(engine: Engine, startTime = 0): () => Promise<unknown> {
+    let next: Promise<unknown> | null = null;
+    const listener = (e: { size: VideoSize | null }) => {
+      if (e.size !== null || next) return;
+      next = engine.load(source, { startTime });
+      engine.removeEventListener('videoresize', listener);
+    };
+    engine.addEventListener('videoresize', listener);
+    return () => {
+      if (!next) throw new Error('listener 沒有 load');
+      return next;
+    };
+  }
+
+  /** 完成新的 Worker 上的 load（probe、第一張 frame、worklet 備妥）。 */
+  async function finish(deps: FakeEngineDeps): Promise<FakeMediaWorker> {
+    const worker = deps.workers.last;
+    await worker.probe(videoMedia());
+    const start = await worker.next('start');
+    frame(worker, start.time, start.epoch);
+    deps.audio.reply({ type: 'paused' });
+    return worker;
+  }
+
+  it('播放中 fatal error：新的 load 不以舊錯誤 reject，state 最後是 ready、不發出舊的 error', async () => {
+    const { engine, deps, worker } = await loaded();
+    const errors: string[] = [];
+    engine.addEventListener('error', (e) => errors.push(e.error.code));
+    const next = loadOnClear(engine);
+    worker.crash();
+    const result = next().catch((error: unknown) => error);
+    await finish(deps);
+    expect(await result).toMatchObject({ tracks: expect.any(Array) as unknown });
+    expect(engine.state).toBe('ready');
+    expect(engine.error).toBeNull();
+    expect(errors).toEqual([]);
+  });
+
+  it('load 中的 listener 再 load（startTime 不同）：currentTime 是新 load 的 startTime', async () => {
+    const { engine, deps } = await loaded();
+    const next = loadOnClear(engine, 5);
+    void engine.load(source, { startTime: 2 }).catch(() => undefined);
+    expect(engine.currentTime).toBe(5);
+    const worker = await finish(deps);
+    await next();
+    expect(worker.messages('start')[0]?.time).toBe(5);
+    expect(engine.currentTime).toBe(5);
+    expect(engine.state).toBe('ready');
+  });
+
+  it('unload 時 listener 呼叫 load：新的 load 正常完成，起點不被 unload 蓋掉', async () => {
+    const { engine, deps } = await loaded();
+    const next = loadOnClear(engine, 3);
+    await engine.unload().catch(() => undefined);
+    expect(engine.currentTime).toBe(3);
+    expect(deps.audio.received.findLast((m) => m.type === 'flush')).toMatchObject({ position: 3 });
+    await finish(deps);
+    await next();
+    expect(engine.state).toBe('ready');
+    expect(engine.currentTime).toBe(3);
+  });
+});
+
 describe('VideoFrame 的 close', () => {
   it('destroy：佇列中與畫面上的 frame 都 close，openVideoFrames 為 0', async () => {
     const { engine, worker } = await loaded();

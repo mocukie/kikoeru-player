@@ -525,12 +525,15 @@ export interface TrackBase {
   /** WebCodecs 的 codec string（只有影片軌），例如 `'avc1.640028'`。 */
   codecString?: string;
   /**
-   * false 時無法選用，原因見 `unsupportedReason`。播放中發現實際無法解碼時（換音軌時 decoder 開不起來，影片的
-   * configure、首個 keyframe 失敗，或播放中重新設定 decoder 之後仍然失敗）會改為 false 並發出 `trackschange`。
+   * false 時無法選用，原因見 `unsupportedReason`。播放中發現實際無法解碼時（音軌的 decoder 開不起來，影片的
+   * configure、首個 keyframe 失敗，或播放中重新設定 decoder 之後仍然失敗）會改為 false 並發出 `trackschange`；
+   * load 期間發現的在 `load()` resolve 時就已經是 false。
    */
   supported: boolean;
   /**
-   * - `'codec'`：Engine 本身不支援，例如 wasm 沒有這個 decoder，或沒對應到 WebCodecs 的影片 codec。
+   * - `'codec'`：Engine 本身不支援，例如 wasm 沒有這個 decoder，或沒對應到 WebCodecs 的影片 codec；也包括音軌的
+   *   decoder 實際開不起來（例如缺少取樣率、extradata 損壞）。不是換軌時發生的，不選用音軌、退回只播影片，不自動改選
+   *   另一條音軌。
    * - `'platform'`：Engine 支援、這個瀏覽器不支援，例如沒有 WebCodecs、`isConfigSupported` 為 false、
    *   configure 或首個 keyframe 失敗，或播放中解碼失敗、重新設定 decoder 之後仍然失敗（退回只播音訊）。
    * - `'bitmap-subtitle'`：圖形字幕（PGS、DVD），Engine 不解碼。

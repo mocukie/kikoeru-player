@@ -155,6 +155,54 @@ test('播放：依音訊時鐘前進，stats 有解碼數；destroy 之後 openV
   expect((await engine.getStats()).resources.openVideoFrames).toBe(0);
 });
 
+test('播放中換檔：被 terminate 的 Worker 在途中送出的 VideoFrame 也 close', async () => {
+  // 記下第一個 Worker 送出的每一張 frame。listener 在 adapter 的 onmessage 之前註冊，所以在收到 frame 的同一個事件裡
+  // 換檔時，Engine 已經 terminate 這個 Worker，之後才派送給 onmessage。
+  const RealWorker = Worker;
+  const received: VideoFrame[] = [];
+  const created: Worker[] = [];
+  const state: { armed: boolean; next: Promise<unknown> | null } = { armed: false, next: null };
+  class RecordingWorker extends RealWorker {
+    constructor(url: string | URL, options?: WorkerOptions) {
+      super(url, options);
+      created.push(this);
+      this.addEventListener('message', (event: MessageEvent<WorkerToMainMessage<MainHost>>) => {
+        if (this !== created[0] || event.data.type !== 'frame') return;
+        received.push(event.data.frame);
+        if (state.armed && !state.next && engine) {
+          state.next = engine.load({ kind: 'http', url: mediaUrl('video/vp9-opus.webm') });
+        }
+      });
+    }
+  }
+  vi.stubGlobal('Worker', RecordingWorker);
+  const closed = new WeakSet<VideoFrame>();
+  const close = Object.getOwnPropertyDescriptor(VideoFrame.prototype, 'close')?.value as (
+    this: VideoFrame,
+  ) => void;
+  vi.spyOn(VideoFrame.prototype, 'close').mockImplementation(function (this: VideoFrame) {
+    closed.add(this);
+    close.call(this);
+  });
+  try {
+    const { engine, supported } = await load('video/h264-aac.mp4', canvas());
+    if (!supported) return;
+    await engine.play().catch(() => undefined);
+    if (engine.state !== 'playing') return;
+    state.armed = true;
+    await until(() => state.next !== null);
+    await state.next;
+    // 被 terminate 的 Worker 之後才派送的訊息。
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(received.length).toBeGreaterThan(0);
+    expect(received.filter((f) => !closed.has(f))).toEqual([]);
+    await engine.destroy();
+    expect((await engine.getStats()).resources.openVideoFrames).toBe(0);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
 test('背景（visibilitychange）：停止解碼、聲音繼續；回到前景後畫面在數個 frame 內對上音訊時鐘', async () => {
   const target = canvas();
   const { engine, supported } = await load('video/multi-track.mkv', target);

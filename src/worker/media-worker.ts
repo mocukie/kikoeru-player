@@ -44,11 +44,11 @@ import {
 import { createWebVideoDecoder, isVideoConfigSupported } from './webcodecs.js';
 
 /**
- * 背景中估計播放位置時，從音訊取用的進度往前扣的秒數：音訊從封包佇列取出之後，還要經過解碼、filter graph 與 worklet 的
- * ring buffer（桌面最多 400 ms，2 倍速時是 0.8 媒體秒）才被聽到。估計得太晚只會讓恢復時從下一個 keyframe 開始。
+ * 背景中估計播放位置時，從已經送給 worklet 的音訊往前扣的秒數：送出的 PCM 還要經過 worklet 的 ring buffer（桌面最多
+ * 400 ms，2 倍速時是 0.8 媒體秒）才被聽到。估計得太晚只會讓恢復時從下一個 keyframe 開始。
  */
 const PLAYED_MARGIN_SECONDS = 2;
-/** 主來源只為字幕 demux 時，等外掛音軌的 demux 進度的輪詢間隔（ms）。 */
+/** 主來源只為字幕 demux 時，等播放進度前進的輪詢間隔（ms）。 */
 const PACE_INTERVAL_MS = 100;
 /**
  * 容器內音軌的 offset 絕對值超過它（秒）而且同時解碼影片時，音軌改在另開的 instance demux（同一個來源，共用 Range
@@ -90,13 +90,13 @@ interface Environment {
   rate: number;
 }
 
-/** stats 與背景估計播放位置讀取的 demuxer 狀態。 */
-type DemuxerView = Pick<Demuxer<unknown>, 'seconds' | 'bytes' | 'headTime' | 'end' | 'ended'>;
+/** stats 讀取的 demuxer 狀態。 */
+type DemuxerView = Pick<Demuxer<unknown>, 'seconds' | 'bytes'>;
 
 /** 目前輸出的 demuxer 與選用的軌（各來源的 pipeline 建立之後才填上）。 */
 interface CurrentOutput {
   demuxers: DemuxerView[];
-  audio: { demuxer: DemuxerView; stream: number } | null;
+  audio: { demuxer: DemuxerView; stream: number; pipeline: AudioPipeline<unknown> } | null;
   video: { demuxer: DemuxerView; stream: number } | null;
   setRate: ((rate: number) => void) | null;
 }
@@ -216,6 +216,8 @@ export class MediaWorker {
    * 目前輸出的各來源最後回報的資料備妥進度（還沒回報時為 null）；全部都回報了這個 epoch 才合併成一個 `buffer` 送出。
    */
   #buffers = new Map<BufferTracker, WorkerBufferMessage | null>();
+  /** 主執行緒最後轉送的播放位置（`position`）；只對同一個 epoch 的輸出有效。 */
+  #position: { epoch: number; time: number } | null = null;
   /** 背景中暫停影片解碼（`videosuspend`）；沿用到之後的 load。 */
   #videoSuspended = false;
   /** 還沒 close 的 `VideoFrame`（Worker 內暫留的加上送到主執行緒的），所有 load 共用。 */
@@ -300,6 +302,9 @@ export class MediaWorker {
         break;
       case 'videosuspend':
         this.#suspendVideo(message.suspended, message.time);
+        break;
+      case 'position':
+        this.#position = { epoch: message.epoch, time: message.time };
         break;
       case 'stats':
         this.#deps.postMessage({ type: 'stats', id: message.id, stats: this.#stats() });
@@ -554,7 +559,10 @@ export class MediaWorker {
     }
   }
 
-  /** 主來源音軌的 decoder 開不起來（換音軌時）：非致命，由主執行緒換回原本的軌（不是換軌時才是致命）。 */
+  /**
+   * 主來源音軌的 decoder 開不起來：停止這次輸出並以非致命的 `audiofailed` 回報。換音軌時由主執行緒換回原本的軌，不是換軌
+   * 時由主執行緒把該軌標為不支援、以 `audio: null` 重新 start（只播影片）；Worker 不自行改成只輸出影片。
+   */
   #audioDecoderFailed(epoch: number, error: AudioDecoderError): void {
     this.#log.log('warn', 'audio', error.message, { epoch });
     this.#deps.postMessage({
@@ -877,38 +885,35 @@ export class MediaWorker {
         setRate: null,
       };
       this.#current = current;
-      /** 音訊的 pipeline 建立之後：記下它的 demuxer（stats、背景的播放位置）並套用建立期間收到的 rate。 */
+      /** 音訊的 pipeline 建立之後：記下它與它的 demuxer（stats、背景的播放位置）並套用建立期間收到的 rate。 */
       const onAudio = (
         audio: AudioPipeline<unknown> | null,
         demuxer: DemuxerView,
         selection: AudioSelection,
       ) => {
         if (!audio) return;
-        current.audio = { demuxer, stream: selection.stream };
+        current.audio = { demuxer, stream: selection.stream, pipeline: audio };
         current.setRate = (rate) => {
           audio.setRate(rate);
         };
         audio.setRate(env.rate);
       };
-      // 背景中以音訊取用的進度估計播放位置：音訊的 lane 空著時，demux 到的都已經被取用。音訊的 pipeline 還沒建立時
-      // 以起點估計。
+      // 背景中以已經送給 worklet 的音訊估計播放位置：實際的播放位置不會超過它。不用音訊 lane 的 demux 進度：offset 為正
+      // 時起點前的靜音一開始就讓 PcmQueue 滿了，lane 停在來源的開頭，換算成媒體時間會遠超過播放位置。音訊的 pipeline
+      // 還沒建立時以起點估計。
       const played = audioSelection
-        ? () => {
-            const lane = current.audio;
-            const time = lane ? (lane.demuxer.headTime(lane.stream) ?? lane.demuxer.end) : null;
-            return (time === null ? startTime : time + audioOffset) - PLAYED_MARGIN_SECONDS;
-          }
+        ? () => (current.audio?.pipeline.sent ?? startTime) - PLAYED_MARGIN_SECONDS
         : null;
-      // 主來源只為字幕 demux（音軌是外掛的）：字幕不進封包佇列，demux 沒有東西讓它停下，改以外掛音軌的 demux 進度
-      // 控制，不超前 `NORMAL_QUEUE_SECONDS` 以上；外掛音軌 demux 到結尾之後就不再限制。
+      // 主來源只為字幕 demux（音軌是外掛的，或沒有音訊）：字幕不進封包佇列，demux 沒有東西讓它停下，改以播放進度控制，
+      // 不超前 `NORMAL_QUEUE_SECONDS` 以上。播放進度取主執行緒轉送的音訊時鐘（暫停時不前進）與已經送給 worklet 的音訊
+      // （外掛音軌）之中較晚的；兩者都沒有時是起點。
       const paceSubtitles =
-        mainDemuxAudio === null && !video && separate
+        mainDemuxAudio === null && !video
           ? async (end: number, stop: AbortSignal) => {
               for (;;) {
-                const lane = current.audio;
-                if (lane?.demuxer.ended) return;
-                const audioEnd = lane ? lane.demuxer.end + audioOffset : startTime;
-                if (end <= audioEnd + NORMAL_QUEUE_SECONDS) return;
+                const position = this.#position?.epoch === epoch ? this.#position.time : startTime;
+                const progress = Math.max(startTime, position, current.audio?.pipeline.sent ?? 0);
+                if (end <= progress + NORMAL_QUEUE_SECONDS) return;
                 await sleep(PACE_INTERVAL_MS, stop);
               }
             }
@@ -940,7 +945,7 @@ export class MediaWorker {
           current.video = { demuxer: main.demuxer, stream: message.video };
         }
         await withDemux(main.demuxer, signal, async () => {
-          // 只為字幕 demux：沒有供料，demux 到結尾（或失敗）才停。
+          // 只為字幕 demux：沒有供料，demux（依播放進度節流）到結尾（或失敗）才停。
           if (!main.audio && !main.video) return main.demuxer.settled(signal);
           await Promise.all([
             main.audio?.run().then(audioEnd),

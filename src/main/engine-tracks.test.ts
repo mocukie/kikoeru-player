@@ -556,23 +556,6 @@ describe('切換影片軌', () => {
     expect(errors).toHaveLength(0);
   });
 
-  it('不是換音軌時主來源的音軌 decoder 失敗（例如 load）：致命', async () => {
-    const deps = createFakeDeps();
-    const engine = createEngineWith(deps);
-    const loading = engine.load(source);
-    const worker = deps.workers.last;
-    await worker.probe(media);
-    const start = await worker.next('start');
-    worker.reply({
-      type: 'audiofailed',
-      epoch: start.epoch,
-      source: null,
-      error: { code: 'CODEC_UNSUPPORTED', fatal: false, message: '無法開啟音訊 decoder' },
-    });
-    await expect(loading).rejects.toMatchObject({ code: 'CODEC_UNSUPPORTED', fatal: true });
-    expect(engine.state).toBe('error');
-  });
-
   it('只換音軌時目前的影片軌播放中解碼失敗：照常退回只播音訊，換軌生效時 video 為 null', async () => {
     const { engine, deps, worker } = await loaded();
     const selecting = engine.selectTracks({ audio: id.audioZh });
@@ -587,6 +570,128 @@ describe('切換影片軌', () => {
     await selecting;
     expect(engine.selectedTracks).toEqual({ audio: id.audioZh, video: null, subtitle: null });
     expect(worker.messages('select')).toHaveLength(1);
+  });
+});
+
+describe('主來源音軌的 decoder 開不起來（不是換軌）', () => {
+  const failure = {
+    code: 'CODEC_UNSUPPORTED' as const,
+    fatal: false,
+    message: '無法開啟音訊 decoder',
+  };
+
+  /** load 到第一個 start 送出，Worker 回報這個 epoch 的主來源音軌 decoder 開不起來。 */
+  async function failOnLoad(probed: ProbedMedia = media) {
+    const deps = createFakeDeps();
+    const engine = createEngineWith(deps);
+    const errors: EngineError[] = [];
+    engine.addEventListener('error', (e) => errors.push(e.error));
+    const loading = engine.load(source);
+    const worker = deps.workers.last;
+    await worker.probe(probed);
+    const start = await worker.next('start');
+    worker.reply({ type: 'audiofailed', epoch: start.epoch, source: null, error: failure });
+    return { engine, deps, worker, loading, start, errors };
+  }
+
+  it('有可播的影片軌：該音軌標為不支援（codec），以新的 epoch、audio: null 重新 start，load 成功、只播影片', async () => {
+    const { engine, deps, worker, loading, start, errors } = await failOnLoad();
+    const restart = await worker.next('start', 2);
+    expect(restart.epoch).toBeGreaterThan(start.epoch);
+    expect(restart).toMatchObject({ audio: null, video: 1, time: 0 });
+    frame(worker, 0, restart.epoch);
+    deps.audio.reply({ type: 'paused' });
+    const info = await loading;
+    expect(engine.state).toBe('ready');
+    // 不自動改選另一條音軌（audioZh 可播）。
+    expect(engine.selectedTracks).toEqual({ audio: null, video: id.video1, subtitle: null });
+    expect(info.tracks.find((t) => t.id === id.audioJa)).toMatchObject({
+      supported: false,
+      unsupportedReason: 'codec',
+    });
+    expect(engine.tracks.find((t) => t.id === id.audioJa)?.supported).toBe(false);
+    // load 完成之前的退回不發出 error（與影片在第一張 frame 之前失敗相同）。
+    expect(errors).toEqual([]);
+    expect(engine.error).toBeNull();
+    // App 可以自己換到另一條音軌。
+    const selecting = engine.selectTracks({ audio: id.audioZh });
+    const select = await worker.next('select');
+    expect(select).toMatchObject({ audio: 2, video: 1 });
+    frame(worker, 0, select.epoch);
+    deps.audio.reply({ type: 'paused' });
+    await selecting;
+    expect(engine.selectedTracks.audio).toBe(id.audioZh);
+  });
+
+  it('只有音軌（沒有可播的影片軌）：load() 以致命的 CODEC_UNSUPPORTED reject，state 是 error', async () => {
+    const { engine, worker, loading } = await failOnLoad(audioMedia());
+    await expect(loading).rejects.toMatchObject({ code: 'CODEC_UNSUPPORTED', fatal: true });
+    expect(engine.state).toBe('error');
+    expect(worker.messages('start')).toHaveLength(1);
+  });
+
+  it('退回途中 load() 換檔：舊的 load 以 AbortError reject，新的 load 照常完成', async () => {
+    const { engine, deps, worker, loading } = await failOnLoad();
+    await worker.next('start', 2);
+    const rejected = loading.catch((error: unknown) => error);
+    const next = engine.load(source);
+    expect(await rejected).toMatchObject({ name: 'AbortError' });
+    const fresh = deps.workers.last;
+    expect(fresh).not.toBe(worker);
+    await fresh.probe(media);
+    const start = await fresh.next('start');
+    expect(start).toMatchObject({ audio: 0, video: 1 });
+    frame(fresh, 0, start.epoch);
+    deps.audio.reply({ type: 'paused' });
+    await next;
+    // 新的媒體：第一條音軌照常選用、可播。
+    const audio = engine.tracks.find((t) => t.id === engine.selectedTracks.audio);
+    expect(audio).toMatchObject({ kind: 'audio', streamIndex: 0, supported: true });
+    expect(engine.state).toBe('ready');
+  });
+
+  it('退回途中 destroy：load 以 AbortError reject，不再送出 start', async () => {
+    const { engine, worker, loading } = await failOnLoad();
+    await worker.next('start', 2);
+    const rejected = loading.catch((error: unknown) => error);
+    await engine.destroy();
+    expect(await rejected).toMatchObject({ name: 'AbortError' });
+    expect(worker.messages('start')).toHaveLength(2);
+  });
+
+  it('已經發布媒體之後：標為不支援並發出 trackschange，以 audio: null 重新輸出，發出非致命的 CODEC_UNSUPPORTED', async () => {
+    const { engine, worker, changes } = await loaded();
+    const errors: EngineError[] = [];
+    engine.addEventListener('error', (e) => errors.push(e.error));
+    const [start] = worker.messages('start');
+    worker.reply({ type: 'audiofailed', epoch: start?.epoch ?? NaN, source: null, error: failure });
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.selected).toEqual({ audio: null, video: id.video1, subtitle: null });
+    expect(changes[0]?.tracks.find((t) => t.id === id.audioJa)).toMatchObject({
+      supported: false,
+      unsupportedReason: 'codec',
+    });
+    expect(worker.messages('select').at(-1)).toMatchObject({ audio: null, video: 1 });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      code: 'CODEC_UNSUPPORTED',
+      fatal: false,
+      detail: { trackId: id.audioJa },
+    });
+    expect(engine.state).toBe('ready');
+    expect(engine.error).toBeNull();
+  });
+
+  it('已經發布媒體之後、trackschange 的 listener 內 destroy：不再重新輸出，也不發出 error', async () => {
+    const { engine, worker } = await loaded();
+    const errors: EngineError[] = [];
+    engine.addEventListener('error', (e) => errors.push(e.error));
+    engine.addEventListener('trackschange', () => void engine.destroy());
+    const [start] = worker.messages('start');
+    worker.reply({ type: 'audiofailed', epoch: start?.epoch ?? NaN, source: null, error: failure });
+    await settle();
+    expect(worker.messages('select')).toEqual([]);
+    expect(errors).toEqual([]);
   });
 });
 

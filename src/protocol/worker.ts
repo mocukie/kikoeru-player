@@ -25,6 +25,7 @@ export type MainToWorkerMessage<H extends HostTypes> =
   | WorkerRateMessage
   | WorkerFrameClosedMessage
   | WorkerVideoSuspendMessage
+  | WorkerPositionMessage
   | WorkerStatsRequestMessage;
 
 /** Worker 建立後的第一個訊息；`workletPort` 以 transfer 傳送。 */
@@ -185,7 +186,7 @@ export interface WorkerFrameClosedMessage {
  * `start` 之前送出就讓這次 load 一開始就不解碼影片。
  *
  * - `suspended: true`：關閉 `VideoDecoder`，Worker 內暫留的 frame close，不再送出 frame；音訊照常。有音軌時影片的封包
- *   只留播放位置之前最後一個 keyframe 之後的（依音訊取用的進度估計），封包佇列不會因為影片沒人取用而增長；沒有音軌時
+ *   只留播放位置之前最後一個 keyframe 之後的（依已經送給 worklet 的音訊估計），封包佇列不會因為影片沒人取用而增長；沒有音軌時
  *   影片的封包讓 demux 停在平常的上限。
  * - `suspended: false`：建立新的 decoder，從 pts ≤ `time` 的最後一個 keyframe 解碼，送出 `time` 的那一張（pts ≤ `time`
  *   的最後一張）與之後的。佇列中沒有那個 keyframe 時從下一個 keyframe 開始。
@@ -194,6 +195,17 @@ export interface WorkerVideoSuspendMessage {
   type: 'videosuspend';
   suspended: boolean;
   /** 恢復時此刻的播放位置（秒）；`suspended: true` 時不使用。 */
+  time: number;
+}
+
+/**
+ * 音訊時鐘的播放位置：主執行緒收到這個 epoch 的 worklet `clock` 時轉送。時鐘不前進（暫停、等資料）時不送。Worker 以它
+ * 節流只為字幕的 demux（沒有音訊、影片的封包佇列讓 demux 停下），不超前播放位置太多；過期的 epoch 丟棄。
+ */
+export interface WorkerPositionMessage {
+  type: 'position';
+  epoch: number;
+  /** 媒體時間（秒）。 */
   time: number;
 }
 
@@ -256,7 +268,8 @@ export interface WorkerAudioErrorMessage {
 /**
  * 這個 epoch 的音軌無法輸出（`error.fatal` 為 false），由主執行緒決定怎麼處理：
  *
- * - `source` 為 null：主來源音軌的 decoder 建立或開啟失敗（`CODEC_UNSUPPORTED`），這個 epoch 的主來源輸出停止。
+ * - `source` 為 null：主來源音軌的 decoder 建立或開啟失敗（`CODEC_UNSUPPORTED`），這個 epoch 的主來源輸出停止。主執行緒
+ *   換回原本的音軌（換軌時），或把它標為不支援、以 `audio: null` 重新 start（只播影片）。
  * - `source` 為外掛音軌的 id：外掛音軌在輸出中開啟 decoder、seek、讀取、demux 或解碼失敗。Worker 丟掉它的 instance
  *   （之後選用它時不輸出音訊），送出這個 epoch 的 `eof`（worklet 以靜音推進時鐘），主來源的影片與字幕照常輸出。
  */

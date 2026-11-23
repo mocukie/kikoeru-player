@@ -184,3 +184,18 @@ describe('cues 事件', () => {
     expect(events).toEqual([]);
   });
 });
+
+describe('播放位置轉送給 Worker', () => {
+  it('worklet 的 clock 以 position 轉送（Worker 以它節流只為字幕的 demux）；過期 epoch 的 clock 不轉送', async () => {
+    const { engine, deps, worker } = await loaded({ preferredLanguages: { subtitle: ['ja'] } });
+    const epoch = latestEpoch(worker);
+    deps.audio.reply({ type: 'clock', position: 3.5, frame: 1, buffered: 0, underruns: 0 });
+    expect(worker.messages('position')).toEqual([{ type: 'position', epoch, time: 3.5 }]);
+    const seeking = engine.seek(8);
+    await worker.next('seek');
+    deps.audio.reply({ type: 'clock', epoch, position: 4, frame: 2, buffered: 0, underruns: 0 });
+    expect(worker.messages('position')).toHaveLength(1);
+    deps.audio.reply({ type: 'paused' });
+    await seeking;
+  });
+});

@@ -432,6 +432,25 @@ describe('音軌 offset', () => {
     expect(concatLeft(pcm()).every((x) => x === 0)).toBe(true);
   });
 
+  test('正值：已送出的媒體時間（sent）從起點開始、隨送出的 chunk 前進，不跳到 offset', async () => {
+    const { pipeline, demand, pcm, epoch } = setup({
+      batches: batches(),
+      startTime: 0.5,
+      offset: 30,
+      duration: 100,
+    });
+    await settle();
+    // 還沒送出任何 chunk：起點。
+    expect(pipeline.sent).toBe(0.5);
+    demand.need(epoch, 3 * 4096);
+    await settle();
+    expect(frames(pcm())).toBe(3 * 4096);
+    expect(pipeline.sent).toBeCloseTo(0.5 + (3 * 4096) / RATE, 9);
+    demand.need(epoch, 4096);
+    await settle();
+    expect(pipeline.sent).toBeCloseTo(0.5 + (4 * 4096) / RATE, 9);
+  });
+
   test('seek 之後：媒體時間 t 送出來源 t − offset 的 sample', async () => {
     const { demand, pcm, epoch } = setup({ batches: batches(), startTime: 0.5, offset: 0.2 });
     demand.need(epoch, 2048);

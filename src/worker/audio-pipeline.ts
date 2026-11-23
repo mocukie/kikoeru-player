@@ -330,9 +330,11 @@ export class AudioPipeline<P> {
   #failedFrames = 0;
   /** 上一個成功解碼的封包長度（frame），封包沒有時長時用來補靜音。 */
   #lastPacketFrames = 0;
+  #sent: number;
 
   constructor(options: AudioPipelineOptions<P>) {
     this.#options = options;
+    this.#sent = options.startTime;
     const queue = new PcmQueue(options.sampleRate, options.startTime, options.duration ?? NaN);
     this.#queue = queue;
     // eslint-disable-next-line @typescript-eslint/no-this-alias -- getter 內的 this 是 input 物件。
@@ -356,6 +358,14 @@ export class AudioPipeline<P> {
       rate: options.rate,
       createStretcher: options.createStretcher,
     });
+  }
+
+  /**
+   * 已經送給 worklet 的 PCM 的結尾在媒體時間軸上的位置（秒）；還沒送出任何 chunk 時是 `startTime`。實際的播放位置
+   * 不會超過它（起點前的靜音、尚未取用的資料都不算），背景中用來估計播放位置。
+   */
+  get sent(): number {
+    return this.#sent;
   }
 
   /** 改變播放速度：已經產生的輸出照舊速度送出，之後的輸入用新的速度（tempo.ts）。 */
@@ -408,6 +418,7 @@ export class AudioPipeline<P> {
       const frames = channels[0].length;
       post({ type: 'pcm', epoch, time, rate, channels }, [channels[0].buffer, channels[1].buffer]);
       demand.consume(epoch, frames);
+      this.#sent = Math.max(this.#sent, time + (frames * rate) / this.#options.sampleRate);
     }
   }
 
