@@ -289,6 +289,10 @@ class EngineImpl extends EventTarget implements Engine {
       },
       // 背景中暫停影片解碼（`suspendVideoWhenHidden` 且 `document.hidden`）。
       suspended: options.suspendVideoWhenHidden && deps.visibility.hidden,
+      // 換軌等新軌的畫面（#outputReady()）。
+      pictured: () => {
+        this.#notify();
+      },
     });
     this.#video.attach(options.canvas);
     if (options.suspendVideoWhenHidden) {
@@ -529,7 +533,7 @@ class EngineImpl extends EventTarget implements Engine {
     }
     this.#log.log('debug', 'command', 'selectTracks', { ...request.selection });
     for (const kind of kindsOf(request)) this.#selectOwners[kind] = request;
-    return this.#queue.enqueue(
+    const result = this.#queue.enqueue(
       'select',
       (signal) => this.#runSelect(request, signal),
       (kind, tag) =>
@@ -539,6 +543,9 @@ class EngineImpl extends EventTarget implements Engine {
         this.#ownedKinds(tag).length === 0,
       request,
     );
+    // 執行中的換軌可能被接手了部分的 kind：讓它以仍負責的 kind 重新輸出（#runSelect）。
+    this.#notify();
+    return result;
   }
   addExternalAudio(
     source: Source,
@@ -916,21 +923,53 @@ class EngineImpl extends EventTarget implements Engine {
   }
 
   /**
-   * selectTracks：只套用這個要求仍負責的 kind（被較新的呼叫接手的 kind 交給它們）。先檢查全部的 kind，有任何一個不能選
-   * 就整個要求不生效。選擇與正在輸出、已生效的都相同時什麼都不做。
+   * selectTracks：只套用這個要求仍負責的 kind（被較新的呼叫接手的 kind 交給它們，其餘沿用已生效的）。先檢查全部的 kind，
+   * 有任何一個不能選就整個要求不生效：被取代的換軌可能已經改了 Worker 的輸出，先換回已生效的選擇再 reject。選擇與正在
+   * 輸出、已生效的都相同時什麼都不做。換軌途中被接手了部分的 kind 時，以仍負責的 kind 重新輸出，不以舊的選擇發布。
    */
   async #runSelect(request: SelectRequest, signal: AbortSignal): Promise<void> {
     this.#assertMedia();
+    for (;;) {
+      const owned = this.#ownedKinds(request);
+      let next: TrackSelection;
+      try {
+        next = this.#requestedSelection(request, owned);
+      } catch (error) {
+        await this.#restoreOutput(signal);
+        throw error;
+      }
+      const output = this.#outputSelection();
+      if (sameSelection(next, this.#selected) && sameSelection(next, output)) return;
+      const lost = () => this.#ownedKinds(request).length !== owned.length;
+      if (await this.#switchTracks(next, signal, undefined, lost)) return;
+    }
+  }
+
+  /** `request` 以 `owned` 的 kind 套用在已生效的選擇上；不能選的軌丟出（見 `#checkSelectable()`）。 */
+  #requestedSelection(request: SelectRequest, owned: readonly TrackKind[]): TrackSelection {
     const next: TrackSelection = { ...this.#selected };
-    for (const kind of this.#ownedKinds(request)) {
+    for (const kind of owned) {
       const value = request.selection[kind];
       if (value === undefined) continue;
       if (value !== null) this.#checkSelectable(kind, value);
       next[kind] = value;
     }
-    const output = this.#outputSelection();
-    if (sameSelection(next, this.#selected) && sameSelection(next, output)) return;
-    await this.#switchTracks(next, signal);
+    return next;
+  }
+
+  /** Worker 正在輸出的不是已生效的選擇（被取代的換軌改了輸出）：換回已生效的選擇，等它重新輸出。 */
+  async #restoreOutput(signal: AbortSignal): Promise<void> {
+    if (sameSelection(this.#outputSelection(), this.#selected)) return;
+    await this.#returnToSelected(signal);
+  }
+
+  /** 以已生效的選擇重新輸出（丟掉換軌期間留著的 cue），等它備妥。 */
+  async #returnToSelected(signal: AbortSignal): Promise<void> {
+    this.#pendingCues = [];
+    // 原本沒有選用影片：renderer 不再畫失敗或被取代的那條軌。
+    if (this.#selected.video === null) this.#video.setTrack(null);
+    this.#applySelection(this.#selected);
+    await this.#until(() => this.#outputReady(), signal);
   }
 
   /** `request` 仍負責的 kind：沒有被較新的 `selectTracks()` 接手的。 */
@@ -966,21 +1005,23 @@ class EngineImpl extends EventTarget implements Engine {
    * 換成 `next`：從目前位置以新的 epoch 重新供料（state 不變），等新軌出聲（播放中時 worklet 開始輸出；暫停中時資料
    * 備妥）、影片的第一張 frame 畫出後才公布 `selectedTracks` 並發出 trackschange，再送出期間留著的 cue。
    * 新的影片軌 configure 或首個 keyframe 失敗時：該軌改為不支援、發出 trackschange，換回原本生效的軌，reject 非致命的
-   * `CODEC_UNSUPPORTED`。
+   * `CODEC_UNSUPPORTED`。生效之前 `stale()` 變成 true 時不公布、回傳 false（呼叫端以新的選擇重來）；生效時回傳 true。
    */
   async #switchTracks(
     next: TrackSelection,
     signal: AbortSignal,
     /** 生效時一起公布的軌道變化（例如移除外掛音軌）。 */
     change: (media: MediaInfo) => MediaInfo = (media) => media,
-  ): Promise<void> {
+    stale: () => boolean = () => false,
+  ): Promise<boolean> {
     const switching: Switching = { next: { ...next }, failed: null };
     this.#switching = switching;
     try {
       this.#applySelection(next);
-      await this.#until(() => switching.failed !== null || this.#outputReady(), signal);
+      await this.#until(() => switching.failed !== null || stale() || this.#outputReady(), signal);
       const failed = switching.failed;
       this.#switching = null;
+      if (!failed && stale()) return false;
       const epoch = this.#epoch;
       if (failed) {
         await this.#revertSwitch(failed, signal);
@@ -992,11 +1033,12 @@ class EngineImpl extends EventTarget implements Engine {
       }
       // 關掉影片：畫面上的 frame 留到生效時才清掉（videoSize 回到 null）。
       if (switching.next.video === null) this.#video.setTrack(null);
-      if (this.#epoch !== epoch) return;
+      if (this.#epoch !== epoch) return true;
       const media = this.#media;
       this.#publishMedia(media && change(media), switching.next);
-      if (this.#epoch !== epoch) return;
+      if (this.#epoch !== epoch) return true;
       this.#flushPendingCues();
+      return true;
     } finally {
       if (this.#switching === switching) this.#switching = null;
     }
@@ -1024,11 +1066,7 @@ class EngineImpl extends EventTarget implements Engine {
       signal.throwIfAborted();
       if (this.#epoch !== epoch) return;
     }
-    this.#pendingCues = [];
-    // 原本沒有選用影片：renderer 不再畫失敗的那條軌。
-    if (this.#selected.video === null) this.#video.setTrack(null);
-    this.#applySelection(this.#selected);
-    await this.#until(() => this.#outputReady(), signal);
+    await this.#returnToSelected(signal);
   }
 
   /**
@@ -1181,11 +1219,17 @@ class EngineImpl extends EventTarget implements Engine {
     if (media) this.#publishMedia({ ...media, tracks: withOffset(media.tracks) }, this.#selected);
   }
 
-  /** 這個 epoch 的輸出已備妥：worklet 回報過（被要求播放時要等到 playing），影片也備妥（或不再等）。 */
+  /**
+   * 這個 epoch 的輸出已備妥：worklet 回報過（被要求播放時要等到 playing），影片也備妥，換了影片軌時新軌的 frame 也已畫出
+   * （或不再等）。
+   */
   #outputReady(): boolean {
     const last = this.#lastOutput;
     return (
-      !this.#video.pending && last !== null && (last === 'playing' || this.#workletPlay !== true)
+      !this.#video.pending &&
+      !this.#video.awaitingPicture &&
+      last !== null &&
+      (last === 'playing' || this.#workletPlay !== true)
     );
   }
 
@@ -1294,7 +1338,10 @@ class EngineImpl extends EventTarget implements Engine {
             if (message.epoch === this.#epoch) this.#onVideoReady();
             break;
           case 'videoend':
-            if (message.epoch === this.#epoch) this.#onVideoReady();
+            if (message.epoch !== this.#epoch) break;
+            // 這個 epoch 不會再有 frame：佇列中也沒有時不再等新軌的畫面。
+            this.#video.giveUpPicture(false);
+            this.#onVideoReady();
             break;
           case 'videoerror':
             if (message.epoch !== this.#epoch) break;
@@ -2035,6 +2082,11 @@ class EngineImpl extends EventTarget implements Engine {
         // 還在 loading：媒體在 load 完成時一起發布。
         load.info = { ...load.info, tracks: mark(load.info.tracks) };
         load.selection = { ...load.selection, video: null };
+        // 它是唯一可播的軌：與 probe 時就沒有可播的軌一樣，load() 以 CODEC_UNSUPPORTED 失敗。
+        if (!load.info.tracks.some((t) => t.supported && t.kind !== 'subtitle')) {
+          this.#fail(this.#fatal('CODEC_UNSUPPORTED', '沒有可以播放的音軌或影片軌'));
+          return;
+        }
       } else if (media) {
         media = { ...media, tracks: mark(media.tracks) };
         this.#publishMedia(media, { ...this.#selected, video: null });
@@ -2064,6 +2116,7 @@ class EngineImpl extends EventTarget implements Engine {
         `影片的第一張 frame 超過 ${String(VIDEO_READY_TIMEOUT_MS)} ms 沒有備妥，先開始播放`,
         { position: this.#currentTime },
       );
+      this.#video.giveUpPicture(true);
       this.#onVideoReady();
     });
   }

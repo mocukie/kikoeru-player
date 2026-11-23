@@ -11,12 +11,13 @@ import type {
   WireTextCue,
   WorkerToMainMessage,
 } from '../protocol/index.js';
+import { WorkerError } from './errors.js';
 import type { WorkerHost } from './host.js';
-import { MediaWorker } from './media-worker.js';
+import { MediaWorker, type MediaWorkerDeps } from './media-worker.js';
 
-function inPage(): WorkerEndpoint {
+function inPage(deps: Omit<MediaWorkerDeps, 'postMessage'> = {}): WorkerEndpoint {
   let listener: ((message: WorkerToMainMessage<WorkerHost>) => void) | null = null;
-  const worker = new MediaWorker({ postMessage: (m) => listener?.(m) });
+  const worker = new MediaWorker({ ...deps, postMessage: (m) => listener?.(m) });
   return {
     post: (message) => {
       worker.handle(message);
@@ -159,6 +160,38 @@ describe('multi-track.mkv', () => {
     await driver.decode(null, { subtitle: srt.streamIndex });
     await expect.poll(() => driver.cues(1).length).toBe(20);
     expectSchedule(driver.cues(1), range(0, 20));
+  });
+
+  test('只選字幕軌時 demux 失敗：照一般的讀取錯誤回報（不當成正常結束）', async () => {
+    const data = new Uint8Array(await mediaBytes('video/multi-track.mkv'));
+    let failing = false;
+    const driver = await WorkerDriver.init(
+      inPage({
+        openSource: () =>
+          Promise.resolve({
+            size: data.length,
+            read: (offset: number, length: number) =>
+              failing
+                ? Promise.reject(new WorkerError('SOURCE_UNAUTHORIZED', 'HTTP 401'))
+                : Promise.resolve(data.subarray(offset, offset + length)),
+          }),
+      }),
+    );
+    const media = await driver.load({ kind: 'bytes', data: data.buffer });
+    failing = true;
+    driver.post({
+      type: 'start',
+      epoch: 1,
+      time: 0,
+      audio: null,
+      video: null,
+      subtitle: subtitle(media, 'subrip').streamIndex,
+    });
+    expect(await driver.waitFor((m) => m.type === 'error')).toMatchObject({
+      epoch: 1,
+      error: { code: 'SOURCE_UNAUTHORIZED' },
+    });
+    expect(driver.cues(1).length).toBeLessThan(20);
   });
 });
 

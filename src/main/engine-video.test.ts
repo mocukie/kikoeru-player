@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createFakeDeps, type FakeEngineDeps } from '../../test/fakes/engine-deps.js';
 import type { FakeMediaWorker } from '../../test/fakes/media-worker.js';
-import { closedCount, frame, videoMedia } from '../../test/fakes/video.js';
+import { closedCount, frame, videoMedia, videoOnlyMedia } from '../../test/fakes/video.js';
 import type { ProbedMedia } from '../protocol/index.js';
 import { createEngineWith } from './engine.js';
 import type { Engine, Source, VideoSize } from './types.js';
@@ -98,6 +98,23 @@ describe('load', () => {
     expect(engine.state).toBe('ready');
     expect(engine.videoSize).toBeNull();
     expect((await statsOf(engine, worker)).video).toBeNull();
+  });
+
+  it('唯一可播的影片軌 configure 失敗、沒有其他可播的軌：load() reject CODEC_UNSUPPORTED，state 進入 error', async () => {
+    const { engine, deps, worker, loading } = await startLoad({}, videoOnlyMedia());
+    const result = loading.catch((e: unknown) => e);
+    const start = await worker.next('start');
+    worker.reply({
+      type: 'videoerror',
+      epoch: start.epoch,
+      beforeFirstFrame: true,
+      error: { code: 'CODEC_UNSUPPORTED', fatal: false, message: 'configure 失敗' },
+    });
+    deps.audio.reply({ type: 'paused' });
+    expect(await result).toMatchObject({ name: 'EngineError', code: 'CODEC_UNSUPPORTED' });
+    expect(engine.state).toBe('error');
+    expect(engine.error).toMatchObject({ code: 'CODEC_UNSUPPORTED', fatal: true });
+    expect(worker.terminated).toBe(true);
   });
 
   it('影片軌不支援（probe 時）：不選用，start 不帶影片軌', async () => {

@@ -1,6 +1,7 @@
 // 主執行緒的影片輸出：繪製 frame 的 VideoRenderer、依音訊時鐘的繪製迴圈、這個 epoch 的影片是否備妥（等第一張 frame，
-// 超過 VIDEO_READY_TIMEOUT_MS 不再等），以及背景時暫停（suspendVideoWhenHidden）。備妥之後怎麼恢復音訊、何時降級，
-// 由 Engine 決定。
+// 超過 VIDEO_READY_TIMEOUT_MS 不再等）、換了影片軌之後新軌的畫面是否已經畫出，以及背景時暫停
+// （suspendVideoWhenHidden）。備妥之後怎麼恢復音訊、何時降級，由 Engine 決定。
+// 「備妥」只表示有資料讓時鐘推進：新軌的第一張 frame 可能晚於時鐘，要等時鐘到了才畫出。
 
 import type { VideoSize, VideoTrack } from './types.js';
 import {
@@ -26,6 +27,8 @@ export interface VideoOutputOptions extends VideoRendererOptions {
   clock(): number;
   /** 一開始是否在背景（暫停影片）。 */
   suspended: boolean;
+  /** 新軌的畫面畫出了（或不再等它，見 `awaitingPicture`）。 */
+  pictured?: () => void;
 }
 
 export class VideoOutput {
@@ -33,9 +36,13 @@ export class VideoOutput {
   readonly #renderer: VideoRenderer;
   #track: VideoTrack | null = null;
   #pending = false;
+  /** 換了影片軌之後新軌的 frame 還沒畫出。 */
+  #awaitingPicture = false;
   #suspended: boolean;
   /** 不再等影片的 timer。 */
   #timer: ReturnType<typeof setTimeout> | null = null;
+  /** 不再等新軌畫面的 timer。 */
+  #pictureTimer: ReturnType<typeof setTimeout> | null = null;
   /** 繪製迴圈的取消；沒有在畫時為 null。 */
   #cancelLoop: (() => void) | null = null;
 
@@ -56,6 +63,15 @@ export class VideoOutput {
    */
   get pending(): boolean {
     return this.#pending;
+  }
+
+  /**
+   * 換了影片軌（`start()`）之後新軌的 frame 還沒畫出：新軌的第一張 frame 晚於時鐘時，收到它（`pending` 結束、時鐘可以
+   * 推進）之後還要等時鐘到了才畫出。這個 epoch 的影片結束而沒有 frame 可畫、影片軌失敗、背景中，或收到 frame 之後超過
+   * `VIDEO_READY_TIMEOUT_MS` 還沒畫出時不再等。
+   */
+  get awaitingPicture(): boolean {
+    return this.#awaitingPicture;
   }
 
   /** 背景中暫停影片：不畫、不等，收到的 frame 立即 close。 */
@@ -87,6 +103,7 @@ export class VideoOutput {
     this.#track = track;
     this.#renderer.setTrack(track);
     this.#pending = !this.#suspended;
+    this.#setAwaitingPicture(!this.#suspended);
     this.#runLoop(!this.#suspended);
   }
 
@@ -96,6 +113,7 @@ export class VideoOutput {
     this.#track = null;
     this.#pending = false;
     this.#clearTimer();
+    this.#setAwaitingPicture(false);
   }
 
   /**
@@ -104,6 +122,7 @@ export class VideoOutput {
   abandon(): void {
     this.#runLoop(false);
     this.#track = null;
+    this.#setAwaitingPicture(false);
   }
 
   /** 新的媒體：close 所有 frame，`size` 回到 null。 */
@@ -137,17 +156,36 @@ export class VideoOutput {
     this.#renderer.push(epoch, frame, source);
   }
 
-  /** 依此刻的音訊時鐘挑選並繪製 frame。 */
+  /** 依此刻的音訊時鐘挑選並繪製 frame；畫出新的一張時結束新軌畫面的等待。 */
   render(): void {
-    if (this.#track) this.#renderer.render(this.#options.clock());
+    if (this.#track && this.#renderer.render(this.#options.clock())) {
+      this.#setAwaitingPicture(false);
+    }
   }
 
-  /** 結束等待：還在等時回傳 true（Engine 接著恢復 worklet），否則什麼都不做。 */
+  /**
+   * 結束等待：還在等時回傳 true（Engine 接著恢復 worklet），否則什麼都不做。新軌的畫面還沒畫出時，從這時起
+   * `VIDEO_READY_TIMEOUT_MS` 後不再等它。
+   */
   markReady(): boolean {
     if (!this.#pending) return false;
     this.#pending = false;
     this.#clearTimer();
+    if (this.#awaitingPicture) {
+      this.#pictureTimer ??= setTimeout(() => {
+        this.#pictureTimer = null;
+        this.#setAwaitingPicture(false);
+      }, VIDEO_READY_TIMEOUT_MS);
+    }
     return true;
+  }
+
+  /**
+   * 不再等新軌的畫面：這個 epoch 的影片結束（`videoend`）而佇列中沒有 frame 可畫，或影片超過 `VIDEO_READY_TIMEOUT_MS`
+   * 還沒備妥。`always` 為 false 時佇列中還有 frame 就繼續等它畫出。
+   */
+  giveUpPicture(always: boolean): void {
+    if (always || this.#renderer.queued === 0) this.#setAwaitingPicture(false);
   }
 
   /** 音訊已備妥、影片還沒：`VIDEO_READY_TIMEOUT_MS` 後還在等就呼叫 `onTimeout`。已經在計時時不重設。 */
@@ -166,6 +204,8 @@ export class VideoOutput {
     if (suspended === this.#suspended) return false;
     this.#suspended = suspended;
     if (!this.#track) return true;
+    // 背景中不畫：不再等新軌的畫面。
+    if (suspended) this.#setAwaitingPicture(false);
     if (suspended) this.#renderer.flush(epoch);
     this.#runLoop(!suspended);
     return true;
@@ -174,6 +214,14 @@ export class VideoOutput {
   #clearTimer(): void {
     if (this.#timer !== null) clearTimeout(this.#timer);
     this.#timer = null;
+  }
+
+  #setAwaitingPicture(awaiting: boolean): void {
+    if (this.#pictureTimer !== null) clearTimeout(this.#pictureTimer);
+    this.#pictureTimer = null;
+    if (this.#awaitingPicture === awaiting) return;
+    this.#awaitingPicture = awaiting;
+    if (!awaiting) this.#options.pictured?.();
   }
 
   /** 開始或停止繪製迴圈：每個 rAF（背景時 rAF 停住則由 timer）依音訊時鐘畫一次。 */

@@ -116,60 +116,72 @@ export class Demand {
   }
 }
 
+/** PcmQueue 中的一段：解碼的資料，或靜音（`planes` 為 null，不配置陣列，取出時才寫入 0）。 */
+interface PcmSegment {
+  planes: readonly [Float32Array, Float32Array] | null;
+  /** 這一段的 frame 數。 */
+  length: number;
+  /** 還沒送出的第一個 frame。 */
+  offset: number;
+  /** 第 0 個 frame 的媒體時間。 */
+  time: number;
+}
+
 /** 解碼後、尚未送出的 stereo PCM。 */
 class PcmQueue {
-  /** `time` 是 `planes` 第 0 個 sample 的時間，`offset` 是還沒送出的第一個 sample。 */
-  readonly #segments: {
-    planes: readonly [Float32Array, Float32Array];
-    offset: number;
-    time: number;
-  }[] = [];
+  readonly #segments: PcmSegment[] = [];
   readonly #sampleRate: number;
   readonly #startTime: number;
+  /** 媒體的長度（秒）；NaN 表示未知。補靜音的空缺不超過它。 */
+  readonly #duration: number;
   /** 最後一段的結尾時間；沒有時間戳的資料接在這裡。 */
   #endTime: number;
   /** 已經收過資料；之後的時間戳才用來偵測空缺。 */
   #started = false;
   /** 壞封包預留、還沒補上的靜音（frame）。 */
   #pendingSilence = 0;
+  /** 空缺的靜音補到了媒體的結尾：之後的資料都在媒體之外。 */
+  #complete = false;
   frames = 0;
 
-  constructor(sampleRate: number, startTime: number) {
+  constructor(sampleRate: number, startTime: number, duration: number) {
     this.#sampleRate = sampleRate;
     this.#startTime = startTime;
     this.#endTime = startTime;
+    this.#duration = duration;
+  }
+
+  /** 空缺的靜音已補到媒體的結尾，之後的資料都在媒體之外，不必再解碼。 */
+  get complete(): boolean {
+    return this.#complete;
   }
 
   /**
    * 加入一段資料，mono 複製成 stereo。有時間戳時依它對齊：比前一段的結尾（第一段是起點）晚就在中間補靜音，早就丟掉
    * 重疊的部分；10 ms 以內的抖動視為連續。起點前補靜音的是音軌 offset 為正（或音訊比起點晚開始）的情況。
+   * 空缺的靜音只補到媒體的結尾（`duration`）：越過它時這段資料在媒體之外，丟掉，之後的也不收（`complete`）。
    */
   push(planes: readonly Float32Array[], time: number | null): void {
     const left = planes[0];
-    if (!left) return;
+    if (!left || this.#complete) return;
     const right = planes[1] ?? left;
     if (time !== null) {
       // 有時間戳時，遺失的範圍由時間戳決定，取代壞封包預留的靜音。
       this.#pendingSilence = 0;
       if (time - this.#endTime > GAP_SECONDS) {
-        this.#pushSilence(Math.round((time - this.#endTime) * this.#sampleRate));
+        const beyond = time >= this.#duration;
+        const gapEnd = beyond ? this.#duration : time;
+        if (gapEnd > this.#endTime) {
+          this.#pushSilence(Math.round((gapEnd - this.#endTime) * this.#sampleRate));
+        }
+        if (beyond) {
+          this.#complete = true;
+          return;
+        }
       }
     }
     this.finish();
-    const origin = time ?? this.#endTime;
-    // 起點之前的 sample，以及時間戳倒退而與已有資料重疊的部分（例如損毀的封包讓 parser 估錯時間）都丟掉。
-    const keepFrom =
-      this.#started && this.#endTime - origin > GAP_SECONDS ? this.#endTime : this.#startTime;
-    this.#started = true;
-    const skip = Math.min(
-      left.length,
-      Math.max(0, Math.round((keepFrom - origin) * this.#sampleRate)),
-    );
-    this.#endTime = Math.max(this.#endTime, origin + left.length / this.#sampleRate);
-    const length = left.length - skip;
-    if (length === 0) return;
-    this.#segments.push({ planes: [left, right], offset: skip, time: origin });
-    this.frames += length;
+    this.#append([left, right], left.length, time);
   }
 
   /**
@@ -188,8 +200,26 @@ class PcmQueue {
   }
 
   #pushSilence(frames: number): void {
-    const silence = new Float32Array(frames);
-    this.push([silence, silence], null);
+    this.#append(null, frames, null);
+  }
+
+  /** 接上一段（`planes` 為 null 時是靜音）：丟掉起點之前與時間戳倒退而與已有資料重疊的部分。 */
+  #append(
+    planes: readonly [Float32Array, Float32Array] | null,
+    length: number,
+    time: number | null,
+  ): void {
+    const origin = time ?? this.#endTime;
+    // 起點之前的 sample，以及時間戳倒退而與已有資料重疊的部分（例如損毀的封包讓 parser 估錯時間）都丟掉。
+    const keepFrom =
+      this.#started && this.#endTime - origin > GAP_SECONDS ? this.#endTime : this.#startTime;
+    this.#started = true;
+    const skip = Math.min(length, Math.max(0, Math.round((keepFrom - origin) * this.#sampleRate)));
+    this.#endTime = Math.max(this.#endTime, origin + length / this.#sampleRate);
+    const kept = length - skip;
+    if (kept === 0) return;
+    this.#segments.push({ planes, length, offset: skip, time: origin });
+    this.frames += kept;
   }
 
   /** 取出最多 `frames` 個 frame，複製進 `allocate` 給的 buffer。 */
@@ -203,13 +233,19 @@ class PcmQueue {
     while (written < frames) {
       const segment = this.#segments[0];
       if (!segment) break;
-      const [left, right] = segment.planes;
-      const count = Math.min(frames - written, left.length - segment.offset);
-      channels[0].set(left.subarray(segment.offset, segment.offset + count), written);
-      channels[1].set(right.subarray(segment.offset, segment.offset + count), written);
+      const count = Math.min(frames - written, segment.length - segment.offset);
+      if (segment.planes) {
+        const [left, right] = segment.planes;
+        channels[0].set(left.subarray(segment.offset, segment.offset + count), written);
+        channels[1].set(right.subarray(segment.offset, segment.offset + count), written);
+      } else {
+        // 靜音：allocate 給的 buffer 可能是重用的，要寫入 0。
+        channels[0].fill(0, written, written + count);
+        channels[1].fill(0, written, written + count);
+      }
       written += count;
       segment.offset += count;
-      if (segment.offset === left.length) this.#segments.shift();
+      if (segment.offset === segment.length) this.#segments.shift();
     }
     this.frames -= written;
     return { time, channels };
@@ -226,10 +262,13 @@ class PcmQueue {
     let written = 0;
     for (const segment of this.#segments) {
       if (written >= count) break;
-      const [left, right] = segment.planes;
-      const n = Math.min(count - written, left.length - segment.offset);
-      channels[0].set(left.subarray(segment.offset, segment.offset + n), written);
-      channels[1].set(right.subarray(segment.offset, segment.offset + n), written);
+      const n = Math.min(count - written, segment.length - segment.offset);
+      // 靜音的段不必寫：新配置的陣列已經是 0。
+      if (segment.planes) {
+        const [left, right] = segment.planes;
+        channels[0].set(left.subarray(segment.offset, segment.offset + n), written);
+        channels[1].set(right.subarray(segment.offset, segment.offset + n), written);
+      }
       written += n;
     }
     return { time, channels };
@@ -256,6 +295,11 @@ export interface AudioPipelineOptions<P> {
   sampleRate: number;
   /** 從這個媒體時間（秒）開始輸出，之前的 sample 丟掉。 */
   startTime: number;
+  /**
+   * 媒體的長度（秒），省略或 NaN 表示未知：時間戳的空缺（例如 offset 為正時起點前的靜音）只補到它，越過它的資料在媒體
+   * 之外，丟掉並結束這個 epoch 的音訊（之後由 worklet 以靜音推進到 `duration`）。
+   */
+  duration?: number;
   /**
    * 音軌 offset（秒），預設 0：decoder 給的時間是來源的時間，`mediaTime = sourceTime + offset`（ADR-0004 之前的
    * 「音訊輸出排程與變速」#13）。在 stretcher 之前套用。
@@ -289,7 +333,7 @@ export class AudioPipeline<P> {
 
   constructor(options: AudioPipelineOptions<P>) {
     this.#options = options;
-    const queue = new PcmQueue(options.sampleRate, options.startTime);
+    const queue = new PcmQueue(options.sampleRate, options.startTime, options.duration ?? NaN);
     this.#queue = queue;
     // eslint-disable-next-line @typescript-eslint/no-this-alias -- getter 內的 this 是 input 物件。
     const pipeline = this;
@@ -373,10 +417,13 @@ export class AudioPipeline<P> {
     if (packet !== undefined) {
       await this.#decode(packet);
       // 最後一個封包解完就排出 decoder，不等下一個要求。
-      if (!lane.drained) return;
+      if (!lane.drained && !this.#queue.complete) return;
     }
-    this.#push(await this.#options.decoder.flush());
-    this.#queue.finish();
+    // 之後的資料都在媒體之外時不必排出 decoder。
+    if (!this.#queue.complete) {
+      this.#push(await this.#options.decoder.flush());
+      this.#queue.finish();
+    }
     this.#ended = true;
   }
 

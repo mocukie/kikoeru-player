@@ -61,6 +61,11 @@ export class VideoRenderer {
     return this.#size;
   }
 
+  /** 佇列中還沒畫出的 frame 數。 */
+  get queued(): number {
+    return this.#queue.length;
+  }
+
   /** 還沒 close 的 frame 數（`getStats().resources.openVideoFrames` 的主執行緒部分）。 */
   get open(): number {
     return this.#queue.length + (this.#shown ? 1 : 0);
@@ -101,24 +106,25 @@ export class VideoRenderer {
 
   /**
    * 依時鐘（媒體時間，秒）挑選 pts ≤ 時鐘的最新一張並畫上去；之前還沒畫的 frame 丟棄、計入 dropped。沒有 canvas 時
-   * 不畫，但同樣消耗 frame，維持同步。
+   * 不畫，但同樣消耗 frame，維持同步。回傳是否換上了新的一張（時鐘還沒到佇列中的 frame 時為 false）。
    */
-  render(clock: number): void {
+  render(clock: number): boolean {
     let pick = -1;
     for (let i = 0; i < this.#queue.length; i++) {
       const entry = this.#queue[i];
       if (!entry || entry.frame.timestamp / 1e6 > clock + EPSILON) break;
       pick = i;
     }
-    if (pick < 0) return;
+    if (pick < 0) return false;
     const skipped = this.#queue.splice(0, pick + 1);
     const next = skipped.pop();
-    if (!next) return;
+    if (!next) return false;
     this.dropped += skipped.length;
     const old = this.#shown ? [this.#shown, ...skipped] : skipped;
     this.#shown = next;
     this.#close(old);
     this.#present(next);
+    return true;
   }
 
   /** 換繪製目標；有畫面上的 frame 時立即畫到新的 canvas。null 表示不再繪製。 */
@@ -128,11 +134,15 @@ export class VideoRenderer {
     if (shown?.layout && canvas) this.#draw(canvas, shown.frame, shown.layout);
   }
 
+  /**
+   * 畫出之後才通知尺寸：listener 讀到的 canvas 已是新的尺寸，listener 內 `destroy()`／換檔 close 了這張 frame 也不會
+   * 再用到它。
+   */
   #present(entry: Entry): void {
     const layout = this.#layoutOf(entry.frame);
     entry.layout = layout;
-    this.#setSize(layout.size);
     if (this.#canvas) this.#draw(this.#canvas, entry.frame, layout);
+    this.#setSize(layout.size);
   }
 
   /**

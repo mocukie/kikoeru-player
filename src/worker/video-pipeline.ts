@@ -3,6 +3,8 @@
 // backpressure：decode 佇列（`decodeQueueSize`）最多 4 個；還沒 close 的 frame（Worker 內暫留的加上送到主執行緒的）
 // 與 decode 佇列合計到 8 張就不再送進 decoder，主執行緒來不及 close 時停止解碼，封包留在封包佇列。decoder 內部
 // （例如 B-frame 的重排）暫存、還沒輸出的 frame 看不到，不計入。
+// 從 lane 取出之後仍保留的封包（catch up 中的 GOP、背景恢復用的這個 GOP）以 `HoldableLane.retain` 計入封包佇列的
+// 硬上限（ADR-0007）：長 GOP 的影片保留的封包超過硬上限時一樣是 MEMORY_LIMIT。
 
 import type { HoldableLane } from './demuxer.js';
 import type { VideoConfig } from './video-codec.js';
@@ -142,10 +144,15 @@ export class VideoDecoding<P, F extends DecodedFrame> {
   #suspended = false;
   /** `resume()` 的位置（秒），由目前的 run 取用。 */
   #resumeAt: number | null = null;
-  /** 這個 GOP 已經從 lane 取出的封包（最後一個 keyframe 開始），suspend 時放進 backlog。 */
+  /**
+   * 這個 GOP 已經從 lane 取出的封包（最後一個 keyframe 開始），suspend 時放進 backlog。catch up 中還沒送進 decoder 的
+   * GOP 也在其中。
+   */
   #history: P[] = [];
+  #historyBytes = 0;
   /** 恢復之後先於 lane 讀的封包。 */
   #backlog: P[] = [];
+  #backlogBytes = 0;
 
   constructor(options: VideoDecodingOptions<P, F>) {
     this.#options = options;
@@ -174,7 +181,9 @@ export class VideoDecoding<P, F extends DecodedFrame> {
       this.#closePending(current);
       current.interrupt();
       this.#backlog = [...this.#history, ...this.#backlog];
+      this.#backlogBytes += this.#historyBytes;
       this.#history = [];
+      this.#historyBytes = 0;
     }
     if (this.#decoder && this.#decoder.state !== 'closed') this.#decoder.close();
     this.#decoder = null;
@@ -212,6 +221,8 @@ export class VideoDecoding<P, F extends DecodedFrame> {
     this.#submitted.clear();
     this.#history = [];
     this.#backlog = [];
+    this.#historyBytes = 0;
+    this.#backlogBytes = 0;
     this.#resumeAt = null;
     try {
       /** 上一次重新設定時的解碼數；之後沒有再解出 frame 就不再重試。 */
@@ -246,7 +257,10 @@ export class VideoDecoding<P, F extends DecodedFrame> {
         this.#current = null;
         this.#history = [];
         this.#backlog = [];
+        this.#historyBytes = 0;
+        this.#backlogBytes = 0;
       }
+      options.packets.retain(0);
     }
   }
 
@@ -287,12 +301,11 @@ export class VideoDecoding<P, F extends DecodedFrame> {
         return true;
       };
       for (;;) {
-        const packet =
-          this.#backlog.length > 0 ? this.#backlog.shift() : await options.packets.next(signal);
+        const packet = this.#takeBacklog(options.packets) ?? (await options.packets.next(signal));
         if (errored()) return 'error';
         const chunk = packet === undefined ? undefined : this.#options.toChunk(packet);
         if (chunk === null) continue;
-        if (packet !== undefined && chunk) this.#remember(packet, chunk);
+        if (packet !== undefined && chunk) this.#remember(options.packets, packet, chunk);
         if (gop && chunk && chunk.timestamp <= current.target) {
           if (chunk.type === 'key') gop = [chunk];
           else if (gop.length > 0) gop.push(chunk);
@@ -336,9 +349,31 @@ export class VideoDecoding<P, F extends DecodedFrame> {
   }
 
   /** 記下這個 GOP 從 lane 取出的封包：keyframe 重新開始，之前沒有 keyframe 的 delta 不記。 */
-  #remember(packet: P, chunk: VideoChunk): void {
-    if (chunk.type === 'key') this.#history = [packet];
-    else if (this.#history.length > 0) this.#history.push(packet);
+  #remember(packets: HoldableLane<P>, packet: P, chunk: VideoChunk): void {
+    if (chunk.type === 'key') {
+      this.#history = [packet];
+      this.#historyBytes = packets.size(packet);
+    } else if (this.#history.length > 0) {
+      this.#history.push(packet);
+      this.#historyBytes += packets.size(packet);
+    } else {
+      return;
+    }
+    this.#reportRetained(packets);
+  }
+
+  /** 取出 backlog 的下一個封包；沒有時為 undefined。 */
+  #takeBacklog(packets: HoldableLane<P>): P | undefined {
+    const packet = this.#backlog.shift();
+    if (packet === undefined) return undefined;
+    this.#backlogBytes -= packets.size(packet);
+    this.#reportRetained(packets);
+    return packet;
+  }
+
+  /** 保留中的封包（這個 GOP 與 backlog）的 bytes 計入封包佇列的硬上限。 */
+  #reportRetained(packets: HoldableLane<P>): void {
+    packets.retain(this.#historyBytes + this.#backlogBytes);
   }
 
   /**
@@ -388,7 +423,10 @@ export class VideoDecoding<P, F extends DecodedFrame> {
     });
     const keep = last >= 0 ? last : first >= 0 ? first : entries.length;
     const fromBacklog = Math.min(keep, this.#backlog.length);
-    this.#backlog.splice(0, fromBacklog);
+    for (const packet of this.#backlog.splice(0, fromBacklog)) {
+      this.#backlogBytes -= packets.size(packet);
+    }
+    this.#reportRetained(packets);
     if (keep > fromBacklog) packets.trim(keep - fromBacklog);
   }
 

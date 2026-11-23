@@ -103,9 +103,11 @@ class ReadGate {
  */
 export class LibavMedia {
   readonly raw: RawMedia;
-  /** 媒體時間軸的原點：容器的 `start_time`（秒），沒有時為 0。 */
-  readonly origin: number;
   readonly #libav: LibAV;
+  /** 媒體時間軸的原點（秒）：預設為容器的 `start_time`（沒有時為 0），`alignTo()` 改為一條 stream 的開頭。 */
+  #origin: number;
+  /** 各 stream 的第一個可播放 sample（`AVStream.start_time`，秒，FFmpeg 已加上要跳過的 sample）；沒有記錄時為 null。 */
+  readonly #streamStarts: readonly (number | null)[];
   readonly #fmt: number;
   readonly #streams: readonly libavjs.Stream[];
   readonly #reads: ReadGate;
@@ -124,6 +126,7 @@ export class LibavMedia {
     streams: libavjs.Stream[],
     raw: RawMedia,
     origin: number,
+    streamStarts: readonly (number | null)[],
     reads: ReadGate,
     demuxPkt: number,
     memory: WebAssembly.Memory | null,
@@ -134,8 +137,24 @@ export class LibavMedia {
     this.#fmt = fmt;
     this.#streams = streams;
     this.raw = raw;
-    this.origin = origin;
+    this.#origin = origin;
+    this.#streamStarts = streamStarts;
     this.#reads = reads;
+  }
+
+  /** 媒體時間軸的原點（秒）：容器時間 − 原點 = 媒體時間。 */
+  get origin(): number {
+    return this.#origin;
+  }
+
+  /**
+   * 以 `stream` 的第一個可播放 sample 為媒體時間軸的原點（外掛音軌：它自己的 0 點對齊媒體的 0，不是容器的
+   * `start_time`）。解碼的時間、demux 的進度與 seek 都依它換算。stream 沒有記錄開頭時沿用容器的 `start_time`。
+   * 在第一次 `startOutput()` 之前呼叫。
+   */
+  alignTo(stream: number): void {
+    const start = this.#streamStarts[stream];
+    if (start != null) this.#origin = start;
   }
 
   /** instance 的 wasm heap（linear memory）目前的大小（bytes）。 */
@@ -206,6 +225,17 @@ export class LibavMedia {
       size: source.size,
       streams: await Promise.all(streams.map((s) => rawStream(libav, s))),
     };
+    const streamStarts = await Promise.all(
+      streams.map(async (s) => {
+        const ts = int64(
+          libav,
+          await libav.AVStream_start_time(s.ptr),
+          await libav.AVStream_start_timehi(s.ptr),
+        );
+        const { time_base_num: num, time_base_den: den } = s;
+        return ts === null || !(num > 0 && den > 0) ? null : (ts * num) / den;
+      }),
+    );
     const demuxPkt = await libav.av_packet_alloc();
     return new LibavMedia(
       libav,
@@ -213,6 +243,7 @@ export class LibavMedia {
       streams,
       raw,
       start === null ? 0 : start / 1e6,
+      streamStarts,
       reads,
       demuxPkt,
       memory(),
@@ -415,6 +446,10 @@ export class LibavMedia {
         lane.trim(count);
       },
       changed: (signal) => lane.changed(signal),
+      size: (chunk) => chunk?.data.byteLength ?? 0,
+      retain: (bytes) => {
+        lane.retain(bytes);
+      },
     };
   }
 

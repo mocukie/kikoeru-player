@@ -93,3 +93,41 @@ describe('稀疏軌', () => {
     expect(received).toEqual([]);
   });
 });
+
+describe('settled', () => {
+  test('只 demux 稀疏軌時 demux 失敗：以 demux 的錯誤 reject（不是當成正常結束）', async () => {
+    const failure = new Error('讀取失敗');
+    let reads = 0;
+    const reader: PacketReader<FakePacket> = {
+      read: () =>
+        ++reads === 1
+          ? Promise.resolve({ packets: [{ stream: SUBTITLE, time: 0, duration: 1 }], eof: false })
+          : Promise.reject(failure),
+      measure: (p) => ({ stream: p.stream, bytes: 1, time: p.time, duration: p.duration }),
+    };
+    const demuxer = new Demuxer({
+      reader,
+      streams: [],
+      sparse: { streams: [SUBTITLE], onPackets: () => undefined },
+      startTime: 0,
+      epoch: 1,
+    });
+    const stop = new AbortController();
+    const running = demuxer.run(stop.signal);
+    await expect(demuxer.settled(stop.signal)).rejects.toBe(failure);
+    await running;
+  });
+
+  test('demux 到結尾：resolve', async () => {
+    const demuxer = new Demuxer({
+      reader: new FakeReader([[{ stream: SUBTITLE, time: 0, duration: 1 }]]),
+      streams: [],
+      sparse: { streams: [SUBTITLE], onPackets: () => undefined },
+      startTime: 0,
+      epoch: 1,
+    });
+    const stop = new AbortController();
+    void demuxer.run(stop.signal);
+    await expect(demuxer.settled(stop.signal)).resolves.toBeUndefined();
+  });
+});

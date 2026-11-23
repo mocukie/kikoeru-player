@@ -57,7 +57,7 @@ export interface WorkerLimits {
   cacheBytes: number;
   /** 每個選用中來源的預讀目標（秒）。 */
   readaheadSeconds: number;
-  /** 封包佇列的硬上限（bytes），超過時 fatal 的 `MEMORY_LIMIT`。 */
+  /** 封包佇列的硬上限（bytes，含影片解碼取出之後仍保留的封包），超過時 fatal 的 `MEMORY_LIMIT`。 */
   packetQueueBytes: number;
 }
 

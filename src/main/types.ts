@@ -248,8 +248,8 @@ export interface Engine extends EventTarget {
    *
    * 只要還有一條可播的音軌或影片軌就成功；不支援的軌照樣列在 `tracks`（`supported: false`），
    * 影片軌不支援或 configure 失敗時 `selectedTracks.video` 為 null、只播音訊。
-   * 沒有任何可播的軌時 reject `EngineError('CODEC_UNSUPPORTED')`。其他失敗也 reject `EngineError`，
-   * state 變為 `'error'`。
+   * 沒有任何可播的軌時（包括唯一可播的影片軌 configure 失敗時）reject `EngineError('CODEC_UNSUPPORTED')`。
+   * 其他失敗也 reject `EngineError`，state 變為 `'error'`。
    */
   load(source: Source, options?: LoadOptions): Promise<MediaInfo>;
 
@@ -309,11 +309,14 @@ export interface Engine extends EventTarget {
    *
    * 從目前位置重新供料：換軌期間時鐘停在切換的位置（聲音以 `audioFadeMs` 淡出淡入，中間短暫無聲），新軌出聲（暫停中為
    * 資料備妥）、選用影片軌時新的 frame 畫出之後才 resolve；這時 `selectedTracks` 才是新值並發出 `trackschange`。
+   * 新影片軌的第一張 frame 晚於目前位置時，等時鐘推進到它、畫出之後才生效（收到 frame 之後超過 2 秒還沒畫出時不再等）。
    * 換了影片軌時從目前位置之前的 keyframe 解碼，畫面上的 frame 留到新軌的第一張畫出；關掉影片時 `videoSize` 在生效時回到
    * null。換了字幕軌時，新軌從目前位置之前的 keyframe 起的 cue 在 `trackschange` 之後才送出；換軌期間不送 cue。
    *
    * 同一 kind 連續呼叫只保留最後一個：較早的呼叫要改的 kind 都被較新的呼叫接手時，以 AbortError reject（執行中的也是）；
-   * 還有自己負責的 kind 時照常執行，只套用那些 kind。選擇與目前生效的相同時立即 resolve。
+   * 還有自己負責的 kind 時照常執行，只套用那些 kind（執行中被接手時，被接手的 kind 回到目前生效的軌重新輸出，不公布
+   * 被接手的選擇）。被取代的換軌已經開始輸出、而最後的呼叫不生效（例如 reject `RangeError`）時，輸出換回目前生效的軌之後才
+   * reject。選擇與目前生效的相同時立即 resolve。
    *
    * 一個呼叫內的 kind 一起生效或一起不生效：選到 `supported: false` 的軌，或新的影片軌 configure／首個 keyframe 失敗、
    * 新的音軌的 decoder 開不起來時，reject 非致命的 `EngineError('CODEC_UNSUPPORTED')` 並保留原本的軌；後兩者會把該軌改為
@@ -806,7 +809,10 @@ export interface EngineStats {
     decodeQueueSize: number;
     avgDecodeMs: number;
   } | null;
-  /** demux 與解碼之間的封包佇列。 */
+  /**
+   * demux 與解碼之間的封包佇列。`audioSeconds`／`videoSeconds`：選用中音軌、影片軌在佇列中的秒數；`bytes`：所有軌的
+   * bytes 合計，含影片解碼取出之後仍保留的封包（seek 後追到起點之前的 GOP、背景恢復用的 GOP），與硬上限比較的就是它。
+   */
   packetQueue: WorkerStats['packetQueue'];
   /**
    * Range 快取。`bytes`／`limitBytes`：目前用量與上限；`aheadBytes`：選用中來源已預讀、在播放位置之後的 bytes 合計；

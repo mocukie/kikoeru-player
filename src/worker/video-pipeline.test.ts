@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import type { HoldableLane } from './demuxer.js';
+import { Demuxer, withDemux, type HoldableLane, type PacketReader } from './demuxer.js';
 import { PacketQueue } from './packet-queue.js';
 import {
   FrameCredit,
@@ -121,6 +121,10 @@ function liveLane(initial: Packet[] = []) {
       queue.trim(1, count);
     },
     changed: (signal) => queue.changed(signal),
+    size: () => 1,
+    retain: (bytes) => {
+      queue.retain(1, bytes);
+    },
   };
   return {
     lane,
@@ -604,5 +608,64 @@ describe('VideoDecoding 的背景（suspend／resume）', () => {
     await expect(running).rejects.toMatchObject({ name: 'AbortError' });
     expect(live.held).toBe(false);
     stop();
+  });
+});
+
+describe('取出之後保留的封包計入封包佇列的硬上限（ADR-0007）', () => {
+  /** 每批一個 60 B 的封包（單一 GOP：只有第一個是 keyframe），以 100 B 的硬上限 demux 的 lane。 */
+  function demuxed(count: number, hardBytes = 100) {
+    const all = Array.from({ length: count }, (_, i) => ({ ms: (i * 1000) / 30, key: i === 0 }));
+    const batches = all.map((p) => [p]);
+    const reader: PacketReader<Packet> = {
+      read: () => {
+        const packets = batches.shift() ?? [];
+        return Promise.resolve({ packets, eof: batches.length === 0 });
+      },
+      measure: (p) => ({ stream: 1, bytes: 60, time: p.ms / 1000, duration: 1 / 30 }),
+    };
+    const demuxer = new Demuxer<Packet>({
+      reader,
+      streams: [1],
+      startTime: 0,
+      epoch: 1,
+      queueLimits: { seconds: 2, bytes: 8 * 1024 * 1024, hardBytes },
+    });
+    const raw = demuxer.lane(1);
+    const lane: HoldableLane<Packet> = {
+      ...raw,
+      entries: () => raw.packets().map((p) => ({ key: p.key, time: p.ms / 1000 })),
+    };
+    return { demuxer, lane };
+  }
+
+  test('seek 到長 GOP 的結尾：catch up 中保留的封包超過硬上限時以 MEMORY_LIMIT 失敗，bytes 也計入', async () => {
+    const t = setup();
+    const { demuxer, lane } = demuxed(10);
+    const signal = new AbortController().signal;
+    const running = withDemux(demuxer, signal, () => t.run(lane, { startTime: 10, signal }));
+    await expect(running).rejects.toMatchObject({ code: 'MEMORY_LIMIT' });
+    expect(demuxer.fatal.aborted).toBe(true);
+    expect(t.decoders.flatMap((d) => d.decoded)).toEqual([]);
+  });
+
+  test('硬上限以內：照常解碼並送出起點的 frame，bytes 含保留中的 GOP；結束後不再保留', async () => {
+    const t = setup();
+    const { demuxer, lane } = demuxed(10, 1000);
+    const signal = new AbortController().signal;
+    // 封包佇列的 bytes（stats）含保留中的 GOP。
+    let peak = 0;
+    const watch = new AbortController();
+    void (async () => {
+      while (!watch.signal.aborted) {
+        peak = Math.max(peak, demuxer.bytes);
+        await lane.changed(watch.signal).catch(() => undefined);
+      }
+    })();
+    await withDemux(demuxer, signal, () => t.run(lane, { startTime: 10, signal }));
+    watch.abort();
+    expect(peak).toBeGreaterThanOrEqual(9 * 60);
+    expect(t.posted.map((p) => p.frame.timestamp)).toEqual([300_000]);
+    expect(t.events).toEqual(['end 1']);
+    expect(demuxer.bytes).toBe(0);
   });
 });

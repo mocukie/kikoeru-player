@@ -14,6 +14,7 @@ import type { WireSource, WorkerToMainMessage } from '../protocol/index.js';
 import type { WorkerHost } from './host.js';
 import { MediaWorker, type MediaWorkerDeps } from './media-worker.js';
 import type { ByteSource } from './source.js';
+import { createWebVideoDecoder } from './webcodecs.js';
 
 function inPage(deps: Omit<MediaWorkerDeps, 'postMessage'> = {}): WorkerEndpoint {
   let listener: ((message: WorkerToMainMessage<WorkerHost>) => void) | null = null;
@@ -33,6 +34,11 @@ const RATE = 48_000;
 const EXTERNAL = 'video/external-audio-440.flac';
 /** multi-track.mkv：stream 0 是 H.264，stream 1 是 880 Hz 的 AAC。 */
 const MAIN = 'video/multi-track.mkv';
+/**
+ * 兩條 FLAC 軌：stream 0 是 440 Hz（0 秒起），stream 1 是 default 的 660 Hz（1.5 秒起），容器的 start_time 是 0
+ *（test/media/README.md）。
+ */
+const LATE_START = 'video/external-audio-late-start.mkv';
 
 async function bytes(path: string): Promise<WireSource<WorkerHost>> {
   return { kind: 'bytes', data: await mediaBytes(path), name: path };
@@ -393,5 +399,180 @@ describe('外掛音軌在輸出中失敗', () => {
     const seeked = await driver.seek(2, 2);
     expect(seeked.left).toHaveLength(0);
     expect(driver.messages.some((m) => m.type === 'error' || m.type === 'crash')).toBe(false);
+  });
+});
+
+describe('外掛音軌的 0 點', () => {
+  test('是選用的 stream 的第一個可播放 sample（不是容器的 start_time）：解碼的時間與 seek 都依它換算', async () => {
+    const driver = await WorkerDriver.init(inPage());
+    await driver.load(await bytes(MAIN));
+    const track = await driver.addAudio('ext:1', await bytes(LATE_START));
+    expect(track).toMatchObject({ streamIndex: 1, default: true });
+    driver.post({
+      type: 'start',
+      epoch: 1,
+      time: 0,
+      audio: 1,
+      audioSource: 'ext:1',
+      video: null,
+      subtitle: null,
+    });
+    const pcm = await driver.collect(1, 2 * RATE);
+    // stream 1 的第一聲（加倍為 1320 Hz）在媒體 0 秒。
+    expectOnsets(onsets(pcm).slice(0, 2), [0, 1]);
+    expect(amplitudeAt(pcm.left, RATE, 1320, 480, 2400)).toBeGreaterThan(0.3);
+    // 媒體 3.25 秒是 stream 的 3.25 秒（容器的 4.75 秒），下一聲在媒體 4 秒。
+    const seeked = await driver.seek(3.25, 2, 2 * RATE);
+    expect(seeked.time).toBe(3.25);
+    expectOnsets(onsets(seeked).slice(0, 2), [0.75, 1.75]);
+    expect(amplitudeAt(seeked.left, RATE, 660, 0.75 * RATE + 480, 2400)).toBeGreaterThan(0.3);
+  });
+});
+
+describe('極大的有限 offset', () => {
+  test.each([Number.MAX_VALUE, -Number.MAX_VALUE])(
+    '外掛音軌 offset %s：不出錯，媒體範圍內都是靜音',
+    async (offset) => {
+      const { driver, media } = await withExternal();
+      driver.post({
+        type: 'start',
+        epoch: 1,
+        time: 0,
+        audio: 0,
+        audioSource: 'ext:1',
+        audioOffset: offset,
+        video: 0,
+        subtitle: null,
+      });
+      // 靜音只補到媒體的長度。
+      const pcm = await driver.collect(1);
+      expect(pcm.left.length).toBeLessThanOrEqual(Math.round(media.duration * RATE));
+      expect(peak(pcm.left)).toBe(0);
+      expect(
+        driver.messages.filter(
+          (m) => m.type.endsWith('error') || m.type === 'crash' || m.type === 'audiofailed',
+        ),
+      ).toEqual([]);
+    },
+  );
+
+  test.each([
+    ['audio/flac.flac', 0, null],
+    [MAIN, 1, 0],
+  ])('容器內音軌（%s）offset ±Number.MAX_VALUE：不出錯，都是靜音', async (path, audio, video) => {
+    for (const offset of [Number.MAX_VALUE, -Number.MAX_VALUE]) {
+      const driver = await WorkerDriver.init(inPage());
+      await driver.load(await bytes(path));
+      driver.post({
+        type: 'start',
+        epoch: 1,
+        time: 0,
+        audio,
+        audioOffset: offset,
+        video,
+        subtitle: null,
+      });
+      const pcm = await driver.collect(1);
+      expect(peak(pcm.left)).toBe(0);
+      expect(
+        driver.messages.filter(
+          (m) => m.type.endsWith('error') || m.type === 'crash' || m.type === 'audiofailed',
+        ),
+      ).toEqual([]);
+    }
+  });
+});
+
+describe('輸出的取代與結束', () => {
+  test('另開 instance 的開檔卡住時換回 offset 小的音軌：中止開檔，新的選擇照常輸出', async () => {
+    const data = new Uint8Array(await mediaBytes(MAIN));
+    const stalled: AbortSignal[] = [];
+    let opens = 0;
+    const driver = await WorkerDriver.init(
+      inPage({
+        openSource: (_wire, signal) => {
+          if (++opens === 1) {
+            return Promise.resolve({
+              size: data.length,
+              read: (offset: number, length: number) =>
+                Promise.resolve(data.subarray(offset, offset + length)),
+            });
+          }
+          // 第二次開檔（另開的 instance）卡住，也不理會 signal。
+          stalled.push(signal);
+          return new Promise<ByteSource>(() => undefined);
+        },
+      }),
+    );
+    await driver.load(await bytes(MAIN));
+    driver.post({ type: 'start', epoch: 1, time: 0, audio: 1, video: 0, subtitle: null });
+    await driver.collect(1, RATE);
+    const select = { type: 'select', time: 1, audio: 1, video: 0, subtitle: null } as const;
+    driver.post({ ...select, epoch: 2, audioOffset: 3 });
+    await expect.poll(() => stalled.length).toBe(1);
+    driver.post({ ...select, epoch: 3 });
+    const pcm = await driver.collect(3, RATE);
+    expect(pcm.time).toBe(1);
+    expect(stalled[0]?.aborted).toBe(true);
+    expect((await driver.stats()).libavInstances).toBe(1);
+  });
+
+  test('所有軌都不選：關掉影片的 decoder、丟掉另開的 instance', async () => {
+    let closed = 0;
+    const driver = await WorkerDriver.init(
+      inPage({
+        createVideoDecoder: (init) => {
+          const decoder = createWebVideoDecoder(init);
+          const close = decoder.close.bind(decoder);
+          decoder.close = () => {
+            closed++;
+            close();
+          };
+          return decoder;
+        },
+      }),
+    );
+    await driver.load(await bytes('video/h264-aac.mp4'));
+    driver.post({
+      type: 'start',
+      epoch: 1,
+      time: 0,
+      audio: 1,
+      audioOffset: 3,
+      video: 0,
+      subtitle: null,
+    });
+    await driver.collect(1, RATE);
+    expect((await driver.stats()).libavInstances).toBe(2);
+    driver.post({ type: 'select', epoch: 2, time: 1, audio: null, video: null, subtitle: null });
+    await expect
+      .poll(() => driver.worklet.some((m) => m.type === 'eof' && m.epoch === 2))
+      .toBe(true);
+    const stats = await driver.stats();
+    expect(stats.libavInstances).toBe(1);
+    expect(stats.video).toBeNull();
+    expect(closed).toBe(1);
+  });
+
+  test('主來源超過封包佇列的硬上限：音訊來自外掛音軌時也回報致命的 MEMORY_LIMIT', async () => {
+    const driver = await WorkerDriver.init(inPage(), { limits: { packetQueueBytes: 64 * 1024 } });
+    const media = await driver.load(await bytes('video/bad-interleave.mp4'));
+    const video = media.tracks.find((t) => t.kind === 'video');
+    if (!video?.supported) return;
+    await driver.addAudio('ext:1', await bytes(EXTERNAL));
+    driver.post({
+      type: 'start',
+      epoch: 1,
+      time: 0,
+      audio: 0,
+      audioSource: 'ext:1',
+      video: video.streamIndex,
+      subtitle: null,
+    });
+    driver.need(1, 20 * RATE);
+    expect(await driver.waitFor((m) => m.type === 'error')).toMatchObject({
+      epoch: 1,
+      error: { code: 'MEMORY_LIMIT', fatal: true },
+    });
   });
 });

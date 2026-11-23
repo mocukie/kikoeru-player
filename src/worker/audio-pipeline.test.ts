@@ -148,6 +148,8 @@ function setup(
     startTime?: number;
     /** 音軌 offset（秒）。 */
     offset?: number;
+    /** 媒體的長度（秒）。 */
+    duration?: number;
     epoch?: number;
     queueLimits?: PacketQueueLimits;
     onDemux?: (end: number) => void;
@@ -181,6 +183,7 @@ function setup(
     sampleRate: RATE,
     startTime,
     ...(options.offset !== undefined && { offset: options.offset }),
+    ...(options.duration !== undefined && { duration: options.duration }),
     rate: options.rate ?? 1,
     createStretcher: stretch.create,
     epoch,
@@ -381,6 +384,52 @@ describe('音軌 offset', () => {
     expect(pcm()[0]?.time).toBe(0.1);
     expect(left.subarray(0, 0.2 * RATE).every((x) => x === 0)).toBe(true);
     expect(left[0.2 * RATE + 7]).toBe(7);
+  });
+
+  test('正值很大（空缺比可配置的陣列長）：依要求逐塊送出靜音，不一次配置整段空缺', async () => {
+    const { demand, pcm, epoch, posted } = setup({
+      batches: batches(),
+      offset: 1e6,
+      duration: 2e6,
+    });
+    demand.need(epoch, 3 * 4096);
+    await settle();
+    const chunks = pcm();
+    expect(frames(chunks)).toBe(3 * 4096);
+    expect(chunks[0]?.time).toBe(0);
+    expect(chunks[2]?.time).toBeCloseTo((2 * 4096) / RATE, 9);
+    expect(concatLeft(chunks).every((x) => x === 0)).toBe(true);
+    expect(posted.some((p) => p.message.type === 'eof')).toBe(false);
+  });
+
+  test('靜音補到媒體長度就結束：超出 duration 的空缺與來源的資料都不送，Number.MAX_VALUE 也一樣', async () => {
+    for (const offset of [Number.MAX_VALUE, 0.75]) {
+      const { demand, pcm, posted, running, epoch } = setup({
+        batches: batches(),
+        offset,
+        duration: 0.5,
+      });
+      demand.need(epoch, 1e9);
+      await running;
+      expect(frames(pcm())).toBe(0.5 * RATE);
+      expect(concatLeft(pcm()).every((x) => x === 0)).toBe(true);
+      expect(posted.at(-1)?.message).toEqual({ type: 'eof', epoch });
+    }
+  });
+
+  test('buffer pool 重用的 buffer 也送出全 0 的靜音', async () => {
+    const { demand, pcm, pool, epoch } = setup({ batches: batches(), offset: 10, duration: 20 });
+    // 先放進寫過資料的 buffer：靜音不能沿用它們的內容。
+    const dirty = Array.from({ length: 4 }, () => {
+      const buffer = new ArrayBuffer(4096 * 4);
+      new Float32Array(buffer).fill(0.5);
+      return buffer;
+    });
+    pool.release(dirty);
+    demand.need(epoch, 2 * 4096);
+    await settle();
+    expect(frames(pcm())).toBe(2 * 4096);
+    expect(concatLeft(pcm()).every((x) => x === 0)).toBe(true);
   });
 
   test('seek 之後：媒體時間 t 送出來源 t − offset 的 sample', async () => {

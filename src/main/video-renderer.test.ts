@@ -127,6 +127,54 @@ describe('VideoRenderer', () => {
     expect(sizes).toHaveLength(1);
   });
 
+  it('先畫再通知 resized：listener 讀到的 canvas 已是新的尺寸；render 回傳是否畫出了新的一張', () => {
+    const closed: unknown[] = [];
+    let seen: number[] = [];
+    const { canvas } = fakeCanvas();
+    const renderer = new VideoRenderer({
+      closed: (source, count) => closed.push(count),
+      resized: () => {
+        seen = [canvas.width, canvas.height];
+      },
+    });
+    renderer.reset(1, track());
+    renderer.attach(canvas);
+    renderer.push(1, new FakeFrame(1), SOURCE);
+    expect(renderer.render(0.5)).toBe(false);
+    expect(renderer.render(1)).toBe(true);
+    expect(seen).toEqual([320, 180]);
+    expect(renderer.render(1)).toBe(false);
+  });
+
+  it('resized 的 listener 內 reset（destroy、換檔）：之後不再使用已經 close 的 frame', () => {
+    const { canvas, calls } = fakeCanvas();
+    const frame = new FakeFrame(0);
+    const draws: boolean[] = [];
+    const context = canvas.getContext('2d') as unknown as {
+      drawImage: (...args: unknown[]) => void;
+    };
+    const drawImage = context.drawImage;
+    context.drawImage = (...args: unknown[]) => {
+      // 真實的 drawImage 對 close 過的 VideoFrame 丟 InvalidStateError。
+      if (args[0] === frame && frame.closed) throw new DOMException('closed', 'InvalidStateError');
+      draws.push(true);
+      drawImage(...args);
+    };
+    let renderer: VideoRenderer | null = null;
+    renderer = new VideoRenderer({
+      closed: () => undefined,
+      resized: (size) => {
+        if (size) renderer?.reset(2, null);
+      },
+    });
+    renderer.reset(1, track());
+    renderer.attach(canvas);
+    renderer.push(1, frame, SOURCE);
+    expect(() => renderer.render(0)).not.toThrow();
+    expect(frame.closed).toBe(true);
+    expect(calls.filter((c) => c[0] === 'drawImage')).toHaveLength(draws.length);
+  });
+
   it('旋轉：canvas 交換寬高，繞中心旋轉後畫', () => {
     const { renderer, push } = setup(
       track({ display: { width: 180, height: 320, rotation: 270 } }),

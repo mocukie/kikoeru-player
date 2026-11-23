@@ -176,6 +176,8 @@ interface Load {
   tracker: BufferTracker | null;
   /** probe 到的軌道；probe 之後才有。 */
   tracks: readonly ProbedTrack[];
+  /** 媒體的長度（秒，probe 之後才有；未知時為 NaN）：音訊的空缺只補到它（`AudioPipelineOptions.duration`）。 */
+  duration: number;
   /** 開檔、probe 中。start 等它完成。 */
   opening: Promise<void>;
   /** 已建立（或正在建立）libav instance，計入 `libavInstances`。 */
@@ -382,6 +384,7 @@ export class MediaWorker {
       source: null,
       tracker: null,
       tracks: [],
+      duration: NaN,
       opening: Promise.resolve(),
       hasInstance: false,
       video: null,
@@ -451,6 +454,7 @@ export class MediaWorker {
       }
       load.media = media;
       load.tracks = probed.tracks;
+      load.duration = probed.duration;
       load.tracker = this.#bufferTracker(load, opened, {
         size: probed.size,
         duration: probed.duration,
@@ -511,6 +515,8 @@ export class MediaWorker {
       );
       const track = audio.find((t) => t.default) ?? audio[0];
       if (!track) throw new WorkerError('CODEC_UNSUPPORTED', '外掛音軌的來源沒有可以播放的音軌');
+      // 外掛音軌的 0 點是選用的 stream 的第一個可播放 sample（不是容器的 start_time）。
+      media.alignTo(track.streamIndex);
       external.media = media;
       external.track = track;
       external.tracker = this.#bufferTracker(external, opened, {
@@ -601,9 +607,13 @@ export class MediaWorker {
 
   /**
    * offset 很大的容器內音軌用的 instance：第一次需要時以同一個來源開檔，之後沿用。開不起來時為 null（呼叫端改用共用的
-   * demuxer）。
+   * demuxer）。等開檔時以 `signal` 中止（輸出被取代）。
    */
-  async #separateInstance(load: Load, stream: number): Promise<LibavMedia | null> {
+  async #separateInstance(
+    load: Load,
+    stream: number,
+    signal: AbortSignal,
+  ): Promise<LibavMedia | null> {
     let separate = load.separate;
     if (!separate) {
       const holder: SourceInstance = {
@@ -618,7 +628,7 @@ export class MediaWorker {
       holder.opening = this.#openSeparate(load, holder, stream);
       load.separate = separate = holder;
     }
-    await separate.opening;
+    await abortable(separate.opening, signal);
     return separate.media;
   }
 
@@ -740,6 +750,9 @@ export class MediaWorker {
       holder.media.abortReads();
       holder.source?.abort?.();
     }
+    // 為被取代的輸出開檔中的 instance（offset 很大的容器內音軌）：新的輸出不需要它時中止開檔、丟掉它。
+    if (load.separate && !load.separate.media && !needsSeparate(message))
+      this.#disposeSeparate(load);
     const output = new AbortController();
     this.#output = output;
     this.#demand.setEpoch(message.epoch);
@@ -767,7 +780,7 @@ export class MediaWorker {
       // 外掛音軌：等它開檔完成（主執行緒在 probe 之後才選用它）；被移除或失敗時不輸出音訊。
       const external =
         selected?.source == null ? null : (this.#externals.get(selected.source) ?? null);
-      if (external) await external.opening;
+      if (external) await abortable(external.opening, signal);
       signal.throwIfAborted();
       const externalMedia = external?.media ?? null;
       const mainAudio = selected?.source === null ? selected : null;
@@ -784,19 +797,20 @@ export class MediaWorker {
       const audioEnd = () => {
         if (!signal.aborted) this.#deps.postMessage({ type: 'audioend', epoch });
       };
+      // 前一個輸出已經停下：換了影片軌（或不再輸出影片）才能關掉舊軌的 decoder。
+      if (message.video === null) this.#closeVideo(load);
       if (!demuxMain && !externalAudio) {
-        // 不輸出音訊：worklet 以靜音推進時鐘。
+        // 不輸出任何軌：另開的 instance 也不再需要。worklet 以靜音推進時鐘。
+        this.#disposeSeparate(load);
         post({ type: 'eof', epoch }, []);
         audioEnd();
         return;
       }
-      // 前一個輸出已經停下：換了影片軌（或不再輸出影片）才能關掉舊軌的 decoder。
-      if (message.video === null) this.#closeVideo(load);
       const video = message.video === null ? null : this.#videoDecoding(load, message.video);
       // offset 很大的容器內音軌與影片同時輸出：音軌在另開的 instance demux。不再需要時丟掉（前一個輸出已經停下）。
       const separateMedia =
-        mainAudio && video && Math.abs(mainAudio.offset) > SEPARATE_OFFSET_SECONDS
-          ? await this.#separateInstance(load, mainAudio.stream)
+        mainAudio && video && needsSeparate(message)
+          ? await this.#separateInstance(load, mainAudio.stream, signal)
           : (this.#disposeSeparate(load), null);
       signal.throwIfAborted();
       const separate: SeparateAudio | null =
@@ -830,6 +844,7 @@ export class MediaWorker {
       });
       const audioOptions = {
         sampleRate: env.sampleRate,
+        duration: load.duration,
         rate: env.rate,
         epoch,
         demand: this.#demand,
@@ -929,7 +944,8 @@ export class MediaWorker {
           await Promise.all([
             main.audio?.run().then(audioEnd),
             video && main.video
-              ? this.#runVideo(video, main.video, message, signal, played)
+              ? // 音訊不是由這個 demuxer 供料（外掛音軌、另開的 instance，或不輸出音訊）時，demux 的錯誤由影片回報。
+                this.#runVideo(video, main.video, message, signal, played, !main.audio)
               : undefined,
           ]);
         });
@@ -1021,7 +1037,8 @@ export class MediaWorker {
 
   /**
    * 解碼一個 epoch 的影片，frame 以 transfer 送給主執行緒。decoder 失敗而放棄時以 `videoerror` 回報（非致命），之後不再
-   * 選用這條影片軌。demux 失敗時影片只是停止（`videoend`），由音訊的供料在播完佇列中的封包後回報；沒有音訊時才由這裡回報。
+   * 選用這條影片軌。demux 失敗（含超過封包佇列的硬上限）時影片停止（`videoend`）；同一個 demuxer 有音訊的供料時由它在
+   * 播完佇列中的封包後回報，否則（`reportDemuxErrors`：沒有音訊，或音訊來自另一個 instance）由這裡回報。
    * `played`：背景中估計的播放位置（有音訊時）。
    */
   async #runVideo(
@@ -1030,8 +1047,8 @@ export class MediaWorker {
     message: OutputRequest,
     signal: AbortSignal,
     played: (() => number) | null,
+    reportDemuxErrors: boolean,
   ): Promise<void> {
-    const hasAudio = played !== null;
     const { epoch } = message;
     let result: 'end' | 'failed' | null = null;
     try {
@@ -1085,7 +1102,7 @@ export class MediaWorker {
     } catch (error) {
       if (signal.aborted) throw error;
       if (result !== 'failed') this.#deps.postMessage({ type: 'videoend', epoch });
-      if (!hasAudio) throw error;
+      if (reportDemuxErrors) throw error;
     }
   }
 
@@ -1181,6 +1198,31 @@ export class MediaWorker {
     if (!this.#env) throw new WorkerError('INTERNAL', 'media Worker 還沒有收到 init');
     return this.#env;
   }
+}
+
+/** 容器內音軌的 offset 很大而且同時解碼影片：音軌在另開的 instance demux（見 `SEPARATE_OFFSET_SECONDS`）。 */
+function needsSeparate(request: OutputRequest): boolean {
+  const { audio } = request;
+  return (
+    audio !== null &&
+    audio.source === null &&
+    request.video !== null &&
+    Math.abs(audio.offset) > SEPARATE_OFFSET_SECONDS
+  );
+}
+
+/** `promise` 的結果；`signal` 先中止時以它的 reason reject（不等 `promise`）。 */
+function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason as Error);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      reject(signal.reason as Error);
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(resolve, reject).finally(() => {
+      signal.removeEventListener('abort', onAbort);
+    });
+  });
 }
 
 /** `start`／`select` 的選擇。 */

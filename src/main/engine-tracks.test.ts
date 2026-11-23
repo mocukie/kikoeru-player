@@ -298,6 +298,59 @@ describe('切換影片軌', () => {
     expect(shown.closed).toBe(true);
   });
 
+  it('新軌的第一張 frame 晚於時鐘：收到 frame 不等於畫出，畫出之前不生效（超過 2 秒不再等）', async () => {
+    const { engine, deps, worker, changes } = await loaded();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const sizes: unknown[] = [];
+    engine.addEventListener('videoresize', (e) => sizes.push(e.size));
+    let done = false;
+    const promise = engine.selectTracks({ video: id.video2 }).then(() => {
+      done = true;
+    });
+    await worker.next('select');
+    // 暫停在 0 秒，新軌的第一張在 1 秒：時鐘到之前不畫。
+    const first = frame(worker, 1);
+    deps.audio.reply({ type: 'paused' });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(done).toBe(false);
+    expect(engine.selectedTracks.video).toBe(id.video1);
+    expect(changes).toHaveLength(0);
+    expect(sizes).toEqual([]);
+    expect(first.closed).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(900);
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(200);
+    await promise;
+    expect(engine.selectedTracks.video).toBe(id.video2);
+  });
+
+  it('播放中新軌的第一張晚於時鐘：時鐘推進到它、畫出之後才生效', async () => {
+    const { engine, deps, worker } = await loaded({ paused: false });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    let done = false;
+    const promise = engine.selectTracks({ video: id.video2 }).then(() => {
+      done = true;
+    });
+    await worker.next('select');
+    frame(worker, 0.5);
+    deps.audio.reply({ type: 'playing' });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(done).toBe(false);
+    expect(engine.selectedTracks.video).toBe(id.video1);
+    deps.audio.frameNow = 48_000 * 0.5;
+    deps.audio.reply({
+      type: 'clock',
+      position: 0.5,
+      frame: 48_000 * 0.5,
+      buffered: 0,
+      underruns: 0,
+    });
+    await vi.advanceTimersByTimeAsync(50);
+    await promise;
+    expect(engine.selectedTracks.video).toBe(id.video2);
+  });
+
   it('video: null：不再解碼影片，生效時 videoSize 回到 null', async () => {
     const { engine, deps, worker } = await loaded();
     frame(worker, 0);
@@ -516,22 +569,61 @@ describe('取代', () => {
     expect(await worker.next('select', 2)).toMatchObject({ audio: 2, subtitle: 6 });
 
     const partly = engine.selectTracks({ audio: id.audioZh });
-    await settle();
-    // queued 的 audio 被 partly 接手，subtitle 還是它的：不被取代。
-    expect(worker.messages('select')).toHaveLength(2);
+    // queued 的 audio 被 partly 接手，subtitle 還是它的：不被取代，只以 subtitle 重新輸出（音軌回到已生效的）。
+    expect(await worker.next('select', 3)).toMatchObject({ audio: 0, subtitle: 6 });
     const last = engine.selectTracks({ subtitle: null });
     // 這時 queued 的 subtitle 也被接手：被取代，last 接著開始（輸出換回沒有字幕、原本的音軌）。
     expect(await queuedResult).toMatchObject({ name: 'AbortError' });
-    expect(await worker.next('select', 3)).toMatchObject({ audio: 0, subtitle: null });
+    expect(await worker.next('select', 4)).toMatchObject({ audio: 0, subtitle: null });
     frame(worker, 0);
     deps.audio.reply({ type: 'paused' });
     await last;
     // partly 最後才換音軌。
-    expect(await worker.next('select', 4)).toMatchObject({ audio: 2, subtitle: null });
+    expect(await worker.next('select', 5)).toMatchObject({ audio: 2, subtitle: null });
     frame(worker, 0);
     deps.audio.reply({ type: 'paused' });
     await partly;
     expect(engine.selectedTracks).toEqual({ audio: id.audioZh, video: id.video1, subtitle: null });
+  });
+
+  it('執行中的換軌被取代、最後一個呼叫的 id 不存在：reject RangeError，輸出換回已生效的軌', async () => {
+    const { engine, deps, worker, changes } = await loaded();
+    const first = engine.selectTracks({ audio: id.audioZh }).catch((e: unknown) => e);
+    expect(await worker.next('select')).toMatchObject({ audio: 2 });
+    const second = engine.selectTracks({ audio: 'a:999' }).catch((e: unknown) => e);
+    expect(await first).toMatchObject({ name: 'AbortError' });
+    // 第一個已經把輸出改成 a:3：Worker 要回到已生效的 a:1。
+    expect(await worker.next('select', 2)).toMatchObject({ audio: 0 });
+    frame(worker, 0);
+    deps.audio.reply({ type: 'paused' });
+    expect(await second).toBeInstanceOf(RangeError);
+    expect(engine.selectedTracks.audio).toBe(id.audioJa);
+    expect(changes).toHaveLength(0);
+    // 之後選回 a:1 不必再重新供料。
+    await engine.selectTracks({ audio: id.audioJa });
+    expect(worker.messages('select')).toHaveLength(2);
+  });
+
+  it('執行中的呼叫的部分 kind 被接手：只以它仍負責的 kind 重新輸出，不以舊的選擇發布', async () => {
+    const { engine, deps, worker, changes } = await loaded();
+    const first = engine.selectTracks({ audio: id.audioZh, subtitle: id.srt });
+    expect(await worker.next('select')).toMatchObject({ audio: 2, subtitle: 5 });
+    const second = engine.selectTracks({ audio: id.audioJa });
+    // first 的 audio 被接手、subtitle 還是它的：音軌回到已生效的 a:1，字幕照它的選擇。
+    expect(await worker.next('select', 2)).toMatchObject({ audio: 0, subtitle: 5 });
+    frame(worker, 0);
+    deps.audio.reply({ type: 'paused' });
+    await first;
+    await second;
+    expect(changes.map((c) => c.selected)).toEqual([
+      { audio: id.audioJa, video: id.video1, subtitle: id.srt },
+    ]);
+    expect(engine.selectedTracks).toEqual({
+      audio: id.audioJa,
+      video: id.video1,
+      subtitle: id.srt,
+    });
+    expect(worker.messages('select')).toHaveLength(2);
   });
 
   it('不同 kind 的呼叫依序都生效', async () => {

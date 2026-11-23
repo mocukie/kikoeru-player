@@ -42,6 +42,13 @@ export interface HoldableLane<P> extends PacketLane<P> {
   trim(count: number): void;
   /** 等到 lane 或封包佇列有變化（demux 推進、取出、結束）；被中止時以 signal 的 reason reject。 */
   changed(signal: AbortSignal): Promise<void>;
+  /** 封包的大小（bytes），與封包佇列計算上限時相同。 */
+  size(packet: P): number;
+  /**
+   * 取出之後仍保留在取用的一方的 bytes（取代前一次的值），例如影片 catch up 中還沒送進 decoder 的 GOP：計入封包佇列的
+   * 硬上限（超過時 `MEMORY_LIMIT`）與 bytes。
+   */
+  retain(bytes: number): void;
 }
 
 /** `Demuxer.lane()`：除了取用，也能 hold 並 trim（見 `HoldableLane`）；`packets()` 是 lane 中的封包，依先進先出的順序。 */
@@ -98,8 +105,8 @@ export class Demuxer<P> {
   #end: number;
   /** demux 到了結尾。 */
   #ended = false;
-  /** demux 失敗。 */
-  #failed = false;
+  /** demux 失敗的錯誤；沒有失敗時為 null。 */
+  #error: Error | null = null;
 
   constructor(options: DemuxerOptions<P>) {
     this.#options = options;
@@ -142,11 +149,15 @@ export class Demuxer<P> {
   }
 
   /**
-   * 等到 demux 到結尾或失敗；被中止時以 signal 的 reason reject。沒有供料取用 lane（只有稀疏軌）時，以它決定 demux
-   * 何時停止。
+   * 等到 demux 到結尾；demux 失敗時以它的錯誤 reject，被中止時以 signal 的 reason reject。沒有供料取用 lane（只有稀疏軌）
+   * 時，以它決定 demux 何時停止，失敗照一般的讀取錯誤回報。
    */
   async settled(signal: AbortSignal): Promise<void> {
-    while (!this.#ended && !this.#failed) await this.#packets.changed(signal);
+    for (;;) {
+      if (this.#error) throw this.#error;
+      if (this.#ended) return;
+      await this.#packets.changed(signal);
+    }
   }
 
   /** 一條軌在佇列中的下一個封包的媒體時間（秒）；沒有封包、沒有時間戳或不是選用中的軌時為 null。 */
@@ -169,6 +180,10 @@ export class Demuxer<P> {
         packets.trim(stream, count);
       },
       changed: (signal) => packets.changed(signal),
+      size: (packet) => this.#options.reader.measure(packet).bytes,
+      retain: (bytes) => {
+        packets.retain(stream, bytes);
+      },
     };
   }
 
@@ -218,8 +233,8 @@ export class Demuxer<P> {
         `demux 失敗：${error instanceof Error ? error.message : String(error)}`,
         { epoch, end: this.#end },
       );
-      this.#failed = true;
-      this.#packets.fail(error);
+      this.#error = error instanceof Error ? error : new Error(String(error));
+      this.#packets.fail(this.#error);
       if (error instanceof WorkerError && error.code === 'MEMORY_LIMIT') this.#fatal.abort(error);
     }
   }

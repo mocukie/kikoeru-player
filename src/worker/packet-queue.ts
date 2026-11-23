@@ -1,6 +1,7 @@
 // demux 與解碼之間的封包佇列（ADR-0007）：每條選用中的軌一個先進先出的佇列。平常到 2 秒或 8 MiB 就停止 demux；
 // 某條選用中的軌是空的（交錯不良的檔案）時繼續 demux，超過硬上限是 fatal 的 MEMORY_LIMIT。
 // 暫停解碼的影片 lane（背景分頁）被 hold：不影響何時停止 demux，由取用的一方 trim 掉不再需要的封包。
+// 取用的一方取出之後仍保留的封包（影片 catch up 中的 GOP、背景恢復用的封包）以 `retain` 計入硬上限與 bytes。
 
 import { WorkerError } from './errors.js';
 
@@ -29,7 +30,11 @@ export class PacketQueue<P> {
   readonly #limits: PacketQueueLimits;
   readonly #size: (packet: P) => number;
   readonly #timing: (packet: P) => { time: number | null; duration: number };
+  /** 各 lane 中的封包的 bytes 合計。 */
   #bytes = 0;
+  /** 各條軌取出之後仍保留的 bytes（`retain`）。 */
+  readonly #retained = new Map<number, number>();
+  #retainedBytes = 0;
   #ended = false;
   #error: Error | null = null;
   readonly #waiters = new Set<() => void>();
@@ -46,9 +51,19 @@ export class PacketQueue<P> {
     this.#timing = timing;
   }
 
-  /** 所有軌的 bytes 合計。 */
+  /** 所有軌的 bytes 合計，含取出之後仍保留的（`retain`）。 */
   get bytes(): number {
-    return this.#bytes;
+    return this.#bytes + this.#retainedBytes;
+  }
+
+  /**
+   * 一條軌取出之後仍由取用的一方保留的 bytes（取代前一次的值）：不計入平常的上限，但計入硬上限與 `bytes`。取出時從
+   * lane 扣掉、保留時加回來，所以保留著的封包讓之後的 push 照樣會超過硬上限。
+   */
+  retain(stream: number, bytes: number): void {
+    this.#lane(stream);
+    this.#retainedBytes += bytes - (this.#retained.get(stream) ?? 0);
+    this.#retained.set(stream, bytes);
   }
 
   /**
@@ -129,7 +144,7 @@ export class PacketQueue<P> {
     return packets.reduce((sum, p) => sum + this.#timing(p).duration, 0);
   }
 
-  /** 加入一條軌的封包；超過硬上限時丟 MEMORY_LIMIT。 */
+  /** 加入一條軌的封包；超過硬上限（含保留的 bytes）時丟 MEMORY_LIMIT。 */
   push(stream: number, packets: readonly P[]): void {
     const lane = this.#lane(stream);
     for (const packet of packets) {
@@ -138,7 +153,7 @@ export class PacketQueue<P> {
       lane.bytes += size;
       this.#bytes += size;
     }
-    if (this.#bytes > this.#limits.hardBytes) {
+    if (this.bytes > this.#limits.hardBytes) {
       throw new WorkerError(
         'MEMORY_LIMIT',
         `封包佇列超過上限 ${String(this.#limits.hardBytes)} bytes（交錯不良的媒體）`,
