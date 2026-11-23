@@ -330,8 +330,8 @@ export interface Engine extends EventTarget {
   /**
    * 以另一個來源加入外掛音軌，resolve 新的 `AudioTrack`（`origin: 'external'`，id 例如 `'ext:5'`）並發出
    * `trackschange`。來源在同一個 media Worker 內以自己的 libav instance 開檔，選用來源內第一條可播的音軌（有 default
-   * 旗標的優先），`streamIndex` 是它在來源內的 index；http 來源與主來源共用 Range 快取（`limits.cacheBytes`），被選用時
-   * 才讀取與預讀。外掛音軌的 0 點是它自己的第一個可播放 sample，對齊媒體時間軸的 0，再依 offset 位移。
+   * 旗標的優先），`streamIndex` 是它在來源內的 index；http 來源與主來源共用 Range 快取（`limits.cacheBytes`）。開檔時
+   * 讀到該軌第一個可播放 sample，以它為 0 點，再依 offset 位移；選用後才繼續讀取與預讀。
    *
    * 不會自動選用，要用 `selectTracks({ audio: track.id })` 切過去。`options.offset` 是初始的音軌 offset（秒，預設 0，見
    * `setAudioOffset()`）；`options.label` 是 `title`，省略時沿用來源記錄的標題。

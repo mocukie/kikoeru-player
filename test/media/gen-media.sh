@@ -161,9 +161,8 @@ ff -f lavfi -i "$(video 2 320 180)" -f lavfi -i "$(stereo 2 880)" -i .work/short
 ff -f lavfi -i "$(video 3 320 180)" "${h264[@]}" -movflags +faststart video/video-only.mp4
 # 外掛音軌：與 multi-track.mkv 同長，440 Hz。
 ff -f lavfi -i "$(stereo 20 440)" -c:a flac video/external-audio-440.flac
-# 外掛音軌的 0 點：兩條 FLAC 軌，非 default 的 440 Hz 從 0 秒開始，default 的 660 Hz（外掛時選用它）從 1.5 秒開始，
-# 容器的 start_time 是 0。
-ff -f lavfi -i "$(stereo 10 440)" -itsoffset 1.5 -f lavfi -i "$(stereo 10 660)" -map 0:a -map 1:a -c:a flac \
+# 外掛音軌的 0 點：非 default 的 440 Hz 從 0 秒開始；default 的 660 Hz 從 12 秒開始，超過 probe 範圍。
+ff -f lavfi -i "$(stereo 20 440)" -itsoffset 12 -f lavfi -i "$(stereo 8 660)" -map 0:a -map 1:a -c:a flac \
   -disposition:a:0 0 -disposition:a:1 default video/external-audio-late-start.mkv
 
 # --- 壞檔 ---

@@ -351,6 +351,91 @@ describe('切換影片軌', () => {
     expect(engine.selectedTracks.video).toBe(id.video2);
   });
 
+  it('videoresize listener 同步換軌：舊 epoch 畫出不會結束新軌的畫面等待', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { engine, deps, worker, changes } = await loaded({
+      paused: false,
+      tracks: { video: null },
+    });
+    const first = outcome(engine.selectTracks({ video: id.video1 }));
+    const v1 = await worker.next('select');
+    let latest: Promise<void> | undefined;
+    engine.addEventListener(
+      'videoresize',
+      () => {
+        latest = engine.selectTracks({ video: id.video2 });
+      },
+      { once: true },
+    );
+    const shown = frame(worker, 0, v1.epoch);
+    const v2 = await worker.next('select', 2);
+    expect(v2.epoch).toBeGreaterThan(v1.epoch);
+    expect(v2.video).toBe(3);
+    expect(deps.audio.intent).toBe('pause');
+
+    const next = frame(worker, 1, v2.epoch);
+    expect(deps.audio.intent).toBe('play');
+    deps.audio.reply({ type: 'playing' });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(first.value()).toMatchObject({ name: 'AbortError' });
+    expect(engine.state).toBe('playing');
+    expect(engine.currentTime).toBe(0);
+    expect(engine.selectedTracks.video).toBeNull();
+    expect(changes).toHaveLength(0);
+    expect(shown.closed).toBe(false);
+
+    deps.audio.frameNow = deps.audio.sampleRate;
+    deps.audio.reply({
+      type: 'clock',
+      position: 1,
+      frame: deps.audio.frameNow,
+      buffered: 0,
+      underruns: 0,
+    });
+    await vi.advanceTimersByTimeAsync(50);
+    await expect(latest).resolves.toBeUndefined();
+    expect(shown.closed).toBe(true);
+    expect(next.closed).toBe(false);
+    expect(engine.selectedTracks.video).toBe(id.video2);
+    expect(changes).toHaveLength(1);
+    await engine.destroy();
+  });
+
+  it('部分取代後從新的 epoch 收到 frame 才重新計算等畫面的 2 秒', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { engine, deps, worker, changes } = await loaded();
+    const first = engine.selectTracks({ audio: id.audioZh, video: id.video2 });
+    const before = await worker.next('select');
+    expect(before).toMatchObject({ audio: 2, video: 3 });
+    const queued = frame(worker, 1, before.epoch);
+    deps.audio.reply({ type: 'paused' });
+    await vi.advanceTimersByTimeAsync(1700);
+    expect(engine.selectedTracks.video).toBe(id.video1);
+
+    const audio = engine.selectTracks({ audio: id.audioJa });
+    const restarted = await worker.next('select', 2);
+    expect(restarted).toMatchObject({ audio: 0, video: 3 });
+    expect(restarted.epoch).toBeGreaterThan(before.epoch);
+    expect(queued.closed).toBe(true);
+    await vi.advanceTimersByTimeAsync(100);
+    frame(worker, 1, restarted.epoch);
+    deps.audio.reply({ type: 'paused' });
+
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(deps.audio.intent).toBe('pause');
+    expect(engine.state).toBe('ready');
+    expect(engine.currentTime).toBe(0);
+    expect(engine.selectedTracks.video).toBe(id.video1);
+    expect(changes).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await first;
+    await audio;
+    expect(engine.selectedTracks).toEqual({ audio: id.audioJa, video: id.video2, subtitle: null });
+    expect(changes).toHaveLength(1);
+    await engine.destroy();
+  });
+
   it('video: null：不再解碼影片，生效時 videoSize 回到 null', async () => {
     const { engine, deps, worker } = await loaded();
     frame(worker, 0);
@@ -366,6 +451,45 @@ describe('切換影片軌', () => {
     expect(engine.videoSize).toBeNull();
     expect(sizes).toEqual([null]);
     expect((await statsOf(engine, worker)).video).toBeNull();
+  });
+
+  it('播放中以關掉影片取代換軌：解除 worklet 的等待，不中斷音訊時鐘', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { engine, deps, worker } = await loaded({ paused: false });
+    deps.audio.reply({ type: 'clock', position: 2, frame: 0, buffered: 0, underruns: 0 });
+    const states: string[] = [];
+    engine.addEventListener('statechange', ({ state }) => states.push(state));
+
+    const pending = outcome(engine.selectTracks({ video: id.video2 }));
+    expect(await worker.next('select')).toMatchObject({ video: 3, time: 2 });
+    expect(deps.audio.intent).toBe('pause');
+    const closing = engine.selectTracks({ video: null });
+    const close = await worker.next('select', 2);
+    expect(close).toMatchObject({ video: null, time: 2 });
+    expect(deps.audio.received.slice(-2)).toEqual([
+      { type: 'flush', epoch: close.epoch, position: 2 },
+      { type: 'play', epoch: close.epoch },
+    ]);
+    expect(deps.audio.intent).toBe('play');
+    expect(engine.currentTime).toBe(2);
+
+    // PCM 可能先於 play 到達 worklet：這次 paused 回報不是使用者的暫停，也不能拿來完成換軌。
+    deps.audio.reply({ type: 'paused' });
+    await settle();
+    expect(pending.value()).toMatchObject({ name: 'AbortError' });
+    expect(engine.state).toBe('playing');
+    expect(engine.selectedTracks.video).toBe(id.video1);
+
+    deps.audio.reply({ type: 'playing' });
+    await closing;
+    deps.audio.frameNow = deps.audio.sampleRate / 2;
+    deps.audio.reply({ type: 'clock', position: 2, frame: 0, buffered: 0, underruns: 0 });
+    expect(engine.currentTime).toBe(2.5);
+    expect(engine.selectedTracks.video).toBeNull();
+    expect(engine.state).toBe('playing');
+    expect(engine.paused).toBe(false);
+    expect(states).toEqual([]);
+    await engine.destroy();
   });
 
   it('新軌 configure 或首個 keyframe 失敗：該軌改為不支援並發出 trackschange，換回原本的軌，reject 非致命的 CODEC_UNSUPPORTED', async () => {
@@ -602,6 +726,42 @@ describe('取代', () => {
     // 之後選回 a:1 不必再重新供料。
     await engine.selectTracks({ audio: id.audioJa });
     expect(worker.messages('select')).toHaveLength(2);
+  });
+
+  it('回復關閉影片時，videoresize listener 的新選擇不會被舊指令覆寫', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { engine, deps, worker, changes } = await loaded({ tracks: { video: null } });
+    const first = outcome(engine.selectTracks({ video: id.video1 }));
+    const firstEpoch = (await worker.next('select')).epoch;
+    const shown = frame(worker, 0, firstEpoch);
+    // 畫面已畫出，但 worklet 還沒回報，因此第一個選擇還沒生效。
+    expect(engine.videoSize).not.toBeNull();
+    expect(engine.selectedTracks.video).toBeNull();
+    let latest: Promise<void> | undefined;
+    engine.addEventListener(
+      'videoresize',
+      ({ size }) => {
+        if (size === null) latest = engine.selectTracks({ video: id.video2 });
+      },
+      { once: true },
+    );
+
+    const invalid = outcome(engine.selectTracks({ video: 'v:999' }));
+    await settle();
+    expect(first.value()).toMatchObject({ name: 'AbortError' });
+    expect(invalid.value()).toMatchObject({ name: 'AbortError' });
+    expect(shown.closed).toBe(true);
+    const selections = worker.messages('select');
+    expect(selections.map((m) => m.video)).toEqual([1, 3]);
+    expect(deps.audio.epoch).toBe(selections[1]?.epoch);
+    expect(changes).toHaveLength(0);
+
+    frame(worker, 0);
+    deps.audio.reply({ type: 'paused' });
+    await expect(latest).resolves.toBeUndefined();
+    expect(engine.selectedTracks.video).toBe(id.video2);
+    expect(changes).toHaveLength(1);
+    await engine.destroy();
   });
 
   it('執行中的呼叫的部分 kind 被接手：只以它仍負責的 kind 重新輸出，不以舊的選擇發布', async () => {

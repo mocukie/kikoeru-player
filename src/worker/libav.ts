@@ -104,10 +104,8 @@ class ReadGate {
 export class LibavMedia {
   readonly raw: RawMedia;
   readonly #libav: LibAV;
-  /** 媒體時間軸的原點（秒）：預設為容器的 `start_time`（沒有時為 0），`alignTo()` 改為一條 stream 的開頭。 */
+  /** 媒體時間軸的原點（秒）：預設為容器的 `start_time`，外掛音軌改用首個可播放 sample。 */
   #origin: number;
-  /** 各 stream 的第一個可播放 sample（`AVStream.start_time`，秒，FFmpeg 已加上要跳過的 sample）；沒有記錄時為 null。 */
-  readonly #streamStarts: readonly (number | null)[];
   readonly #fmt: number;
   readonly #streams: readonly libavjs.Stream[];
   readonly #reads: ReadGate;
@@ -126,7 +124,6 @@ export class LibavMedia {
     streams: libavjs.Stream[],
     raw: RawMedia,
     origin: number,
-    streamStarts: readonly (number | null)[],
     reads: ReadGate,
     demuxPkt: number,
     memory: WebAssembly.Memory | null,
@@ -138,23 +135,54 @@ export class LibavMedia {
     this.#streams = streams;
     this.raw = raw;
     this.#origin = origin;
-    this.#streamStarts = streamStarts;
     this.#reads = reads;
   }
 
-  /** 媒體時間軸的原點（秒）：容器時間 − 原點 = 媒體時間。 */
-  get origin(): number {
-    return this.#origin;
-  }
-
   /**
-   * 以 `stream` 的第一個可播放 sample 為媒體時間軸的原點（外掛音軌：它自己的 0 點對齊媒體的 0，不是容器的
-   * `start_time`）。解碼的時間、demux 的進度與 seek 都依它換算。stream 沒有記錄開頭時沿用容器的 `start_time`。
-   * 在第一次 `startOutput()` 之前呼叫。
+   * 外掛來源在第一次輸出前，只讀選用的音軌直到解出首個可播放 sample。probe 的 `start_time` 不一定看得到晚起的軌，
+   * 直接用 decoder 的時間也能計入 codec 裁掉的 sample。沒有時間戳時沿用 stream／容器的時間。
    */
-  alignTo(stream: number): void {
-    const start = this.#streamStarts[stream];
-    if (start != null) this.#origin = start;
+  async alignTo(streamIndex: number, sampleRate: number, signal: AbortSignal): Promise<void> {
+    const stream = this.#streams[streamIndex];
+    if (!stream) throw new WorkerError('INTERNAL', `沒有 stream ${String(streamIndex)}`);
+    const indices = [streamIndex];
+    await this.#selectStreams(indices);
+    const decoder = await LibavAudioDecoder.create(this.#libav, stream, 0, sampleRate);
+    try {
+      let first: number | null | undefined;
+      for (;;) {
+        signal.throwIfAborted();
+        const { packets, eof } = await this.#readPackets(indices);
+        signal.throwIfAborted();
+        for (const packet of packets) {
+          first = await decoder.firstSample([packet], false);
+          if (first !== undefined) break;
+        }
+        if (first !== undefined) break;
+        if (eof) {
+          first = await decoder.firstSample([], true);
+          break;
+        }
+      }
+      signal.throwIfAborted();
+      if (first === undefined) {
+        throw new WorkerError('CODEC_UNSUPPORTED', '外掛音軌沒有可播放的 sample');
+      }
+      if (first === null) {
+        const libav = this.#libav;
+        const pts = int64(
+          libav,
+          await libav.AVStream_start_time(stream.ptr),
+          await libav.AVStream_start_timehi(stream.ptr),
+        );
+        if (pts !== null && stream.time_base_num > 0 && stream.time_base_den > 0) {
+          first = (pts * stream.time_base_num) / stream.time_base_den;
+        }
+      }
+      if (first !== null) this.#origin = first;
+    } finally {
+      await decoder.free();
+    }
   }
 
   /** instance 的 wasm heap（linear memory）目前的大小（bytes）。 */
@@ -225,17 +253,6 @@ export class LibavMedia {
       size: source.size,
       streams: await Promise.all(streams.map((s) => rawStream(libav, s))),
     };
-    const streamStarts = await Promise.all(
-      streams.map(async (s) => {
-        const ts = int64(
-          libav,
-          await libav.AVStream_start_time(s.ptr),
-          await libav.AVStream_start_timehi(s.ptr),
-        );
-        const { time_base_num: num, time_base_den: den } = s;
-        return ts === null || !(num > 0 && den > 0) ? null : (ts * num) / den;
-      }),
-    );
     const demuxPkt = await libav.av_packet_alloc();
     return new LibavMedia(
       libav,
@@ -243,7 +260,6 @@ export class LibavMedia {
       streams,
       raw,
       start === null ? 0 : start / 1e6,
-      streamStarts,
       reads,
       demuxPkt,
       memory(),
@@ -296,16 +312,7 @@ export class LibavMedia {
     for (const index of demuxed) {
       if (!this.#streams[index]) throw new WorkerError('INTERNAL', `沒有 stream ${String(index)}`);
     }
-    const selection = [options.audio, options.video, subtitle?.stream ?? null, progress].join(',');
-    if (selection !== this.#selection) {
-      for (const s of this.#streams) {
-        await libav.AVStream_discard_s(
-          s.ptr,
-          demuxed.includes(s.index) ? AV_DISCARD_DEFAULT : AV_DISCARD_ALL,
-        );
-      }
-      this.#selection = selection;
-    }
+    await this.#selectStreams(demuxed);
     let decoder = this.#decoder;
     if (options.audio !== null && decoder?.streamIndex !== options.audio) {
       await decoder?.free();
@@ -315,7 +322,7 @@ export class LibavMedia {
       decoder = await LibavAudioDecoder.create(
         libav,
         stream,
-        this.origin,
+        this.#origin,
         options.audioOptions.sampleRate,
       );
       this.#decoder = decoder;
@@ -348,21 +355,7 @@ export class LibavMedia {
           }
         : options.demux;
     const reader: PacketReader<Packet> = {
-      read: async () => {
-        const [result, packets] = await libav.ff_read_frame_multi(this.#fmt, this.#demuxPkt, {
-          limit: READ_LIMIT,
-        });
-        const selected = demuxed.flatMap((index) => packets[index] ?? []);
-        if (result === libav.AVERROR_EOF) return { packets: selected, eof: true };
-        if (result < 0 && result !== -libav.EAGAIN) {
-          const text = await libav.ff_error(result);
-          // AVERROR(ENOMEM)：wasm 記憶體用完，交給 crash 的路線（crashReason）。
-          const error = new Error(`demux 失敗：${text}`);
-          if (crashReason(error) !== null) throw error;
-          throw new WorkerError('FORMAT_CORRUPT', error.message);
-        }
-        return { packets: selected, eof: false };
-      },
+      read: () => this.#readPackets(demuxed),
       measure: (packet) => ({
         stream: packet.stream_index ?? -1,
         bytes: packet.data.byteLength,
@@ -408,6 +401,38 @@ export class LibavMedia {
       audio,
       video: options.video === null ? null : this.#videoLane(demuxer, options.video),
     };
+  }
+
+  async #selectStreams(indices: readonly number[]): Promise<void> {
+    const selection = indices.join(',');
+    if (selection === this.#selection) return;
+    for (const stream of this.#streams) {
+      await this.#libav.AVStream_discard_s(
+        stream.ptr,
+        indices.includes(stream.index) ? AV_DISCARD_DEFAULT : AV_DISCARD_ALL,
+      );
+    }
+    this.#selection = selection;
+  }
+
+  async #readPackets(indices: readonly number[]): Promise<{ packets: Packet[]; eof: boolean }> {
+    const libav = this.#libav;
+    const [result, packets] = await libav.ff_read_frame_multi(this.#fmt, this.#demuxPkt, {
+      limit: READ_LIMIT,
+    });
+    if (result < 0 && result !== libav.AVERROR_EOF && result !== -libav.EAGAIN) {
+      const text = await libav.ff_error(result);
+      // AVERROR(ENOMEM)：wasm 記憶體用完，交給 crash 的路線（crashReason）。
+      const error = new Error(`demux 失敗：${text}`);
+      if (crashReason(error) !== null) throw error;
+      throw new WorkerError('FORMAT_CORRUPT', error.message);
+    }
+    const first = indices[0];
+    const selected =
+      first !== undefined && indices.length === 1
+        ? (packets[first] ?? [])
+        : indices.flatMap((index) => packets[index] ?? []);
+    return { packets: selected, eof: result === libav.AVERROR_EOF };
   }
 
   /** 推進 demux 進度用的軌：位元率最低的音軌，沒有音軌時第一條影片軌；都沒有時為 null。 */
@@ -485,7 +510,7 @@ export class LibavMedia {
     const pts = packet.pts === undefined ? null : int64(this.#libav, packet.pts, packet.ptshi ?? 0);
     const dts = packet.dts === undefined ? null : int64(this.#libav, packet.dts, packet.dtshi ?? 0);
     const ts = pts ?? dts;
-    return ts === null ? null : (ts * num) / den - this.origin;
+    return ts === null ? null : (ts * num) / den - this.#origin;
   }
 
   /**
@@ -501,7 +526,7 @@ export class LibavMedia {
     await libav.AVIOContext_eof_reached_s(pb, 0);
     const seekTo = (t: number) => {
       // stream -1：以 AV_TIME_BASE（µs）表示、包含容器 start_time 的時間戳。
-      const [lo, hi] = libav.f64toi64(Math.round((t + this.origin) * 1e6));
+      const [lo, hi] = libav.f64toi64(Math.round((t + this.#origin) * 1e6));
       return libav.av_seek_frame(this.#fmt, -1, lo, hi, AVSEEK_FLAG_BACKWARD);
     };
     let result = await seekTo(time);
@@ -666,6 +691,27 @@ class LibavAudioDecoder implements AudioDecoder<Packet> {
       sampleRate,
       inputRate,
     );
+  }
+
+  /** 只取第一個可播放 frame 的時間，不複製 PCM。undefined 表示 decoder 還沒輸出。 */
+  async firstSample(packets: Packet[], fin: boolean): Promise<number | null | undefined> {
+    const libav = this.#libav;
+    const frames = await libav.ff_decode_multi(this.#ctx, this.pkt, this.#frame, packets, {
+      fin,
+      ignoreErrors: true,
+      copyoutFrame: 'ptr',
+    });
+    try {
+      for (const frame of frames) {
+        if ((await libav.AVFrame_nb_samples(frame)) <= 0) continue;
+        const pts = int64(libav, await libav.AVFrame_pts(frame), await libav.AVFrame_ptshi(frame));
+        // decoder 的 pkt_timebase 是 1 / inputRate，包含 libavcodec 裁切 priming 後的時間。
+        return pts === null ? null : pts / this.#inputRate;
+      }
+      return undefined;
+    } finally {
+      for (const frame of frames) await libav.av_frame_free_js(frame);
+    }
   }
 
   async decode(packet: Packet): Promise<DecodedAudio[]> {

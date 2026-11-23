@@ -35,6 +35,7 @@ export class VideoOutput {
   readonly #options: VideoOutputOptions;
   readonly #renderer: VideoRenderer;
   #track: VideoTrack | null = null;
+  #epoch = 0;
   #pending = false;
   /** 換了影片軌之後新軌的 frame 還沒畫出。 */
   #awaitingPicture = false;
@@ -127,6 +128,7 @@ export class VideoOutput {
 
   /** 新的媒體：close 所有 frame，`size` 回到 null。 */
   reset(epoch: number): void {
+    this.#epoch = epoch;
     this.#renderer.reset(epoch, null);
   }
 
@@ -140,8 +142,11 @@ export class VideoOutput {
    * frame；回傳是否在等。
    */
   beginEpoch(epoch: number): boolean {
+    this.#epoch = epoch;
     this.#renderer.flush(epoch);
     this.#clearTimer();
+    // 同一條新軌仍要畫出，但等待畫出的期限從新 epoch 收到 frame 才開始算。
+    this.#clearPictureTimer();
     this.#pending = this.#track !== null && !this.#suspended;
     return this.#pending;
   }
@@ -158,7 +163,10 @@ export class VideoOutput {
 
   /** 依此刻的音訊時鐘挑選並繪製 frame；畫出新的一張時結束新軌畫面的等待。 */
   render(): void {
-    if (this.#track && this.#renderer.render(this.#options.clock())) {
+    if (!this.#track) return;
+    const epoch = this.#epoch;
+    // videoresize 的 listener 可能已經開始新的 epoch。
+    if (this.#renderer.render(this.#options.clock()) && this.#epoch === epoch) {
       this.#setAwaitingPicture(false);
     }
   }
@@ -216,9 +224,13 @@ export class VideoOutput {
     this.#timer = null;
   }
 
-  #setAwaitingPicture(awaiting: boolean): void {
+  #clearPictureTimer(): void {
     if (this.#pictureTimer !== null) clearTimeout(this.#pictureTimer);
     this.#pictureTimer = null;
+  }
+
+  #setAwaitingPicture(awaiting: boolean): void {
+    this.#clearPictureTimer();
     if (this.#awaitingPicture === awaiting) return;
     this.#awaitingPicture = awaiting;
     if (!awaiting) this.#options.pictured?.();

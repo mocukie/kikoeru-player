@@ -516,7 +516,8 @@ export class MediaWorker {
       const track = audio.find((t) => t.default) ?? audio[0];
       if (!track) throw new WorkerError('CODEC_UNSUPPORTED', '外掛音軌的來源沒有可以播放的音軌');
       // 外掛音軌的 0 點是選用的 stream 的第一個可播放 sample（不是容器的 start_time）。
-      media.alignTo(track.streamIndex);
+      await media.alignTo(track.streamIndex, env.sampleRate, signal);
+      signal.throwIfAborted();
       external.media = media;
       external.track = track;
       external.tracker = this.#bufferTracker(external, opened, {
@@ -750,9 +751,8 @@ export class MediaWorker {
       holder.media.abortReads();
       holder.source?.abort?.();
     }
-    // 為被取代的輸出開檔中的 instance（offset 很大的容器內音軌）：新的輸出不需要它時中止開檔、丟掉它。
-    if (load.separate && !load.separate.media && !needsSeparate(message))
-      this.#disposeSeparate(load);
+    // 開檔中的 instance 屬於舊輸出。即使新輸出也需要另開 instance，也不能等舊的讀取。
+    if (load.separate && !load.separate.media) this.#disposeSeparate(load);
     const output = new AbortController();
     this.#output = output;
     this.#demand.setEpoch(message.epoch);
@@ -769,6 +769,7 @@ export class MediaWorker {
     const { signal } = output;
     const media = load.media;
     if (signal.aborted || !media) return;
+    this.#current = null;
     try {
       const env = this.#requireEnv();
       const post = (m: WorkerToWorkletMessage, transfer: Transferable[]) => {
@@ -944,8 +945,15 @@ export class MediaWorker {
           await Promise.all([
             main.audio?.run().then(audioEnd),
             video && main.video
-              ? // 音訊不是由這個 demuxer 供料（外掛音軌、另開的 instance，或不輸出音訊）時，demux 的錯誤由影片回報。
-                this.#runVideo(video, main.video, message, signal, played, !main.audio)
+              ? this.#runVideo(
+                  video,
+                  main.video,
+                  message,
+                  // 背景中影片不取封包，硬上限仍須立即中止等候並回報。
+                  AbortSignal.any([signal, main.demuxer.fatal]),
+                  played,
+                  !main.audio,
+                )
               : undefined,
           ]);
         });

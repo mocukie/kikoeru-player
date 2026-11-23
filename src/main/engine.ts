@@ -968,6 +968,8 @@ class EngineImpl extends EventTarget implements Engine {
     this.#pendingCues = [];
     // 原本沒有選用影片：renderer 不再畫失敗或被取代的那條軌。
     if (this.#selected.video === null) this.#video.setTrack(null);
+    // videoresize 的 listener 可能已經取代了回復指令。
+    signal.throwIfAborted();
     this.#applySelection(this.#selected);
     await this.#until(() => this.#outputReady(), signal);
   }
@@ -1262,6 +1264,8 @@ class EngineImpl extends EventTarget implements Engine {
       subtitle: subtitle?.streamIndex ?? null,
     });
     this.#flushAudio(time);
+    // 關閉影片會解除前一次換軌的等待；flush 沒有等影片時不會同步播放意圖。
+    if (!video) this.#syncWorklet();
   }
 
   async #runDestroy(): Promise<void> {
@@ -1509,7 +1513,8 @@ class EngineImpl extends EventTarget implements Engine {
         this.#setState(output, output === 'playing' ? 'media' : reason);
         break;
       case 'playing':
-        if (output === 'paused') this.#setState('paused', reason);
+        // 取消影片等待後，worklet 可能在收到 play 之前就回報 paused。
+        if (output === 'paused' && this.#workletPlay !== true) this.#setState('paused', reason);
         break;
       default:
         break;

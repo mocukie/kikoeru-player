@@ -45,8 +45,8 @@ export interface HoldableLane<P> extends PacketLane<P> {
   /** 封包的大小（bytes），與封包佇列計算上限時相同。 */
   size(packet: P): number;
   /**
-   * 取出之後仍保留在取用的一方的 bytes（取代前一次的值），例如影片 catch up 中還沒送進 decoder 的 GOP：計入封包佇列的
-   * 硬上限（超過時 `MEMORY_LIMIT`）與 bytes。
+   * 取出之後仍保留在取用的一方的 bytes（取代前一次的值），例如影片 catch up 中還沒送進 decoder 的 GOP。增加時立即
+   * 檢查硬上限；超過時以同一個 `MEMORY_LIMIT` 中止 demuxer 的 `fatal` signal 並丟出錯誤。
    */
   retain(bytes: number): void;
 }
@@ -182,7 +182,15 @@ export class Demuxer<P> {
       changed: (signal) => packets.changed(signal),
       size: (packet) => this.#options.reader.measure(packet).bytes,
       retain: (bytes) => {
-        packets.retain(stream, bytes);
+        try {
+          packets.retain(stream, bytes);
+        } catch (error) {
+          if (error instanceof WorkerError && error.code === 'MEMORY_LIMIT') {
+            this.fatal.throwIfAborted();
+            this.#fail(error);
+          }
+          throw error;
+        }
       },
     };
   }
@@ -193,12 +201,14 @@ export class Demuxer<P> {
    */
   async run(stop: AbortSignal): Promise<void> {
     const { reader, onDemux, log, epoch, sparse, pace } = this.#options;
+    const signal = AbortSignal.any([stop, this.fatal]);
     try {
       for (;;) {
-        await this.#packets.space(stop);
-        await pace?.(this.#end, stop);
+        await this.#packets.space(signal);
+        await pace?.(this.#end, signal);
+        signal.throwIfAborted();
         const { packets, eof } = await reader.read();
-        if (stop.aborted) return;
+        if (signal.aborted) return;
         const byStream = new Map<number, P[]>();
         const sparsePackets: P[] = [];
         for (const packet of packets) {
@@ -226,17 +236,16 @@ export class Demuxer<P> {
         }
       }
     } catch (error) {
-      if (stop.aborted) return;
-      log?.log(
-        'warn',
-        'demux',
-        `demux 失敗：${error instanceof Error ? error.message : String(error)}`,
-        { epoch, end: this.#end },
-      );
-      this.#error = error instanceof Error ? error : new Error(String(error));
-      this.#packets.fail(this.#error);
-      if (error instanceof WorkerError && error.code === 'MEMORY_LIMIT') this.#fatal.abort(error);
+      if (!signal.aborted) this.#fail(error instanceof Error ? error : new Error(String(error)));
     }
+  }
+
+  #fail(error: Error): void {
+    const { log, epoch } = this.#options;
+    log?.log('warn', 'demux', `demux 失敗：${error.message}`, { epoch, end: this.#end });
+    this.#error = error;
+    this.#packets.fail(error);
+    if (error instanceof WorkerError && error.code === 'MEMORY_LIMIT') this.#fatal.abort(error);
   }
 }
 

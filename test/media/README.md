@@ -60,7 +60,7 @@
 | `mov-text.mp4` | 2 s | H.264 | AAC | 字幕：mov_text，0 s 與 1 s 各一個 0.5 秒的 cue，文字為 `[embedded mov_text] <秒數>`；cue 之間有清空畫面的空 sample |
 | `video-only.mp4` | 3 s | H.264 | — | 沒有音軌（MP4，faststart） |
 | `external-audio-440.flac` | 20 s | — | FLAC，基準頻率 440 Hz | 外掛音軌，與 `multi-track.mkv` 同長 |
-| `external-audio-late-start.mkv` | 11.5 s | — | 2 軌 FLAC：440 Hz（非 default，0 s 起）、660 Hz（default，1.5 s 起） | 外掛音軌的 0 點是選用的軌（default）的第一個 sample，不是容器的 `start_time`（0 s） |
+| `external-audio-late-start.mkv` | 20 s | — | 2 軌 FLAC：440 Hz（非 default，0 s 起）、660 Hz（default，12 s 起） | 外掛時需找到 probe 範圍以外的首個 sample，不能將容器的 `start_time`（0 s）當作音軌原點 |
 
 `multi-track.mkv` 的軌道（依容器內順序）：
 

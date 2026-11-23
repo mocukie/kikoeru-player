@@ -305,7 +305,14 @@ export class VideoDecoding<P, F extends DecodedFrame> {
         if (errored()) return 'error';
         const chunk = packet === undefined ? undefined : this.#options.toChunk(packet);
         if (chunk === null) continue;
-        if (packet !== undefined && chunk) this.#remember(options.packets, packet, chunk);
+        // 下一張 keyframe 會取代 history，但 catch up 的舊 GOP 要留到送進 decoder 或中止；仍共用時不能計兩次。
+        const detachedBytes =
+          gop?.length && chunk?.type === 'key' && chunk.timestamp > current.target
+            ? this.#historyBytes
+            : 0;
+        if (packet !== undefined && chunk) {
+          this.#remember(options.packets, packet, chunk, detachedBytes);
+        }
         if (gop && chunk && chunk.timestamp <= current.target) {
           if (chunk.type === 'key') gop = [chunk];
           else if (gop.length > 0) gop.push(chunk);
@@ -314,9 +321,15 @@ export class VideoDecoding<P, F extends DecodedFrame> {
         if (gop) {
           const buffered = gop;
           gop = null;
-          for (const c of buffered) {
-            needKey = false;
-            if (!(await submit(c))) return 'error';
+          try {
+            for (const c of buffered) {
+              needKey = false;
+              if (!(await submit(c))) return 'error';
+            }
+          } finally {
+            if (detachedBytes !== 0 && this.#current === current) {
+              this.#reportRetained(options.packets);
+            }
           }
         }
         if (chunk === undefined) {
@@ -349,7 +362,7 @@ export class VideoDecoding<P, F extends DecodedFrame> {
   }
 
   /** 記下這個 GOP 從 lane 取出的封包：keyframe 重新開始，之前沒有 keyframe 的 delta 不記。 */
-  #remember(packets: HoldableLane<P>, packet: P, chunk: VideoChunk): void {
+  #remember(packets: HoldableLane<P>, packet: P, chunk: VideoChunk, detachedBytes: number): void {
     if (chunk.type === 'key') {
       this.#history = [packet];
       this.#historyBytes = packets.size(packet);
@@ -359,7 +372,7 @@ export class VideoDecoding<P, F extends DecodedFrame> {
     } else {
       return;
     }
-    this.#reportRetained(packets);
+    this.#reportRetained(packets, detachedBytes);
   }
 
   /** 取出 backlog 的下一個封包；沒有時為 undefined。 */
@@ -371,9 +384,9 @@ export class VideoDecoding<P, F extends DecodedFrame> {
     return packet;
   }
 
-  /** 保留中的封包（這個 GOP 與 backlog）的 bytes 計入封包佇列的硬上限。 */
-  #reportRetained(packets: HoldableLane<P>): void {
-    packets.retain(this.#historyBytes + this.#backlogBytes);
+  /** 保留中的封包（這個 GOP、backlog 與不再共用 history 的 catch up GOP）計入硬上限。 */
+  #reportRetained(packets: HoldableLane<P>, detachedBytes = 0): void {
+    packets.retain(this.#historyBytes + this.#backlogBytes + detachedBytes);
   }
 
   /**

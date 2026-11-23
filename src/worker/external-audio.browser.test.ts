@@ -35,8 +35,8 @@ const EXTERNAL = 'video/external-audio-440.flac';
 /** multi-track.mkv：stream 0 是 H.264，stream 1 是 880 Hz 的 AAC。 */
 const MAIN = 'video/multi-track.mkv';
 /**
- * 兩條 FLAC 軌：stream 0 是 440 Hz（0 秒起），stream 1 是 default 的 660 Hz（1.5 秒起），容器的 start_time 是 0
- *（test/media/README.md）。
+ * 兩條 FLAC 軌：stream 0 是 440 Hz（0 秒起），stream 1 是 default 的 660 Hz（12 秒起，超過 probe 範圍），
+ * 容器的 start_time 是 0（test/media/README.md）。
  */
 const LATE_START = 'video/external-audio-late-start.mkv';
 
@@ -421,7 +421,7 @@ describe('外掛音軌的 0 點', () => {
     // stream 1 的第一聲（加倍為 1320 Hz）在媒體 0 秒。
     expectOnsets(onsets(pcm).slice(0, 2), [0, 1]);
     expect(amplitudeAt(pcm.left, RATE, 1320, 480, 2400)).toBeGreaterThan(0.3);
-    // 媒體 3.25 秒是 stream 的 3.25 秒（容器的 4.75 秒），下一聲在媒體 4 秒。
+    // 媒體 3.25 秒是 stream 的 3.25 秒（容器的 15.25 秒），下一聲在媒體 4 秒。
     const seeked = await driver.seek(3.25, 2, 2 * RATE);
     expect(seeked.time).toBe(3.25);
     expectOnsets(onsets(seeked).slice(0, 2), [0.75, 1.75]);
@@ -484,14 +484,14 @@ describe('極大的有限 offset', () => {
 });
 
 describe('輸出的取代與結束', () => {
-  test('另開 instance 的開檔卡住時換回 offset 小的音軌：中止開檔，新的選擇照常輸出', async () => {
+  test.each([0, 4])('改用 offset %s：中止卡住的另開 instance', async (offset) => {
     const data = new Uint8Array(await mediaBytes(MAIN));
     const stalled: AbortSignal[] = [];
     let opens = 0;
     const driver = await WorkerDriver.init(
       inPage({
         openSource: (_wire, signal) => {
-          if (++opens === 1) {
+          if (++opens !== 2) {
             return Promise.resolve({
               size: data.length,
               read: (offset: number, length: number) =>
@@ -510,11 +510,11 @@ describe('輸出的取代與結束', () => {
     const select = { type: 'select', time: 1, audio: 1, video: 0, subtitle: null } as const;
     driver.post({ ...select, epoch: 2, audioOffset: 3 });
     await expect.poll(() => stalled.length).toBe(1);
-    driver.post({ ...select, epoch: 3 });
+    driver.post({ ...select, epoch: 3, audioOffset: offset });
     const pcm = await driver.collect(3, RATE);
     expect(pcm.time).toBe(1);
     expect(stalled[0]?.aborted).toBe(true);
-    expect((await driver.stats()).libavInstances).toBe(1);
+    expect((await driver.stats()).libavInstances).toBe(offset === 0 ? 1 : 2);
   });
 
   test('所有軌都不選：關掉影片的 decoder、丟掉另開的 instance', async () => {
@@ -550,16 +550,18 @@ describe('輸出的取代與結束', () => {
       .toBe(true);
     const stats = await driver.stats();
     expect(stats.libavInstances).toBe(1);
+    expect(stats.packetQueue).toEqual({ audioSeconds: 0, videoSeconds: 0, bytes: 0 });
     expect(stats.video).toBeNull();
     expect(closed).toBe(1);
   });
 
-  test('主來源超過封包佇列的硬上限：音訊來自外掛音軌時也回報致命的 MEMORY_LIMIT', async () => {
+  test.each([false, true])('外掛音軌、背景暫停=%s：主來源超限仍回報致命錯誤', async (suspended) => {
     const driver = await WorkerDriver.init(inPage(), { limits: { packetQueueBytes: 64 * 1024 } });
     const media = await driver.load(await bytes('video/bad-interleave.mp4'));
     const video = media.tracks.find((t) => t.kind === 'video');
     if (!video?.supported) return;
     await driver.addAudio('ext:1', await bytes(EXTERNAL));
+    if (suspended) driver.post({ type: 'videosuspend', suspended: true, time: 0 });
     driver.post({
       type: 'start',
       epoch: 1,
@@ -569,7 +571,8 @@ describe('輸出的取代與結束', () => {
       video: video.streamIndex,
       subtitle: null,
     });
-    driver.need(1, 20 * RATE);
+    // 只要開頭的一秒資料；錯誤回報不應等外掛音軌播完，也不應等影片恢復。
+    driver.need(1, RATE);
     expect(await driver.waitFor((m) => m.type === 'error')).toMatchObject({
       epoch: 1,
       error: { code: 'MEMORY_LIMIT', fatal: true },

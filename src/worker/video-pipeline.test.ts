@@ -11,7 +11,7 @@ import {
   type VideoDecoderInit,
   type VideoDecoderLike,
 } from './video-pipeline.js';
-import type { VideoConfig } from './video-codec.js';
+import { withParameterSets, type VideoConfig } from './video-codec.js';
 
 const config: VideoConfig = { codec: 'avc1.64000d', codedWidth: 320, codedHeight: 180 };
 
@@ -95,6 +95,7 @@ class FakeDecoder implements VideoDecoderLike {
 interface Packet {
   ms: number;
   key: boolean;
+  data?: Uint8Array;
 }
 
 /** 依序交出封包的 lane（真實的封包佇列，stream 1）；`end` 之前取完會等待。 */
@@ -164,7 +165,7 @@ const toChunk = (p: Packet): VideoChunk => ({
   type: p.key ? 'key' : 'delta',
   timestamp: Math.round(p.ms * 1000),
   duration: 33_333,
-  data: new Uint8Array(1),
+  data: p.data ?? new Uint8Array(1),
 });
 
 /** `failFrom`：每個新建的 decoder 在這個 timestamp（µs）以後的 chunk 都失敗（壞掉的資料）。 */
@@ -612,16 +613,15 @@ describe('VideoDecoding 的背景（suspend／resume）', () => {
 });
 
 describe('取出之後保留的封包計入封包佇列的硬上限（ADR-0007）', () => {
-  /** 每批一個 60 B 的封包（單一 GOP：只有第一個是 keyframe），以 100 B 的硬上限 demux 的 lane。 */
-  function demuxed(count: number, hardBytes = 100) {
-    const all = Array.from({ length: count }, (_, i) => ({ ms: (i * 1000) / 30, key: i === 0 }));
-    const batches = all.map((p) => [p]);
+  function demuxed(read: PacketReader<Packet>['read'], hardBytes: number) {
     const reader: PacketReader<Packet> = {
-      read: () => {
-        const packets = batches.shift() ?? [];
-        return Promise.resolve({ packets, eof: batches.length === 0 });
-      },
-      measure: (p) => ({ stream: 1, bytes: 60, time: p.ms / 1000, duration: 1 / 30 }),
+      read,
+      measure: (p) => ({
+        stream: 1,
+        bytes: p.data?.byteLength ?? 1,
+        time: p.ms / 1000,
+        duration: 1 / 30,
+      }),
     };
     const demuxer = new Demuxer<Packet>({
       reader,
@@ -633,14 +633,30 @@ describe('取出之後保留的封包計入封包佇列的硬上限（ADR-0007�
     const raw = demuxer.lane(1);
     const lane: HoldableLane<Packet> = {
       ...raw,
+      get drained() {
+        return raw.drained;
+      },
       entries: () => raw.packets().map((p) => ({ key: p.key, time: p.ms / 1000 })),
     };
     return { demuxer, lane };
   }
 
+  /** 每批一個 60 B 的封包，只有第一個是 keyframe。 */
+  function longGop(count: number, hardBytes = 100) {
+    const all = Array.from({ length: count }, (_, i) => ({
+      ms: (i * 1000) / 30,
+      key: i === 0,
+      data: new Uint8Array(60),
+    }));
+    return demuxed(() => {
+      const packet = all.shift();
+      return Promise.resolve({ packets: packet ? [packet] : [], eof: all.length === 0 });
+    }, hardBytes);
+  }
+
   test('seek 到長 GOP 的結尾：catch up 中保留的封包超過硬上限時以 MEMORY_LIMIT 失敗，bytes 也計入', async () => {
     const t = setup();
-    const { demuxer, lane } = demuxed(10);
+    const { demuxer, lane } = longGop(10);
     const signal = new AbortController().signal;
     const running = withDemux(demuxer, signal, () => t.run(lane, { startTime: 10, signal }));
     await expect(running).rejects.toMatchObject({ code: 'MEMORY_LIMIT' });
@@ -650,7 +666,7 @@ describe('取出之後保留的封包計入封包佇列的硬上限（ADR-0007�
 
   test('硬上限以內：照常解碼並送出起點的 frame，bytes 含保留中的 GOP；結束後不再保留', async () => {
     const t = setup();
-    const { demuxer, lane } = demuxed(10, 1000);
+    const { demuxer, lane } = longGop(10, 1000);
     const signal = new AbortController().signal;
     // 封包佇列的 bytes（stats）含保留中的 GOP。
     let peak = 0;
@@ -667,5 +683,82 @@ describe('取出之後保留的封包計入封包佇列的硬上限（ADR-0007�
     expect(t.posted.map((p) => p.frame.timestamp)).toEqual([300_000]);
     expect(t.events).toEqual(['end 1']);
     expect(demuxer.bytes).toBe(0);
+  });
+
+  test('catch up 等 decoder 時，舊 GOP 與下一個 keyframe 各計一次，後續 demux 超限時以 MEMORY_LIMIT 失敗', async () => {
+    const t = setup();
+    const firstBatch = Array.from({ length: 5 }, (_, i) => ({
+      ms: i * 100,
+      key: i === 0 || i === 4,
+      data: new Uint8Array(60),
+    }));
+    const lastBatch = { packets: [{ ms: 500, key: false, data: new Uint8Array(240) }], eof: true };
+    let readRest: () => void = () => undefined;
+    const rest = new Promise<typeof lastBatch>((resolve) => {
+      readRest = () => {
+        resolve(lastBatch);
+      };
+    });
+    const { demuxer, lane } = demuxed(
+      () =>
+        firstBatch.length > 0
+          ? Promise.resolve({ packets: firstBatch.splice(0), eof: false })
+          : rest,
+      300,
+    );
+    const stop = new AbortController();
+    const signal = AbortSignal.any([stop.signal, demuxer.fatal]);
+    for (let i = 0; i < MAX_OPEN_FRAMES; i++) t.credit.acquire();
+    const running = withDemux(demuxer, stop.signal, () =>
+      t.run(lane, { startTime: 0.3, signal }),
+    ).catch((error: unknown) => error);
+    try {
+      await settle();
+      expect(t.decoder.decoded).toHaveLength(0);
+      expect(demuxer.fatal.aborted).toBe(false);
+      const blockedBytes = demuxer.bytes;
+
+      readRest();
+      await settle();
+      expect(demuxer.fatal.reason).toMatchObject({ code: 'MEMORY_LIMIT' });
+      expect(await running).toBe(demuxer.fatal.reason);
+      expect(blockedBytes).toBe(300);
+      expect(demuxer.bytes).toBe(240);
+      expect(t.events).toEqual([]);
+    } finally {
+      readRest();
+      stop.abort();
+      await running;
+      t.credit.release(MAX_OPEN_FRAMES);
+    }
+  });
+
+  test('最末 Annex B keyframe 補上 SPS／PPS 後超出硬上限：不等下次 push 就以 MEMORY_LIMIT 失敗', async () => {
+    const t = setup();
+    const data = Uint8Array.of(0, 0, 1, 0x65, 0x88, 0x84);
+    const sets = Uint8Array.of(0, 0, 1, 0x67, 0x64, 0, 13, 0, 0, 1, 0x68, 0xee);
+    const { demuxer, lane } = demuxed(
+      () => Promise.resolve({ packets: [{ ms: 0, key: true, data }], eof: true }),
+      10,
+    );
+    const annexB: HoldableLane<Packet> = {
+      ...lane,
+      get drained() {
+        return lane.drained;
+      },
+      next: async (signal) => {
+        const packet = await lane.next(signal);
+        return packet && { ...packet, data: withParameterSets('h264', data, sets) };
+      },
+      size: (packet) => packet.data?.byteLength ?? 0,
+    };
+    const signal = new AbortController().signal;
+    const running = withDemux(demuxer, signal, () => t.run(annexB, { signal }));
+    await expect(running).rejects.toMatchObject({ code: 'MEMORY_LIMIT' });
+    await expect(running).rejects.toBe(demuxer.fatal.reason);
+    expect(demuxer.ended).toBe(true);
+    expect(demuxer.bytes).toBe(0);
+    expect(t.decoder.decoded).toHaveLength(0);
+    expect(t.events).toEqual([]);
   });
 });

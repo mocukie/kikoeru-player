@@ -57,13 +57,15 @@ export class PacketQueue<P> {
   }
 
   /**
-   * 一條軌取出之後仍由取用的一方保留的 bytes（取代前一次的值）：不計入平常的上限，但計入硬上限與 `bytes`。取出時從
-   * lane 扣掉、保留時加回來，所以保留著的封包讓之後的 push 照樣會超過硬上限。
+   * 一條軌取出之後仍由取用的一方保留的 bytes（取代前一次的值）：不計入平常的上限，但計入硬上限與 `bytes`。
+   * 增加保留的 bytes 時立即檢查硬上限；釋放時不檢查，即使其他 bytes 還讓佇列超過上限。
    */
   retain(stream: number, bytes: number): void {
     this.#lane(stream);
-    this.#retainedBytes += bytes - (this.#retained.get(stream) ?? 0);
+    const change = bytes - (this.#retained.get(stream) ?? 0);
+    this.#retainedBytes += change;
     this.#retained.set(stream, bytes);
+    if (change > 0) this.#checkHardLimit();
   }
 
   /**
@@ -153,12 +155,7 @@ export class PacketQueue<P> {
       lane.bytes += size;
       this.#bytes += size;
     }
-    if (this.bytes > this.#limits.hardBytes) {
-      throw new WorkerError(
-        'MEMORY_LIMIT',
-        `封包佇列超過上限 ${String(this.#limits.hardBytes)} bytes（交錯不良的媒體）`,
-      );
-    }
+    this.#checkHardLimit();
     this.#notify();
   }
 
@@ -216,6 +213,17 @@ export class PacketQueue<P> {
   fail(error: unknown): void {
     this.#error = error instanceof Error ? error : new Error(String(error));
     this.#notify();
+  }
+
+  #checkHardLimit(): void {
+    const bytes = this.bytes;
+    const limit = this.#limits.hardBytes;
+    if (bytes > limit) {
+      throw new WorkerError(
+        'MEMORY_LIMIT',
+        `封包佇列及保留的封包共 ${String(bytes)} bytes，超過上限 ${String(limit)} bytes`,
+      );
+    }
   }
 
   #lane(stream: number): Lane<P> {
