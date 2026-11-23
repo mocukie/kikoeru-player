@@ -54,6 +54,26 @@
           0.75rem/1.3 ui-monospace,
           monospace;
       }
+      #video {
+        display: block;
+        width: 100%;
+        max-height: 50vh;
+        aspect-ratio: 16 / 9;
+        object-fit: contain;
+        background: #000;
+      }
+      #current-cue {
+        min-height: 2.8em;
+        white-space: pre-wrap;
+      }
+      #cue-log {
+        max-height: 30vh;
+        overflow: auto;
+        padding-left: 2.5rem;
+        font:
+          0.8rem/1.4 ui-monospace,
+          monospace;
+      }
       #log {
         max-height: 50vh;
         overflow: auto;
@@ -121,6 +141,14 @@
       <label><input id="autoplay" type="checkbox" /> load 後直接播放（paused: false）</label>
     </div>
     <div class="row">
+      <label for="subtitle-lang">字幕偏好語言</label>
+      <input
+        id="subtitle-lang"
+        type="text"
+        placeholder="load 時的 preferredLanguages.subtitle，以逗號分隔，例如 ja 或 zh"
+      />
+    </div>
+    <div class="row">
       <label
         ><input id="background" type="checkbox" /> 背景播放模組（audioSession 與靜音 anchor）</label
       >
@@ -159,6 +187,68 @@
       <small>改變時以新的 logLevel 建立新的 Engine；Engine 的 log 記進下方的事件 log</small>
     </div>
 
+    <h2>軌道</h2>
+    <div class="row">
+      <label for="select-audio">音軌</label>
+      <select id="select-audio" data-kind="audio"></select>
+    </div>
+    <div class="row">
+      <label for="select-video">影片軌</label>
+      <select id="select-video" data-kind="video"></select>
+    </div>
+    <div class="row">
+      <label for="select-subtitle">字幕軌</label>
+      <select id="select-subtitle" data-kind="subtitle"></select>
+    </div>
+    <small
+      >選了就呼叫 selectTracks()；不支援的軌也列出（選了會 reject），選單跟著
+      selectedTracks（生效之後才變）。</small
+    >
+    <ul id="track-list"></ul>
+    <div class="row">
+      <label for="external-media">外掛音軌</label>
+      <select id="external-media"></select>
+      <input id="external-url" type="url" placeholder="或 URL（填了就優先使用）" />
+      <label for="external-offset">offset（秒）</label>
+      <input id="external-offset" type="number" step="0.001" value="0" />
+      <button id="add-external" type="button">addExternalAudio</button>
+    </div>
+    <div class="row">
+      <label for="offset-track">音軌</label>
+      <select id="offset-track"></select>
+      <label for="offset-value">offset（秒）</label>
+      <input id="offset-value" type="number" step="0.001" value="0" />
+      <button id="set-offset" type="button">setAudioOffset</button>
+      <button id="remove-external" type="button">removeExternalAudio</button>
+    </div>
+    <small
+      >外掛音軌加入後出現在上面的音軌選單（不自動選用）；offset
+      正值表示聲音較晚出現。下拉選單選了音軌時，offset 欄位顯示它目前的值。</small
+    >
+
+    <h2>影片</h2>
+    <canvas id="video" width="320" height="180"></canvas>
+    <div class="row">
+      <label
+        ><input id="attach-canvas" type="checkbox" checked />
+        attachCanvas（取消時不繪製，但照樣解碼）</label
+      >
+    </div>
+
+    <h2>內嵌字幕</h2>
+    <dl>
+      <dt>字幕軌</dt>
+      <dd id="subtitle-track">—</dd>
+      <dt>目前的 cue</dt>
+      <dd id="current-cue"></dd>
+      <dt>cue</dt>
+      <dd id="cue-count">—</dd>
+    </dl>
+    <details open>
+      <summary>cue log（以 id 去重，依開始時間排列）</summary>
+      <ol id="cue-log"></ol>
+    </details>
+
     <h2>狀態</h2>
     <dl>
       <dt>state</dt>
@@ -175,6 +265,8 @@
       <dd id="buffered">—</dd>
       <dt>error</dt>
       <dd id="error">—</dd>
+      <dt>videoSize</dt>
+      <dd id="video-size">—</dd>
       <dt>media</dt>
       <dd id="media-info">—</dd>
       <dt>audio</dt>

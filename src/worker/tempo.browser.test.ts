@@ -9,12 +9,13 @@ import {
   type WorkerEndpoint,
 } from '../../test/media-worker-harness.js';
 import type { WorkerToMainMessage, WorkletPcmMessage } from '../protocol/index.js';
+import type { WorkerHost } from './host.js';
 import { MediaWorker } from './media-worker.js';
 
 const SR = 48_000;
 
 function inPage(): WorkerEndpoint {
-  let listener: ((message: WorkerToMainMessage) => void) | null = null;
+  let listener: ((message: WorkerToMainMessage<WorkerHost>) => void) | null = null;
   const worker = new MediaWorker({ postMessage: (m) => listener?.(m) });
   return {
     post: (message) => {

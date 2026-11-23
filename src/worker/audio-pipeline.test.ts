@@ -6,8 +6,8 @@ import {
   Demand,
   type AudioDecoder,
   type DecodedAudio,
-  type PacketReader,
 } from './audio-pipeline.js';
+import { Demuxer, withDemux, type PacketReader } from './demuxer.js';
 import { WorkerError } from './errors.js';
 import type { Logger } from './log.js';
 import type { PacketQueueLimits } from './packet-queue.js';
@@ -44,7 +44,12 @@ class FakeReader implements PacketReader<FakePacket> {
     return Promise.resolve({ packets, eof: this.#batches.length === 0 });
   }
   measure(packet: FakePacket) {
-    return { bytes: packet.frames * 4, time: packet.time ?? null, duration: packet.frames / RATE };
+    return {
+      stream: 0,
+      bytes: packet.frames * 4,
+      time: packet.time ?? null,
+      duration: packet.frames / RATE,
+    };
   }
 }
 
@@ -141,6 +146,10 @@ function setup(
     batches?: FakePacket[][];
     decoder?: FakeDecoder;
     startTime?: number;
+    /** 音軌 offset（秒）。 */
+    offset?: number;
+    /** 媒體的長度（秒）。 */
+    duration?: number;
     epoch?: number;
     queueLimits?: PacketQueueLimits;
     onDemux?: (end: number) => void;
@@ -157,27 +166,50 @@ function setup(
   const controller = new AbortController();
   const epoch = options.epoch ?? 1;
   demand.setEpoch(epoch);
-  const pipeline = new AudioPipeline({
+  const startTime = options.startTime ?? 0;
+  const demuxer = new Demuxer({
     reader,
+    streams: [0],
+    startTime,
+    epoch,
+    ...(options.queueLimits && { queueLimits: options.queueLimits }),
+    ...(options.onDemux && { onDemux: options.onDemux }),
+    ...(options.log && { log: options.log }),
+  });
+  const pipeline = new AudioPipeline({
+    packets: demuxer.lane(0),
+    fatal: demuxer.fatal,
     decoder: options.decoder ?? new FakeDecoder(),
     sampleRate: RATE,
-    startTime: options.startTime ?? 0,
+    startTime,
+    ...(options.offset !== undefined && { offset: options.offset }),
+    ...(options.duration !== undefined && { duration: options.duration }),
     rate: options.rate ?? 1,
     createStretcher: stretch.create,
     epoch,
     demand,
     pool,
     signal: controller.signal,
-    ...(options.queueLimits && { queueLimits: options.queueLimits }),
-    ...(options.onDemux && { onDemux: options.onDemux }),
     ...(options.log && { log: options.log }),
     // 與 MessagePort 一樣 transfer：送出後原本的 buffer 被 detach。
     post: (message, transfer) => posted.push(structuredClone({ message, transfer }, { transfer })),
   });
-  const running = pipeline.run();
+  const running = withDemux(demuxer, controller.signal, () => pipeline.run());
   const pcm = () =>
     posted.map((p) => p.message).filter((m): m is WorkletPcmMessage => m.type === 'pcm');
-  return { pipeline, running, posted, pcm, demand, pool, reader, controller, epoch, stretch };
+  return {
+    pipeline,
+    demuxer,
+    running,
+    posted,
+    pcm,
+    demand,
+    pool,
+    reader,
+    controller,
+    epoch,
+    stretch,
+  };
 }
 
 /** 讓 pipeline 處理完目前能處理的工作。 */
@@ -317,6 +349,115 @@ describe('供料', () => {
     demand.need(epoch, 4096);
     await expect(running).rejects.toMatchObject({ name: 'AbortError' });
     expect(posted).toEqual([]);
+  });
+});
+
+describe('音軌 offset', () => {
+  // sourceTime = mediaTime − offset：來源 t 秒的 sample 在媒體時間 t + offset 播出。
+  const batches = () => Array.from({ length: 30 }, () => [{ frames: 2048 }]);
+
+  test('正值：起點前補靜音，來源的第一個 sample 在媒體時間 offset', async () => {
+    const { demand, pcm, epoch } = setup({ batches: batches(), offset: 0.25 });
+    demand.need(epoch, 0.5 * RATE);
+    await settle();
+    const left = concatLeft(pcm());
+    expect(pcm()[0]?.time).toBe(0);
+    expect(left.subarray(0, 0.25 * RATE).every((x) => x === 0)).toBe(true);
+    // 來源的第 1 個 frame（值 1）落在媒體時間 0.25 之後一個 frame。
+    expect(left[0.25 * RATE + 1]).toBe(1);
+  });
+
+  test('負值：跳過來源開頭，媒體時間 0 是來源的 -offset', async () => {
+    const { demand, pcm, epoch } = setup({ batches: batches(), offset: -0.25 });
+    demand.need(epoch, 2048);
+    await settle();
+    const [chunk] = pcm();
+    expect(chunk?.time).toBeCloseTo(0, 9);
+    expect(chunk?.channels[0]?.[0]).toBe(0.25 * RATE);
+  });
+
+  test('seek 到來源起點之前（起點 − offset < 0）：從來源開頭解碼，到來源的 0 點之前補靜音', async () => {
+    const { demand, pcm, epoch } = setup({ batches: batches(), startTime: 0.1, offset: 0.3 });
+    demand.need(epoch, 0.4 * RATE);
+    await settle();
+    const left = concatLeft(pcm());
+    expect(pcm()[0]?.time).toBe(0.1);
+    expect(left.subarray(0, 0.2 * RATE).every((x) => x === 0)).toBe(true);
+    expect(left[0.2 * RATE + 7]).toBe(7);
+  });
+
+  test('正值很大（空缺比可配置的陣列長）：依要求逐塊送出靜音，不一次配置整段空缺', async () => {
+    const { demand, pcm, epoch, posted } = setup({
+      batches: batches(),
+      offset: 1e6,
+      duration: 2e6,
+    });
+    demand.need(epoch, 3 * 4096);
+    await settle();
+    const chunks = pcm();
+    expect(frames(chunks)).toBe(3 * 4096);
+    expect(chunks[0]?.time).toBe(0);
+    expect(chunks[2]?.time).toBeCloseTo((2 * 4096) / RATE, 9);
+    expect(concatLeft(chunks).every((x) => x === 0)).toBe(true);
+    expect(posted.some((p) => p.message.type === 'eof')).toBe(false);
+  });
+
+  test('靜音補到媒體長度就結束：超出 duration 的空缺與來源的資料都不送，Number.MAX_VALUE 也一樣', async () => {
+    for (const offset of [Number.MAX_VALUE, 0.75]) {
+      const { demand, pcm, posted, running, epoch } = setup({
+        batches: batches(),
+        offset,
+        duration: 0.5,
+      });
+      demand.need(epoch, 1e9);
+      await running;
+      expect(frames(pcm())).toBe(0.5 * RATE);
+      expect(concatLeft(pcm()).every((x) => x === 0)).toBe(true);
+      expect(posted.at(-1)?.message).toEqual({ type: 'eof', epoch });
+    }
+  });
+
+  test('buffer pool 重用的 buffer 也送出全 0 的靜音', async () => {
+    const { demand, pcm, pool, epoch } = setup({ batches: batches(), offset: 10, duration: 20 });
+    // 先放進寫過資料的 buffer：靜音不能沿用它們的內容。
+    const dirty = Array.from({ length: 4 }, () => {
+      const buffer = new ArrayBuffer(4096 * 4);
+      new Float32Array(buffer).fill(0.5);
+      return buffer;
+    });
+    pool.release(dirty);
+    demand.need(epoch, 2 * 4096);
+    await settle();
+    expect(frames(pcm())).toBe(2 * 4096);
+    expect(concatLeft(pcm()).every((x) => x === 0)).toBe(true);
+  });
+
+  test('正值：已送出的媒體時間（sent）從起點開始、隨送出的 chunk 前進，不跳到 offset', async () => {
+    const { pipeline, demand, pcm, epoch } = setup({
+      batches: batches(),
+      startTime: 0.5,
+      offset: 30,
+      duration: 100,
+    });
+    await settle();
+    // 還沒送出任何 chunk：起點。
+    expect(pipeline.sent).toBe(0.5);
+    demand.need(epoch, 3 * 4096);
+    await settle();
+    expect(frames(pcm())).toBe(3 * 4096);
+    expect(pipeline.sent).toBeCloseTo(0.5 + (3 * 4096) / RATE, 9);
+    demand.need(epoch, 4096);
+    await settle();
+    expect(pipeline.sent).toBeCloseTo(0.5 + (4 * 4096) / RATE, 9);
+  });
+
+  test('seek 之後：媒體時間 t 送出來源 t − offset 的 sample', async () => {
+    const { demand, pcm, epoch } = setup({ batches: batches(), startTime: 0.5, offset: 0.2 });
+    demand.need(epoch, 2048);
+    await settle();
+    const [chunk] = pcm();
+    expect(chunk?.time).toBe(0.5);
+    expect(chunk?.channels[0]?.[0]).toBe(0.3 * RATE);
   });
 });
 
@@ -630,12 +771,12 @@ describe('封包佇列', () => {
 
   test('worklet 要求之前就 demux 到約 2 秒的封包，之後停下', async () => {
     const ends: number[] = [];
-    const { reader, pipeline } = setup({ batches: many(500), onDemux: (end) => ends.push(end) });
+    const { reader, demuxer } = setup({ batches: many(500), onDemux: (end) => ends.push(end) });
     await settle();
     const reads = reader.reads;
     expect(reads).toBeGreaterThan(90);
     expect(reads).toBeLessThan(100);
-    expect(pipeline.queuedSeconds).toBeGreaterThanOrEqual(2);
+    expect(demuxer.seconds(0)).toBeGreaterThanOrEqual(2);
     expect(ends.at(-1)).toBeCloseTo((reads * 1024) / RATE, 6);
     await settle();
     expect(reader.reads).toBe(reads);

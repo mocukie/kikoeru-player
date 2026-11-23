@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""產生內嵌字幕軌的來源檔，由 gen-media.sh mux 進 MKV。
+"""產生內嵌字幕軌的來源檔，由 gen-media.sh mux 進 MKV／MP4。
 
-每整秒一個 0.5 秒的 cue，與 beep 同時出現（見 README.md）。
+每整秒一個 0.5 秒的 cue，與 beep 同時出現（見 README.md）。2 秒的短檔另有 WebVTT、mov_text 用的 SRT 與
+PGS（圖形字幕，.sup）的來源。
 
 用法：gen-subs.py <輸出目錄> <秒數>
 """
+import struct
 import sys
 from pathlib import Path
 
@@ -46,3 +48,39 @@ def ass(text, tag):
 
 (out / "embedded-ja.srt").write_text(srt(JA, "embedded srt"), encoding="utf-8")
 (out / "embedded-zh.ass").write_text(ass(HANT, "embedded ass"), encoding="utf-8")
+
+
+SHORT = 2
+
+
+def vtt(tag):
+    return "WEBVTT\n\n" + "".join(f"{ts(n, '.')} --> {ts(n+0.5, '.')}\n[{tag}] {n}\n\n" for n in range(SHORT))
+
+
+def pgs():
+    """PGS（.sup）：每整秒顯示一個 8×2 的方塊，0.5 秒後清掉。每個 display set 是 PCS、WDS、(PDS、ODS)、END。"""
+
+    def segment(pts, kind, body):
+        return b"PG" + struct.pack(">IIBH", pts, 0, kind, len(body)) + body
+
+    def display_set(sec, number, show):
+        pts = round(sec * 90000)
+        w, h = 8, 2
+        objects = struct.pack(">HBBHH", 0, 0, 0, 10, 10) if show else b""
+        pcs = struct.pack(">HHBHBBBB", 320, 180, 0x10, number, 0x80 if show else 0, 0, 0, int(show)) + objects
+        out = segment(pts, 0x16, pcs) + segment(pts, 0x17, struct.pack(">BBHHHH", 1, 0, 10, 10, w, h))
+        if show:
+            out += segment(pts, 0x14, struct.pack(">BBBBBBB", 0, 0, 1, 235, 128, 128, 255))
+            rle = (b"\x01" * w + b"\x00\x00") * h
+            ods = struct.pack(">HBB", 0, 0, 0xC0) + (len(rle) + 4).to_bytes(3, "big") + struct.pack(">HH", w, h) + rle
+            out += segment(pts, 0x15, ods)
+        return out + segment(pts, 0x80, b"")
+
+    return b"".join(display_set(n, 2 * n, True) + display_set(n + 0.5, 2 * n + 1, False) for n in range(SHORT))
+
+
+(out / "short.vtt").write_text(vtt("embedded webvtt"), encoding="utf-8")
+(out / "short-mov-text.srt").write_text(
+    "".join(f"{n+1}\n{ts(n)} --> {ts(n+0.5)}\n[embedded mov_text] {n}\n\n" for n in range(SHORT)), encoding="utf-8"
+)
+(out / "short.sup").write_bytes(pgs())

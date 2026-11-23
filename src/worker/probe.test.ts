@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'vitest';
-import { hasPlayableTrack, toProbedMedia, type RawMedia, type RawStream } from './probe.js';
+import {
+  hasPlayableTrack,
+  toProbedMedia,
+  withPlatformSupport,
+  type RawMedia,
+  type RawStream,
+} from './probe.js';
 
 function stream(overrides: Partial<RawStream> = {}): RawStream {
   return {
@@ -18,6 +24,10 @@ function stream(overrides: Partial<RawStream> = {}): RawStream {
     disposition: 0,
     extradata: null,
     bitRate: 0,
+    profile: -99,
+    level: -99,
+    displayMatrix: null,
+    sampleAspectRatio: null,
     ...overrides,
   };
 }
@@ -117,10 +127,18 @@ describe('toProbedMedia', () => {
     expect(track).toMatchObject({ title: 'beep 880 Hz', default: true, forced: true });
   });
 
-  test('影片軌依 Engine 支援的 codec 判斷', () => {
+  test('影片軌依 Engine 對應得到的 WebCodecs codec 判斷，帶 codec string', () => {
     const tracks = toProbedMedia(
       media([
-        stream({ type: 'video', codec: 'h264', width: 320, height: 180, frameRate: 30 }),
+        stream({
+          type: 'video',
+          codec: 'h264',
+          width: 320,
+          height: 180,
+          frameRate: 30,
+          profile: 100,
+          level: 13,
+        }),
         stream({ type: 'video', codec: 'mpeg4', decodable: false, width: 320, height: 180 }),
       ]),
     ).tracks;
@@ -128,6 +146,7 @@ describe('toProbedMedia', () => {
       kind: 'video',
       streamIndex: 0,
       codec: 'h264',
+      codecString: 'avc1.64000d',
       supported: true,
       default: false,
       forced: false,
@@ -138,6 +157,28 @@ describe('toProbedMedia', () => {
     });
     expect(tracks[1]).toMatchObject({ supported: false, unsupportedReason: 'codec' });
     expect(tracks[1]).not.toHaveProperty('frameRate');
+    expect(tracks[1]).not.toHaveProperty('codecString');
+  });
+
+  test('影片軌的顯示尺寸套用 display matrix 的旋轉與容器的 SAR', () => {
+    const [rotated, wide] = toProbedMedia(
+      media([
+        stream({
+          type: 'video',
+          codec: 'h264',
+          width: 320,
+          height: 180,
+          displayMatrix: Int32Array.from([0, -65536, 0, 65536, 0, 0, 0, 0, 1 << 30]),
+        }),
+        stream({ type: 'video', codec: 'vp9', width: 320, height: 180, sampleAspectRatio: [2, 1] }),
+      ]),
+    ).tracks;
+    expect(rotated).toMatchObject({
+      codedWidth: 320,
+      codedHeight: 180,
+      display: { width: 180, height: 320, rotation: 270 },
+    });
+    expect(wide).toMatchObject({ display: { width: 640, height: 180, rotation: 0 } });
   });
 
   test('文字字幕帶格式，ASS 另帶 header；圖形字幕不支援', () => {
@@ -170,6 +211,41 @@ describe('toProbedMedia', () => {
       ]),
     ).tracks;
     expect(tracks.map((t) => t.streamIndex)).toEqual([2]);
+  });
+});
+
+describe('withPlatformSupport', () => {
+  const raw = media([
+    stream({ index: 0, type: 'video', codec: 'hevc', width: 320, height: 180 }),
+    stream({ index: 1, type: 'video', codec: 'h264', width: 320, height: 180 }),
+    stream({ index: 2, type: 'video', codec: 'mpeg4', width: 320, height: 180 }),
+    stream({ index: 3 }),
+  ]);
+
+  test('瀏覽器不支援的影片 config 標為 platform，其餘不變', async () => {
+    const checked: string[] = [];
+    const probed = await withPlatformSupport(toProbedMedia(raw), raw, (config) => {
+      checked.push(config.codec);
+      return Promise.resolve(!config.codec.startsWith('hev1'));
+    });
+    expect(checked).toEqual(['hev1.1.6.L93.B0', 'avc1.640028']);
+    expect(probed.tracks).toMatchObject([
+      { codec: 'hevc', supported: false, unsupportedReason: 'platform' },
+      { codec: 'h264', supported: true },
+      { codec: 'mpeg4', supported: false, unsupportedReason: 'codec' },
+      { codec: 'aac', supported: true },
+    ]);
+    expect(probed.tracks[1]).not.toHaveProperty('unsupportedReason');
+  });
+
+  test('判斷本身失敗（例如沒有 WebCodecs）也標為 platform', async () => {
+    const probed = await withPlatformSupport(toProbedMedia(raw), raw, () =>
+      Promise.reject(new ReferenceError('VideoDecoder is not defined')),
+    );
+    expect(probed.tracks.slice(0, 2)).toMatchObject([
+      { supported: false, unsupportedReason: 'platform' },
+      { supported: false, unsupportedReason: 'platform' },
+    ]);
   });
 });
 

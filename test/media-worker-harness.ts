@@ -6,6 +6,7 @@ import type {
   ProbedAudioTrack,
   ProbedMedia,
   RetryPolicy,
+  WireCue,
   WireLogLevel,
   WorkerLimits,
   WorkerStats,
@@ -83,7 +84,20 @@ export async function mediaBytes(path: string): Promise<ArrayBuffer> {
 /** 能收發協定訊息的 media Worker：測試內直接建立的 `MediaWorker`，或真實的 Worker。 */
 export interface WorkerEndpoint {
   post(message: MainToWorkerMessage<BrowserHost>, transfer?: Transferable[]): void;
-  onMessage(listener: (message: WorkerToMainMessage) => void): void;
+  onMessage(listener: (message: WorkerToMainMessage<BrowserHost>) => void): void;
+}
+
+/** 收到的一張影片 frame（收到時就 close，只留下特徵）。 */
+export interface ReceivedFrame {
+  epoch: number;
+  /** 媒體時間（秒）。 */
+  time: number;
+  /** `visibleRect` 的大小（coded size 可能因 macroblock 對齊而較大）。 */
+  visibleWidth: number;
+  visibleHeight: number;
+  displayWidth: number;
+  displayHeight: number;
+  format: VideoPixelFormat | null;
 }
 
 /** 解出的音訊。 */
@@ -98,7 +112,15 @@ export interface DecodedPcm {
 
 /** 以協定驅動一個 media Worker：init、load、start、要資料。 */
 export class WorkerDriver {
-  readonly messages: WorkerToMainMessage[] = [];
+  readonly messages: WorkerToMainMessage<BrowserHost>[] = [];
+  /** 收到的影片 frame，依收到的順序。 */
+  readonly frames: ReceivedFrame[] = [];
+  /**
+   * 扮演主執行緒：收到的 frame 立即 close 並以 `frameclosed` 告訴 Worker。false 時留在 `heldFrames`，由測試呼叫
+   * `releaseFrames()`。
+   */
+  autoCloseFrames = true;
+  readonly heldFrames: VideoFrame[] = [];
   readonly worklet: WorkerToWorkletMessage[] = [];
   readonly sampleRate: number;
   readonly #endpoint: WorkerEndpoint;
@@ -111,6 +133,24 @@ export class WorkerDriver {
     this.#port = port;
     this.sampleRate = sampleRate;
     endpoint.onMessage((message) => {
+      if (message.type === 'frame') {
+        const { frame } = message;
+        this.frames.push({
+          epoch: message.epoch,
+          time: frame.timestamp / 1e6,
+          visibleWidth: frame.visibleRect?.width ?? frame.codedWidth,
+          visibleHeight: frame.visibleRect?.height ?? frame.codedHeight,
+          displayWidth: frame.displayWidth,
+          displayHeight: frame.displayHeight,
+          format: frame.format,
+        });
+        if (this.autoCloseFrames) {
+          frame.close();
+          this.post({ type: 'frameclosed', count: 1 });
+        } else {
+          this.heldFrames.push(frame);
+        }
+      }
       this.messages.push(message);
       this.#notify();
     });
@@ -182,14 +222,71 @@ export class WorkerDriver {
     return reply.media;
   }
 
-  /** 從 `time` 開始輸出 `audio` 軌，要 `frames` 個 frame（預設全部），等到 EOF 或送滿。 */
+  /**
+   * 從 `time` 開始輸出 `audio` 軌（與 `video` 軌、`subtitle` 軌），要 `frames` 個 frame（預設全部），等到 EOF 或送滿。
+   */
   async decode(
     audio: number | null,
-    options: { epoch?: number; time?: number; frames?: number } = {},
+    options: {
+      epoch?: number;
+      time?: number;
+      frames?: number;
+      video?: number | null;
+      subtitle?: number | null;
+    } = {},
   ): Promise<DecodedPcm> {
     const epoch = options.epoch ?? 1;
-    this.post({ type: 'start', epoch, time: options.time ?? 0, audio });
+    this.post({
+      type: 'start',
+      epoch,
+      time: options.time ?? 0,
+      audio,
+      video: options.video ?? null,
+      subtitle: options.subtitle ?? null,
+    });
     return this.collect(epoch, options.frames);
+  }
+
+  /** 加入外掛音軌並等到 `audioprobe` 或 `audioerror`（以 Error reject，帶 WireError 的欄位）。 */
+  async addAudio(
+    id: string,
+    source: Extract<MainToWorkerMessage<BrowserHost>, { type: 'addaudio' }>['source'],
+  ): Promise<ProbedAudioTrack> {
+    const from = this.messages.length;
+    this.post({ type: 'addaudio', id, source });
+    const match = (m: WorkerToMainMessage<BrowserHost>) =>
+      (m.type === 'audioprobe' || m.type === 'audioerror') && m.id === id;
+    await this.#until(() => this.messages.slice(from).some(match));
+    const reply = this.messages.slice(from).find(match);
+    if (reply?.type === 'audioerror') {
+      throw Object.assign(new Error(reply.error.message), reply.error);
+    }
+    if (reply?.type !== 'audioprobe') throw new Error('unreachable');
+    return reply.track;
+  }
+
+  /** `epoch` 收到的 cue，依收到的順序。 */
+  cues(epoch: number): WireCue[] {
+    return this.messages.flatMap((m) => (m.type === 'cues' && m.epoch === epoch ? m.cues : []));
+  }
+
+  /** close 留著的 frame 並告訴 Worker。 */
+  releaseFrames(): void {
+    const count = this.heldFrames.length;
+    for (const frame of this.heldFrames.splice(0)) frame.close();
+    if (count > 0) this.post({ type: 'frameclosed', count });
+  }
+
+  /** 等到 `epoch` 的影片結束（`videoend` 或 `videoerror`），回傳那個訊息與這個 epoch 收到的 frame。 */
+  async videoDone(epoch: number): Promise<{
+    end: Extract<WorkerToMainMessage, { type: 'videoend' | 'videoerror' }>;
+    frames: ReceivedFrame[];
+  }> {
+    const end = await this.waitFor(
+      (m) => (m.type === 'videoend' || m.type === 'videoerror') && m.epoch === epoch,
+    );
+    if (end.type !== 'videoend' && end.type !== 'videoerror') throw new Error('unreachable');
+    return { end, frames: this.frames.filter((f) => f.epoch === epoch) };
   }
 
   /** seek 到 `time`，以新的 `epoch` 要 `frames` 個 frame（預設全部），等到 EOF 或送滿。 */
@@ -234,7 +331,9 @@ export class WorkerDriver {
     return reply.stats;
   }
 
-  async waitFor(match: (m: WorkerToMainMessage) => boolean): Promise<WorkerToMainMessage> {
+  async waitFor(
+    match: (m: WorkerToMainMessage<BrowserHost>) => boolean,
+  ): Promise<WorkerToMainMessage<BrowserHost>> {
     await this.#until(() => this.messages.some(match));
     const found = this.messages.find(match);
     if (!found) throw new Error('unreachable');

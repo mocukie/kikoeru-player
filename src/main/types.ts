@@ -79,7 +79,15 @@ export interface EngineOptions {
   stallAttempts?: number;
   /** 預設的偏好語言（BCP 47），`load()` 的 `preferredLanguages` 會覆蓋。預設沒有偏好。 */
   preferredLanguages?: { audio?: string[]; subtitle?: string[] };
-  /** 背景（`document.hidden`）時停止解碼影片、只播聲音，回前景時從 keyframe 重新同步。預設 true。 */
+  /**
+   * 背景（`document.hidden`，例如切到其他分頁或最小化視窗）時關閉 `VideoDecoder`、停止解碼影片，只播聲音；state、
+   * `currentTime` 與事件照常，背景中的 seek、load 不等影片的第一張 frame。回到前景（`visibilitychange`）時建立新的
+   * decoder，從 pts ≤ 此刻位置的 keyframe 解碼，依音訊時鐘在數個 frame 內重新同步，聲音不中斷；沒有音軌的媒體改從
+   * 此刻位置重新 seek。背景中畫面停在最後畫出的 frame。預設 true。
+   *
+   * false 時背景中照常解碼；`requestAnimationFrame` 停住時改以 timer 依音訊時鐘消耗 frame。瀏覽器在背景回收 decoder
+   *（Chromium 會回收背景中的 codec）時當作播放中解碼失敗處理：重新設定 decoder，仍然失敗就只播音訊。
+   */
   suspendVideoWhenHidden?: boolean;
   /**
    * AudioWorklet ring buffer 的水位（ms）：低於 `refillMs` 就向 media Worker 要資料，補到 `targetMs`，
@@ -132,7 +140,8 @@ export type EngineState =
  * - getter 顯示「已生效」的值，例如 `selectTracks()` 進行中，`selectedTracks` 仍是舊軌，新軌出聲後才更新。
  *   唯一的例外是 `paused`，它是使用者意圖。
  * - `tracks` 在 `load()` 之後只因指令或降級改變（`addExternalAudio()`、`removeExternalAudio()`、
- *   `setAudioOffset()`、`selectTracks()` 發現 codec 實際不支援、播放中影片解碼失敗而退回只播音訊）。
+ *   `setAudioOffset()`、`selectTracks()` 發現 codec 實際不支援、播放中影片解碼失敗而退回只播音訊、外掛音軌在播放中或
+ *   `reload()` 時失敗而被移除）。
  *   播放中才出現的軌道只記 log、不加入。
  *
  * **指令**（`load`、`reload`、`play`、`pause`、`seek`、`selectTracks`、`addExternalAudio`、
@@ -142,6 +151,7 @@ export type EngineState =
  * - `seek()` 取代尚未完成的 `seek()`（包括執行中的，它的讀取會被中止）。
  * - `selectTracks()` 同一 kind 只保留最後一個。
  * - `play()` 與 `pause()` 互相取代。
+ * - `addExternalAudio()`、`removeExternalAudio()`、`setAudioOffset()` 不互相取代，依呼叫順序執行。
  *
  * `volume`、`muted`、`playbackRate` 是同步屬性，不進指令佇列。
  *
@@ -187,7 +197,9 @@ export interface Engine extends EventTarget {
   readonly error: EngineError | null;
   /**
    * 影片的顯示尺寸（已套用旋轉與 SAR）；沒有選用影片軌，或選用的影片軌還沒畫出第一張 frame 時為 null。
-   * 0.1.0 還不解碼影片，一律為 null。
+   * 在第一張 frame 畫出（沒有 canvas 時是輪到它顯示）時更新並發出 `videoresize`；`load()` 開始時回到 null。
+   * SAR 以容器記錄的為準（MP4 的 `pasp`、Matroska 的 DisplayWidth／Height），容器沒有記錄時沿用瀏覽器依 bitstream
+   * 給的 `VideoFrame.displayWidth`／`displayHeight`。
    */
   readonly videoSize: VideoSize | null;
 
@@ -228,15 +240,16 @@ export interface Engine extends EventTarget {
   // ── 指令 ──
 
   /**
-   * 載入新媒體，並中止舊媒體的讀取。resolve 時 state 為 `'ready'`（`options.paused === false` 時為 `'playing'`）。
+   * 載入新媒體，並中止舊媒體的讀取。resolve 時 state 為 `'ready'`（`options.paused === false` 時為 `'playing'`）；
+   * 選用了影片軌時，起點的 frame 也已經畫出（影片超過 2 秒還沒備妥時不再等它）。
    *
    * `options.paused === false` 時與 `play()` 一樣在呼叫內同步解鎖 AudioContext。沒有 gesture 而 AudioContext
    * 無法開始時，`paused` 回到 true，仍以 state `'ready'` resolve；App 可以由 `audioUnlocked` 得知，請使用者點擊後 `play()`。
    *
    * 只要還有一條可播的音軌或影片軌就成功；不支援的軌照樣列在 `tracks`（`supported: false`），
    * 影片軌不支援或 configure 失敗時 `selectedTracks.video` 為 null、只播音訊。
-   * 沒有任何可播的軌時 reject `EngineError('CODEC_UNSUPPORTED')`。其他失敗也 reject `EngineError`，
-   * state 變為 `'error'`。
+   * 沒有任何可播的軌時（包括唯一可播的影片軌 configure 失敗時）reject `EngineError('CODEC_UNSUPPORTED')`。
+   * 其他失敗也 reject `EngineError`，state 變為 `'error'`。
    */
   load(source: Source, options?: LoadOptions): Promise<MediaInfo>;
 
@@ -244,7 +257,10 @@ export interface Engine extends EventTarget {
    * 以同一份媒體重新開檔，用於 session 失效等錯誤之後的接續；`'ready'` 以後的任何狀態與 `'error'` 都可呼叫。
    * 保留位置（`'error'` 時取 `error.position`）、`paused`、軌道選擇、外掛音軌、各音軌 offset、音量與速度；
    * track id 不變。重新開檔後軌道的組成（軌道數、各軌的 kind 與 codec）與先前不同時 reject 致命的
-   * `EngineError('SOURCE_CHANGED')`，state 變為 `'error'`。
+   * `EngineError('SOURCE_CHANGED')`，state 變為 `'error'`。外掛音軌也重新開檔；開檔失敗或選用的音軌（codec、stream）與
+   * 先前不同時不影響 reload：發出非致命的 `error` 事件（開檔失敗的錯誤碼，例如 `SOURCE_UNAUTHORIZED`；組成不同時
+   * `SOURCE_CHANGED`；`detail.trackId` 是該軌），該軌從 `tracks` 移除，選用中時改選容器內的預設音軌（同
+   * `removeExternalAudio()`）。
    *
    * 執行期間 state 為 `'loading'`，`media`、`tracks`、`selectedTracks` 維持原狀，期間的 `seek()` 改寫起點；
    * resolve 時 state 同 `load()`：`paused` 時為 `'ready'`，否則為 `'playing'`。最近一次 `load()` 沒有完成就失敗時
@@ -263,6 +279,8 @@ export interface Engine extends EventTarget {
    * 並 resume AudioContext，所以在 user gesture 內呼叫時會自動解鎖；AudioContext 開始之前不會進入 `'playing'`。
    * resume 被拒絕或 2 秒內沒有完成時，以非致命的 `EngineError('AUDIO_LOCKED')` reject，`paused` 回到 true；
    * 逾時而 AudioContext 仍處於系統中斷（iOS 的 `'interrupted'`）時改為非致命的 `EngineError('AUDIO_OUTPUT')`。
+   * 沒有音軌的媒體（純影片）也一樣：時鐘由 AudioWorklet 以靜音推進到 `duration`，所以同樣需要 AudioContext 與
+   * user gesture。
    */
   play(): Promise<void>;
 
@@ -274,7 +292,8 @@ export interface Engine extends EventTarget {
   pause(): Promise<void>;
 
   /**
-   * 精準 seek（影片到 frame、音訊到 sample），resolve 實際落點（夾在 `[0, duration]`）。
+   * 精準 seek（影片到 frame、音訊到 sample），resolve 實際落點（夾在 `[0, duration]`）。影片顯示 pts ≤ 落點的最後一張
+   * frame，聲音與畫面在落點的 frame 畫出之後才一起開始（影片超過 2 秒還沒備妥時不再等它）。
    * 執行期間 state 為 `'seeking'`；完成時發出 `seeked` 並補發一次 `timeupdate`，之後依 `paused` 回到
    * `'playing'` 或 `'paused'`（還沒播放過時為 `'ready'`）。`'ended'` 時 seek 也一樣，從新的位置繼續。
    * 連續呼叫時只執行最後一個，被取代的 reject AbortError。
@@ -286,32 +305,74 @@ export interface Engine extends EventTarget {
 
   /**
    * 播放中切換軌道，不重新載入、時間不跳。只帶要改的 kind；null 表示關閉該類軌道
-   * （例如影片檔只播音訊、關掉字幕）。同一 kind 連續呼叫只保留最後一個。不改變 state。
+   * （例如影片檔只播音訊、關掉字幕）。不改變 state。
    *
-   * 選到 `supported: false` 的軌，或新軌 configure／首個 keyframe 失敗時，reject 非致命的
-   * `EngineError('CODEC_UNSUPPORTED')` 並保留原本的軌；後者會把該軌改為 `supported: false` 並發出 `trackschange`。
+   * 從目前位置重新供料：換軌期間時鐘停在切換的位置（聲音以 `audioFadeMs` 淡出淡入，中間短暫無聲），新軌出聲（暫停中為
+   * 資料備妥）、選用影片軌時新的 frame 畫出之後才 resolve；這時 `selectedTracks` 才是新值並發出 `trackschange`。
+   * 新影片軌的第一張 frame 晚於目前位置時，等時鐘推進到它、畫出之後才生效（收到 frame 之後超過 2 秒還沒畫出時不再等）。
+   * 換了影片軌時從目前位置之前的 keyframe 解碼，畫面上的 frame 留到新軌的第一張畫出；關掉影片時 `videoSize` 在生效時回到
+   * null。換了字幕軌時，新軌從目前位置之前的 keyframe 起的 cue 在 `trackschange` 之後才送出；換軌期間不送 cue。
+   *
+   * 同一 kind 連續呼叫只保留最後一個：較早的呼叫要改的 kind 都被較新的呼叫接手時，以 AbortError reject（執行中的也是）；
+   * 還有自己負責的 kind 時照常執行，只套用那些 kind（執行中被接手時，被接手的 kind 回到目前生效的軌重新輸出，不公布
+   * 被接手的選擇）。被取代的換軌已經開始輸出、而最後的呼叫不生效（例如 reject `RangeError`）時，輸出換回目前生效的軌之後才
+   * reject。選擇與目前生效的相同時立即 resolve。
+   *
+   * 一個呼叫內的 kind 一起生效或一起不生效：選到 `supported: false` 的軌，或新的影片軌 configure／首個 keyframe 失敗、
+   * 新的音軌的 decoder 開不起來時，reject 非致命的 `EngineError('CODEC_UNSUPPORTED')` 並保留原本的軌；後兩者會把該軌改為
+   * `supported: false`（影片軌 `'platform'`，音軌 `'codec'`）並發出 `trackschange`，換回原本的軌之後才 reject。新的外掛
+   * 音軌在生效之前失敗時，以它的錯誤碼 reject 非致命的 `EngineError`，並把它從 `tracks` 移除（見 `addExternalAudio()`）。id 不存在或不是該 kind 的軌時 reject `RangeError`。執行時沒有媒體
+   *（state 為 `'idle'` 或 `'error'`）則以 `DOMException`（name `'InvalidStateError'`）reject；loading 期間呼叫時等
+   * load 完成才執行。
    */
   selectTracks(selection: Partial<TrackSelection>): Promise<void>;
 
   /**
-   * 以另一個來源加入外掛音軌，resolve 新的 `AudioTrack`（`origin: 'external'`）。
-   * 不會自動選用，要用 `selectTracks({ audio: track.id })` 切過去。
+   * 以另一個來源加入外掛音軌，resolve 新的 `AudioTrack`（`origin: 'external'`，id 例如 `'ext:5'`）並發出
+   * `trackschange`。來源在同一個 media Worker 內以自己的 libav instance 開檔，選用來源內第一條可播的音軌（有 default
+   * 旗標的優先），`streamIndex` 是它在來源內的 index；http 來源與主來源共用 Range 快取（`limits.cacheBytes`）。開檔時
+   * 讀到該軌第一個可播放 sample，以它為 0 點，再依 offset 位移；選用後才繼續讀取與預讀。
+   *
+   * 不會自動選用，要用 `selectTracks({ audio: track.id })` 切過去。`options.offset` 是初始的音軌 offset（秒，預設 0，見
+   * `setAudioOffset()`）；`options.label` 是 `title`，省略時沿用來源記錄的標題。
    * 外掛音軌屬於當前媒體：下一次 `load()`／`unload()` 時一併移除，`reload()` 時保留。
    *
-   * 載入失敗時 reject 非致命的 `EngineError`，主媒體繼續播放。
+   * 載入失敗時 reject 非致命的 `EngineError`（錯誤碼同 `load()`，例如 `SOURCE_NOT_FOUND`；來源沒有可播的音軌時
+   * `CODEC_UNSUPPORTED`），主媒體繼續播放。
+   *
+   * 選用中的外掛音軌在播放中讀取、demux 或解碼失敗時也不影響主媒體：發出非致命的 `error` 事件（`detail.trackId` 是該軌），
+   * 它在失敗處以靜音接續，再與 `removeExternalAudio()` 一樣從 `tracks` 移除、切回容器內的預設音軌。不是標成
+   * `supported: false`：外掛音軌由 App 加入，失敗的來源留在 `tracks` 也無法再選用。
    * 每份媒體最多 4 條外掛音軌，超過時 reject 非致命的 `EngineError('MEMORY_LIMIT')`。
+   * `options.offset` 不是有限數時 reject `TypeError`；執行時沒有媒體（state 為 `'idle'` 或 `'error'`）則以
+   * `DOMException`（name `'InvalidStateError'`）reject；loading 期間呼叫時等 load 完成才執行。
    */
   addExternalAudio(
     source: Source,
     options?: { offset?: number; label?: string },
   ): Promise<AudioTrack>;
 
-  /** 移除 `addExternalAudio()` 加入的外掛音軌。 */
+  /**
+   * 移除 `addExternalAudio()` 加入的外掛音軌，丟掉它的 libav instance 並發出 `trackschange`。
+   * 它是選用中的音軌時先切回容器內的預設音軌（與 load 的初始選擇相同：偏好語言 → default 旗標 → 第一條可播的），
+   * 切換的方式與生效時機同 `selectTracks()`，生效時一起移除（只發出一次 `trackschange`）。
+   * `trackId` 不是外掛音軌時 reject `RangeError`；執行時沒有媒體則以 `DOMException`（name `'InvalidStateError'`）reject。
+   */
   removeExternalAudio(trackId: string): Promise<void>;
 
   /**
-   * 設定指定音軌的音軌 offset（秒），容器內與外掛音軌都適用；正值表示聲音較晚出現。
-   * 每條音軌各自記住；改的是目前選中的軌時會立即重新同步（短暫 seeking）。
+   * 設定指定音軌的音軌 offset（秒），容器內與外掛音軌都適用；正值表示聲音較晚出現。只要是有限數就接受。
+   * 在變速之前套用：媒體時間 `t` 播出來源的 `t − offset`；正值時起點前補靜音，負值時跳過來源的開頭。
+   * 音訊超出 `duration` 的部分截掉，比媒體短時之後以靜音推進到 `duration`。
+   *
+   * 每條音軌各自記住，之後選用該軌、seek 與 `reload()` 都沿用。改的是目前選中的軌時立即重新同步：從目前位置以新的
+   * offset 重新供料，state 短暫進入 `'seeking'`（同 `seek()`，完成時發出 `seeked`），完成後 `tracks` 才是新值並發出
+   * `trackschange`；其他軌立即更新並發出 `trackschange`。值與目前相同時什麼都不做。
+   * 容器內的音軌平常與影片軌在同一個 demuxer；同時播放影片而 offset 的絕對值超過 2 秒時，該音軌改以同一個來源另開的
+   * libav instance demux（共用 Range 快取，`getStats().resources.libavInstances` 多一個），封包佇列不會因 offset 增長。
+   *
+   * `offset` 不是有限數時 reject `TypeError`；`trackId` 不是音軌時 reject `RangeError`；執行時沒有媒體則以
+   * `DOMException`（name `'InvalidStateError'`）reject。
    */
   setAudioOffset(trackId: string, offset: number): Promise<void>;
 
@@ -332,8 +393,10 @@ export interface Engine extends EventTarget {
   // ── 影片輸出 ──
 
   /**
-   * 指定繪製目標；null 表示不再繪製（影片仍會解碼以維持同步，除非也關掉影片軌）。
-   * Engine 會把 `canvas.width`／`height` 設為影片顯示尺寸，版面縮放由 App 用 CSS（例如 `object-fit: contain`）處理。
+   * 指定繪製目標；null 表示不再繪製（影片仍會解碼以維持同步，除非也關掉影片軌）。接上時立即畫上目前的 frame。
+   * Engine 依音訊時鐘挑選 pts ≤ `currentTime` 的最新一張 frame，以 2D context 畫上去（套用旋轉），並把
+   * `canvas.width`／`height` 設為影片顯示尺寸（`videoSize`）；版面縮放由 App 用 CSS（例如 `object-fit: contain`）處理。
+   * canvas 不能是已經 `transferControlToOffscreen()` 的。
    */
   attachCanvas(canvas: HTMLCanvasElement | null): void;
 
@@ -461,12 +524,18 @@ export interface TrackBase {
   codec: string;
   /** WebCodecs 的 codec string（只有影片軌），例如 `'avc1.640028'`。 */
   codecString?: string;
-  /** false 時無法選用，原因見 `unsupportedReason`。播放中發現實際無法解碼時會改為 false 並發出 `trackschange`。 */
+  /**
+   * false 時無法選用，原因見 `unsupportedReason`。播放中發現實際無法解碼時（音軌的 decoder 開不起來，影片的
+   * configure、首個 keyframe 失敗，或播放中重新設定 decoder 之後仍然失敗）會改為 false 並發出 `trackschange`；
+   * load 期間發現的在 `load()` resolve 時就已經是 false。
+   */
   supported: boolean;
   /**
-   * - `'codec'`：Engine 本身不支援，例如 wasm 沒有這個 decoder，或沒對應到 WebCodecs 的影片 codec。
+   * - `'codec'`：Engine 本身不支援，例如 wasm 沒有這個 decoder，或沒對應到 WebCodecs 的影片 codec；也包括音軌的
+   *   decoder 實際開不起來（例如缺少取樣率、extradata 損壞）。不是換軌時發生的，不選用音軌、退回只播影片，不自動改選
+   *   另一條音軌。
    * - `'platform'`：Engine 支援、這個瀏覽器不支援，例如沒有 WebCodecs、`isConfigSupported` 為 false、
-   *   configure 或首個 keyframe 失敗。
+   *   configure 或首個 keyframe 失敗，或播放中解碼失敗、重新設定 decoder 之後仍然失敗（退回只播音訊）。
    * - `'bitmap-subtitle'`：圖形字幕（PGS、DVD），Engine 不解碼。
    */
   unsupportedReason?: 'codec' | 'platform' | 'bitmap-subtitle';
@@ -536,22 +605,33 @@ export interface TimeRange {
 
 // ───────────────────────────── 字幕 cue ─────────────────────────────
 
-/** 內嵌字幕的 cue，隨 demux 進度串流送出；同一個 cue 可能因 seek 重新送出，App 以 id 去重。 */
+/**
+ * 內嵌字幕的 cue，隨 demux 進度串流送出（通常比播放位置早約 2 秒），只送選中的字幕軌；同一個 cue 可能因 seek 重新送出，
+ * App 以 id 去重。seek 時 demux 從落點之前的 keyframe 開始，比 keyframe 更早開始、仍在顯示中的 cue 不會重新送出。
+ */
 export type SubtitleCue = TextCue | AssCue;
 
 /** 各種 cue 共有的欄位。 */
 export interface CueBase {
   trackId: string;
-  /** 穩定的 id（由 pts 與 ReadOrder 組成），可用來去重。 */
+  /**
+   * 穩定的 id，跨 seek 不變，可用來去重：ASS／SSA 由 pts 與 ReadOrder 組成；文字字幕沒有 ReadOrder，由 pts 與文字的
+   * hash 組成。
+   */
   id: string;
+  /** 開始的媒體時間（秒）。 */
   start: number;
+  /** 結束的媒體時間（秒）；容器沒有記錄時長時等於 `start`。 */
   end: number;
 }
 
 /** 文字字幕的 cue。 */
 export interface TextCue extends CueBase {
   format: 'subrip' | 'webvtt' | 'mov_text';
-  /** 封包內的原始文字，不解析標記。 */
+  /**
+   * 封包內的原始文字，不解析標記（SRT 的 `<i>`、WebVTT 的 `<v>` 等原樣保留）。mov_text 取 sample 內的文字，不含之後的
+   * style 等 box；只用來清空畫面的空 sample 不送出。
+   */
   text: string;
 }
 
@@ -561,7 +641,11 @@ export interface AssCue extends CueBase {
   /** Matroska 封包原文：`ReadOrder,Layer,Style,Name,MarginL,MarginR,MarginV,Effect,Text`（不含時間）。 */
   raw: string;
   readOrder: number;
-  /** 依 header 的 Format 重組的完整 `Dialogue:` 行，可以直接餵給 libass／JASSUB。 */
+  /**
+   * 依 header 的 Format 重組的完整 `Dialogue:` 行，可以直接餵給 libass／JASSUB。時間是媒體時間軸上的 `start`／`end`
+   * （`H:MM:SS.cc`）；header 沒有 `[Events]` 的 Format 時以 V4+ 的標準 Format 重組，SSA 的 `Marked` 欄位填
+   * `Marked=<Layer>`。
+   */
   dialogue: string;
 }
 
@@ -594,7 +678,10 @@ export interface EngineEventMap {
   bufferedchange: BufferedChangeEvent;
   /** `videoSize` 改變。 */
   videoresize: VideoResizeEvent;
-  /** 一批新的內嵌字幕 cue（只送選中的字幕軌）。 */
+  /**
+   * 一批新的內嵌字幕 cue（只送選中的字幕軌），隨 demux 的進度送出。load 期間 demux 到的 cue 留到 load 完成、
+   * `trackschange` 之後才送出，App 可以先從軌道取得 ASS 的 header。
+   */
   cues: CuesEvent;
   /** buffering 超過 `stallTimeout`，Engine 開始自動恢復。 */
   stall: StallEvent;
@@ -714,14 +801,21 @@ export interface EngineStats {
    * `targetMs`：實際生效的 `audioBuffer.targetMs`。
    */
   audio: { ringMs: number; underruns: number; outputLatencyMs: number; targetMs: number };
-  /** 影片解碼；沒有選用影片軌時為 null。 */
+  /**
+   * 影片解碼；沒有選用影片軌時為 null。`decoded`：decoder 輸出的 frame 數；`dropped`：時鐘已經越過、沒有畫出就丟棄的
+   * frame 數；`decodeQueueSize`：`VideoDecoder.decodeQueueSize`（上限 4）；`avgDecodeMs`：送進 decoder 到輸出 frame
+   * 的時間（ms，移動平均）。`decoded` 與 `dropped` 在 `load()` 時歸零。
+   */
   video: {
     decoded: number;
     dropped: number;
     decodeQueueSize: number;
     avgDecodeMs: number;
   } | null;
-  /** demux 與解碼之間的封包佇列。 */
+  /**
+   * demux 與解碼之間的封包佇列。`audioSeconds`／`videoSeconds`：選用中音軌、影片軌在佇列中的秒數；`bytes`：所有軌的
+   * bytes 合計，含影片解碼取出之後仍保留的封包（seek 後追到起點之前的 GOP、背景恢復用的 GOP），與硬上限比較的就是它。
+   */
   packetQueue: WorkerStats['packetQueue'];
   /**
    * Range 快取。`bytes`／`limitBytes`：目前用量與上限；`aheadBytes`：選用中來源已預讀、在播放位置之後的 bytes 合計；
@@ -734,7 +828,10 @@ export interface EngineStats {
   wasmHeapBytes: number;
   /**
    * 存活中的資源數，用於診斷 leak：`destroy()` 後全為 0；換檔後 `workers` 為 1、
-   * `libavInstances` 等於來源數（主來源加外掛音軌）。`workers` 是建立之後還沒 terminate 的 media Worker 數。
+   * `libavInstances` 等於來源數（主來源加外掛音軌）。例外是播放影片時選用的容器內音軌 offset 超過 2 秒：那條音軌另開
+   * 一個 instance（見 `setAudioOffset()`），多一個。`workers` 是建立之後還沒 terminate 的 media Worker 數；
+   * `openVideoFrames` 是還沒 close 的 `VideoFrame`（主執行緒畫面上與等待顯示的，加上 media Worker 內暫留的），
+   * 播放影片時最多十幾張。
    */
   resources: { workers: number; libavInstances: number; openVideoFrames: number };
 }

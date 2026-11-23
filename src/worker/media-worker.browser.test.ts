@@ -14,11 +14,12 @@ import {
   type WorkerEndpoint,
 } from '../../test/media-worker-harness.js';
 import type { WorkerToMainMessage, WorkerToWorkletMessage } from '../protocol/index.js';
+import type { WorkerHost } from './host.js';
 import { MediaWorker, type MediaWorkerDeps } from './media-worker.js';
 import type { ByteSource } from './source.js';
 
 function inPage(deps: Omit<MediaWorkerDeps, 'postMessage'> = {}): WorkerEndpoint {
-  let listener: ((message: WorkerToMainMessage) => void) | null = null;
+  let listener: ((message: WorkerToMainMessage<WorkerHost>) => void) | null = null;
   const worker = new MediaWorker({ ...deps, postMessage: (m) => listener?.(m) });
   return {
     post: (message) => {
@@ -198,8 +199,24 @@ describe('probe 與選軌', () => {
         rawLanguage: 'jpn',
         title: 'beep 880 Hz',
         default: true,
+        forced: false,
+        sampleRate: 48_000,
+        channels: 2,
+        channelLayout: 'stereo',
+        sampleFormat: 'fltp',
       },
-      { kind: 'audio', streamIndex: 2, codec: 'opus', language: 'zh', title: 'beep 440 Hz' },
+      {
+        kind: 'audio',
+        streamIndex: 2,
+        codec: 'opus',
+        language: 'zh',
+        rawLanguage: 'chi',
+        title: 'beep 440 Hz',
+        default: false,
+        channels: 2,
+        channelLayout: 'stereo',
+        sampleFormat: 'fltp',
+      },
       { kind: 'subtitle', streamIndex: 3, format: 'subrip', language: 'ja', supported: true },
       { kind: 'subtitle', streamIndex: 4, format: 'ass', language: 'zh', supported: true },
     ]);
@@ -214,6 +231,92 @@ describe('probe 與選軌', () => {
     const window = [48_000 + 480, 2400] as const;
     expect(amplitudeAt(pcm.left, 48_000, 440, ...window)).toBeGreaterThan(0.3);
     expect(amplitudeAt(pcm.left, 48_000, 880, ...window)).toBeLessThan(0.02);
+  });
+
+  test('select 換音軌：新的 epoch 從 time 開始只送新軌的聲音，之後的 seek 沿用新軌', async () => {
+    const driver = await WorkerDriver.init(inPage());
+    const media = await driver.load({
+      kind: 'bytes',
+      data: await mediaBytes('video/multi-track.mkv'),
+    });
+    const [ja, zh] = audioTracks(media);
+    const first = await driver.decode(ja?.streamIndex ?? null, { frames: 48_000 });
+    expect(amplitudeAt(first.left, 48_000, 880 * 2, 480, 2400)).toBeGreaterThan(0.3);
+
+    driver.post({
+      type: 'select',
+      epoch: 2,
+      time: 3,
+      audio: zh?.streamIndex ?? null,
+      video: null,
+      subtitle: null,
+    });
+    const pcm = await driver.collect(2, 2 * 48_000);
+    // 起點 3 秒：beep 從第一個 sample 開始，只有 440 Hz。
+    expect(pcm.time).toBe(3);
+    expect(amplitudeAt(pcm.left, 48_000, 440, 480, 2400)).toBeGreaterThan(0.3);
+    expect(amplitudeAt(pcm.left, 48_000, 880, 480, 2400)).toBeLessThan(0.02);
+    expect(beepOnsets(pcm.left, 48_000)[0]).toBeLessThan(0.002);
+
+    const seek = await driver.seek(7, 3, 48_000);
+    expect(amplitudeAt(seek.left, 48_000, 440, 480, 2400)).toBeGreaterThan(0.3);
+
+    // audio: null：立即 eof，worklet 以靜音推進。
+    driver.post({ type: 'select', epoch: 4, time: 8, audio: null, video: null, subtitle: null });
+    const none = await driver.collect(4);
+    expect(none.left).toHaveLength(0);
+    expect(driver.worklet.some((m) => m.type === 'eof' && m.epoch === 4)).toBe(true);
+  });
+
+  test('select 換到 decoder 開不起來的音軌：非致命的 audiofailed，之後換回原本的軌照常供料', async () => {
+    const driver = await WorkerDriver.init(inPage());
+    const media = await driver.load({
+      kind: 'bytes',
+      data: await mediaBytes('video/multi-track.mkv'),
+    });
+    const [ja] = audioTracks(media);
+    await driver.decode(ja?.streamIndex ?? null, { frames: 4096 });
+    // stream 0 是影片軌：當成音軌時沒有取樣率，音訊 decoder 開不起來。
+    driver.post({ type: 'select', epoch: 2, time: 3, audio: 0, video: null, subtitle: null });
+    const failed = await driver.waitFor((m) => m.type === 'audiofailed');
+    expect(failed).toMatchObject({
+      type: 'audiofailed',
+      epoch: 2,
+      source: null,
+      error: { code: 'CODEC_UNSUPPORTED', fatal: false },
+    });
+    driver.post({
+      type: 'select',
+      epoch: 3,
+      time: 3,
+      audio: ja?.streamIndex ?? null,
+      video: null,
+      subtitle: null,
+    });
+    const pcm = await driver.collect(3, 48_000);
+    expect(pcm.time).toBe(3);
+    expect(driver.messages.some((m) => m.type === 'error' || m.type === 'crash')).toBe(false);
+  });
+
+  test('主來源音軌 decoder 失敗後立刻收到 seek：不自行清除 #tracks.audio，新 epoch 仍回報 audiofailed', async () => {
+    const driver = await WorkerDriver.init(inPage());
+    await driver.load({
+      kind: 'bytes',
+      data: await mediaBytes('video/multi-track.mkv'),
+    });
+    // stream 0 是影片軌：當成音軌時 decoder 開不起來。
+    driver.post({ type: 'start', epoch: 1, time: 0, audio: 0, video: 0, subtitle: null });
+    expect(await driver.waitFor((m) => m.type === 'audiofailed' && m.epoch === 1)).toMatchObject({
+      source: null,
+      error: { code: 'CODEC_UNSUPPORTED', fatal: false },
+    });
+    // 主執行緒在收到 audiofailed(1) 前送出 seek(2)：Worker 應重試同一條音軌並回報 audiofailed(2)，不應靜默 eof。
+    driver.post({ type: 'seek', epoch: 2, time: 2 });
+    expect(await driver.waitFor((m) => m.type === 'audiofailed' && m.epoch === 2)).toMatchObject({
+      source: null,
+      error: { code: 'CODEC_UNSUPPORTED', fatal: false },
+    });
+    expect(driver.worklet.some((m) => m.type === 'eof' && m.epoch === 2)).toBe(false);
   });
 
   test('容器的 start_time 換算到媒體時間軸：MP3 的第一個 sample 在 0', async () => {
@@ -257,6 +360,23 @@ describe('供料', () => {
     const pcm = await driver.decode(null);
     expect(pcm.chunks).toEqual([]);
     expect(driver.worklet).toEqual([{ type: 'eof', epoch: 1 }]);
+    await expect.poll(() => driver.messages).toContainEqual({ type: 'audioend', epoch: 1 });
+  });
+
+  test('音訊送完（eof）時告訴主執行緒 audioend；影片還在解碼時也一樣', async () => {
+    const driver = await WorkerDriver.init(inPage());
+    driver.autoCloseFrames = false;
+    const media = await driver.load({
+      kind: 'bytes',
+      data: await mediaBytes('video/h264-aac.mp4'),
+    });
+    const audio = audioTracks(media)[0]?.streamIndex ?? null;
+    const video = media.tracks.find((t) => t.kind === 'video')?.streamIndex ?? null;
+    const pcm = await driver.decode(audio, { time: 8, video });
+    expect(pcm.left.length).toBeGreaterThan(0);
+    await expect.poll(() => driver.messages).toContainEqual({ type: 'audioend', epoch: 1 });
+    expect(driver.messages.some((m) => m.type === 'videoend')).toBe(false);
+    driver.releaseFrames();
   });
 
   test('port：改接重建後的 worklet，以新的 epoch 從指定時間精準 seek 重新供料，舊的 port 不再收到資料', async () => {

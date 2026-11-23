@@ -1,9 +1,10 @@
-// leak 測試（#40，docs/testing.md「E2E」）：以 CI 組的短檔連續 load 100 次，混入被取代的 load、播放中換檔與播放中
-// destroy。每次換檔後 resources 為 1 個 Worker、1 個 libav instance，進行中的請求都屬於目前的媒體（預讀），
-// destroy 後全為 0、沒有進行中的請求；
+// leak 測試（#40、#50、#53，docs/testing.md「E2E」）：以 CI 組的短檔（混入影片檔）連續 load 100 次，混入被取代的 load、
+// 播放中換檔、播放中 destroy 與外掛音軌。每次換檔後 resources 為 1 個 Worker、libav instance 等於來源數（主來源加上外掛
+// 音軌），影片檔持有的 VideoFrame 不超過上限、純音訊為 0，進行中的請求都屬於目前的媒體（預讀），destroy 後全為 0、沒有
+// 進行中的請求；
 // 最後數 Worker target，並在 GC 後量 JS heap（Chromium 的 CDP）。Firefox 跑不了 CDP 的部分。
 import { expect, test, type Page } from '@playwright/test';
-import { LEAK_HEAP_GROWTH_BYTES } from './tolerances.js';
+import { LEAK_HEAP_GROWTH_BYTES, MAX_OPEN_VIDEO_FRAMES } from './tolerances.js';
 
 /** 頁面上的 Engine 只用到的部分（Demo 頁以 `engine` 放在 globalThis）。 */
 interface PageEngine {
@@ -11,6 +12,8 @@ interface PageEngine {
   currentTime: number;
   load(source: { kind: 'http'; url: string }, options?: { paused?: boolean }): Promise<unknown>;
   seek(time: number): Promise<number>;
+  addExternalAudio(source: { kind: 'http'; url: string }): Promise<{ id: string }>;
+  selectTracks(selection: { audio: string }): Promise<void>;
   destroy(): Promise<void>;
   getStats(): Promise<{
     resources: { workers: number; libavInstances: number; openVideoFrames: number };
@@ -23,12 +26,19 @@ interface E2EWindow {
 }
 
 /** 一次換檔的方式。 */
-type Step = 'load' | 'play' | 'superseded' | 'seek-then-load' | 'destroy-while-playing';
+type Step =
+  'load' | 'play' | 'superseded' | 'seek-then-load' | 'destroy-while-playing' | 'external';
+
+/** `external` 換檔加入的外掛音軌（同一個來源加入 2 次，選用第一條並播放）。 */
+const EXTERNAL = 'video/external-audio-440.flac';
+const EXTERNAL_COUNT = 2;
 
 const FILES = [
   'audio/flac.flac',
+  'video/h264-aac.mp4',
   'audio/mp3.mp3',
   'audio/opus.opus',
+  'video/vp9-opus.webm',
   'audio/aac.m4a',
   'audio/vorbis.ogg',
   'audio/pcm-s16.wav',
@@ -36,11 +46,15 @@ const FILES = [
 
 const LOADS = 100;
 
-/** 第 `i` 次換檔的方式：每 25 次一次播放中 destroy，每 10 次一次被取代的 load，其餘輪流停在 ready 與播放中換檔。 */
+/**
+ * 第 `i` 次換檔的方式：每 25 次一次播放中 destroy，每 10 次一次被取代的 load、一次加入外掛音軌，其餘輪流停在 ready 與
+ * 播放中換檔。
+ */
 function stepOf(i: number): Step {
   if (i % 25 === 24) return 'destroy-while-playing';
   if (i % 10 === 5) return 'superseded';
   if (i % 10 === 8) return 'seek-then-load';
+  if (i % 10 === 3) return 'external';
   return i % 2 === 0 ? 'load' : 'play';
 }
 
@@ -54,7 +68,7 @@ interface StepResult {
 /** 在頁面內執行一次換檔，回傳之後的 resources 與被取代的指令的錯誤名稱。 */
 function runStep(page: Page, step: Step, file: string, next: string): Promise<StepResult> {
   return page.evaluate(
-    async ({ step, file, next }) => {
+    async ({ step, file, next, external, externalCount }) => {
       const w = window as unknown as E2EWindow;
       const engine = w.engine;
       const source = (path: string) =>
@@ -94,6 +108,17 @@ function runStep(page: Page, step: Step, file: string, next: string): Promise<St
           superseded.push(await seeking);
           break;
         }
+        case 'external': {
+          await engine.load(source(file), { paused: false });
+          const tracks = [];
+          for (let n = 0; n < externalCount; n++) {
+            tracks.push(await engine.addExternalAudio(source(external)));
+          }
+          await engine.selectTracks({ audio: tracks[0]?.id ?? '' });
+          const at = engine.currentTime;
+          await until(() => engine.currentTime > at + 0.1);
+          break;
+        }
         case 'destroy-while-playing': {
           await engine.load(source(file), { paused: false });
           await until(() => engine.currentTime > 0.1);
@@ -109,7 +134,7 @@ function runStep(page: Page, step: Step, file: string, next: string): Promise<St
         state: engine.state,
       };
     },
-    { step, file, next },
+    { step, file, next, external: EXTERNAL, externalCount: EXTERNAL_COUNT },
   );
 }
 
@@ -171,7 +196,6 @@ test('連續 load 100 次：resources 與 Worker 不累積，destroy 後全為 0
   await page.goto('/demo/?background=0');
   await expect(page.locator('#media option')).not.toHaveCount(0);
 
-  const one = { workers: 1, libavInstances: 1, openVideoFrames: 0 };
   const none = { workers: 0, libavInstances: 0, openVideoFrames: 0 };
   let baseline: number | null = null;
 
@@ -183,7 +207,10 @@ test('連續 load 100 次：resources 與 Worker 不累積，destroy 後全為 0
     const where = `第 ${String(i)} 次（${step}，${file}）`;
     // 預讀會在換檔後繼續抓目前的媒體；之前（含被取代）的媒體不能留下請求。
     const current = step === 'superseded' || step === 'seek-then-load' ? next : file;
-    const stale = result.inflight.filter((r) => !r.url.endsWith(`/media/${current}`));
+    const sources = step === 'external' ? [current, EXTERNAL] : [current];
+    const stale = result.inflight.filter(
+      (r) => !sources.some((path) => r.url.endsWith(`/media/${path}`)),
+    );
     expect(stale, where).toEqual([]);
     if (step === 'destroy-while-playing') {
       expect(result.resources, where).toEqual(none);
@@ -191,7 +218,14 @@ test('連續 load 100 次：resources 與 Worker 不累積，destroy 後全為 0
       await expect.poll(() => workerTargets(page, browserName), { message: where }).toBe(0);
       await page.locator('#recreate').click();
     } else {
-      expect(result.resources, where).toEqual(one);
+      const { openVideoFrames, ...rest } = result.resources;
+      expect(rest, where).toEqual({
+        workers: 1,
+        libavInstances: step === 'external' ? 1 + EXTERNAL_COUNT : 1,
+      });
+      expect(openVideoFrames, where).toBeLessThanOrEqual(
+        current.startsWith('video/') ? MAX_OPEN_VIDEO_FRAMES : 0,
+      );
       expect(result.superseded, where).toEqual(
         step === 'superseded' || step === 'seek-then-load' ? ['AbortError'] : [],
       );

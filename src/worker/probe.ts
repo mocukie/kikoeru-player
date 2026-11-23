@@ -8,6 +8,12 @@ import type {
   ProbedTrackBase,
   ProbedVideoTrack,
 } from '../protocol/index.js';
+import {
+  displayRotation,
+  displaySize,
+  videoDecoderConfig,
+  type VideoConfig,
+} from './video-codec.js';
 
 /** libav 層讀到的容器資訊，時間沿用 libavformat 的單位。 */
 export interface RawMedia {
@@ -40,16 +46,21 @@ export interface RawStream {
   metadata: Readonly<Record<string, string>>;
   /** `AVStream.disposition`。 */
   disposition: number;
+  /** 音訊與影片：`AVCodecParameters.extradata`（avcC、hvcC、av1C、ASS 的 header 等）。 */
   extradata: Uint8Array | null;
   /** `AVCodecParameters.bit_rate`（bits/s）；沒有記錄時為 0。 */
   bitRate: number;
+  /** `AVCodecParameters.profile`／`level`；未知時為負數。 */
+  profile: number;
+  level: number;
+  /** 影片的 display matrix（`AV_PKT_DATA_DISPLAYMATRIX`）；沒有時為 null。 */
+  displayMatrix: Int32Array | null;
+  /** 容器記錄的 sample aspect ratio（`AVStream.sample_aspect_ratio`）；未知時為 null。 */
+  sampleAspectRatio: readonly [number, number] | null;
 }
 
 const AV_DISPOSITION_DEFAULT = 0x1;
 const AV_DISPOSITION_FORCED = 0x40;
-
-/** Engine 會交給 WebCodecs 的影片 codec；瀏覽器是否支援（`'platform'`）由影片的 issue 判斷。 */
-const videoCodecs = new Set(['h264', 'hevc', 'vp8', 'vp9', 'av1']);
 
 const textSubtitleFormats: Readonly<Record<string, ProbedSubtitleTrack['format']>> = {
   ass: 'ass',
@@ -126,15 +137,49 @@ function audioTrack(s: RawStream): ProbedAudioTrack {
 }
 
 function videoTrack(s: RawStream): ProbedVideoTrack {
+  const config = videoConfig(s);
   return {
     kind: 'video',
-    ...base(s, videoCodecs.has(s.codec)),
+    ...base(s, config !== null),
+    ...(config && { codecString: config.codec }),
     codedWidth: s.width,
     codedHeight: s.height,
-    // display matrix 與 SAR 由影片的 issue 套用。
-    display: { width: s.width, height: s.height, rotation: 0 },
+    display: displaySize(s.width, s.height, s.sampleAspectRatio, displayRotation(s.displayMatrix)),
     ...(s.frameRate !== null && { frameRate: s.frameRate }),
   };
+}
+
+/** 影片串流交給 `VideoDecoder` 的 config；Engine 對應不到 WebCodecs 的 codec 時為 null。 */
+export function videoConfig(s: RawStream): VideoConfig | null {
+  return videoDecoderConfig({
+    codec: s.codec,
+    profile: s.profile,
+    level: s.level,
+    extradata: s.extradata,
+    width: s.width,
+    height: s.height,
+  });
+}
+
+/**
+ * 判斷瀏覽器是否支援 Engine 支援的影片軌（load 時）：`isSupported` 為 false 或失敗（例如沒有 WebCodecs）時改為
+ * `supported: false`、`unsupportedReason: 'platform'`。不偵測 UA：Safari 的 AV1、Firefox Android 的影片軌都由這條規則涵蓋。
+ */
+export async function withPlatformSupport(
+  media: ProbedMedia,
+  raw: RawMedia,
+  isSupported: (config: VideoConfig) => Promise<boolean>,
+): Promise<ProbedMedia> {
+  const tracks = await Promise.all(
+    media.tracks.map(async (track): Promise<ProbedTrack> => {
+      if (track.kind !== 'video' || !track.supported) return track;
+      const stream = raw.streams.find((s) => s.index === track.streamIndex);
+      const config = stream ? videoConfig(stream) : null;
+      const supported = config ? await isSupported(config).catch(() => false) : false;
+      return supported ? track : { ...track, supported: false, unsupportedReason: 'platform' };
+    }),
+  );
+  return { ...media, tracks };
 }
 
 function subtitleTrack(s: RawStream): ProbedSubtitleTrack | null {

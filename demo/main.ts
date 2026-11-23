@@ -11,6 +11,10 @@ import {
   type LogEntry,
   type LogLevel,
   type Source,
+  type SubtitleCue,
+  type Track,
+  type TrackKind,
+  type TrackSelection,
 } from '../src/index.js';
 
 declare global {
@@ -20,8 +24,8 @@ declare global {
 /**
  * 頁面 URL 的 query 可以覆蓋部分 `EngineOptions`，供 E2E 與實機測試製造網路不足的情況：
  * `readahead`（`limits.readaheadSeconds`）、`cacheMiB`（`limits.cacheBytes`，MiB）、`stallTimeout`、
- * `stallAttempts`。例如 `/demo/?readahead=1&stallTimeout=3000`。log 等級由頁面上的選單決定（query `logLevel`
- * 給初始值）。
+ * `stallAttempts`，以及 `suspendVideoWhenHidden=0`（背景時照常解碼影片）。例如 `/demo/?readahead=1&stallTimeout=3000`。
+ * log 等級由頁面上的選單決定（query `logLevel` 給初始值）。
  */
 function engineOptions(query: URLSearchParams): EngineOptions {
   const number = (name: string) => {
@@ -32,6 +36,7 @@ function engineOptions(query: URLSearchParams): EngineOptions {
   const cacheMiB = number('cacheMiB');
   const stallTimeout = number('stallTimeout');
   const stallAttempts = number('stallAttempts');
+  const suspendVideoWhenHidden = query.get('suspendVideoWhenHidden');
   return {
     limits: {
       ...(readaheadSeconds !== undefined && { readaheadSeconds }),
@@ -39,6 +44,9 @@ function engineOptions(query: URLSearchParams): EngineOptions {
     },
     ...(stallTimeout !== undefined && { stallTimeout }),
     ...(stallAttempts !== undefined && { stallAttempts }),
+    ...(suspendVideoWhenHidden !== null && {
+      suspendVideoWhenHidden: suspendVideoWhenHidden !== '0',
+    }),
   };
 }
 
@@ -71,6 +79,11 @@ const mediaSessionInput = element('media-session', HTMLInputElement);
 // Demo 頁預設扮演 App 設定 Media Session；query `mediasession=0` 時不設定（例如驗證 Now Playing 是 AudioContext 時）。
 mediaSessionInput.checked = new URLSearchParams(location.search).get('mediasession') !== '0';
 const nextOnEndedInput = element('next-on-ended', HTMLInputElement);
+const videoCanvas = element('video', HTMLCanvasElement);
+const attachCanvasInput = element('attach-canvas', HTMLInputElement);
+const subtitleLangInput = element('subtitle-lang', HTMLInputElement);
+// query `subtitleLang` 給初始值（E2E 用）。
+subtitleLangInput.value = new URLSearchParams(location.search).get('subtitleLang') ?? '';
 element('engine-options', HTMLElement).textContent =
   `EngineOptions（由頁面 query 覆蓋）：${JSON.stringify(options)}`;
 
@@ -87,6 +100,11 @@ function log(message: string): void {
   // 只捲動 log 本身：scrollIntoView() 也會捲動頁面，頁面比視窗高時，按鈕會在 E2E 點下去之前被移走。
   logList.scrollTop = logList.scrollHeight;
 }
+
+// 分頁切到背景、回到前景（`suspendVideoWhenHidden` 在這時暫停、恢復影片解碼；log 等級 info 以上時有 Engine 的 log）。
+document.addEventListener('visibilitychange', () => {
+  log(`visibilitychange ${document.visibilityState}`);
+});
 
 element('copy-log', HTMLElement).addEventListener('click', () => {
   const text = [navigator.userAgent, ...logLines].join('\n');
@@ -135,7 +153,11 @@ function logOptions(): Pick<EngineOptions, 'log' | 'logLevel'> {
 
 /** 建立 Engine 並接上事件 log；`globalThis.engine` 指向新的 Engine。 */
 function setupEngine(): void {
-  const target = createEngine({ ...options, ...logOptions() });
+  const target = createEngine({
+    ...options,
+    ...logOptions(),
+    canvas: attachCanvasInput.checked ? videoCanvas : null,
+  });
   engine = target;
   globalThis.engine = target;
   target.addEventListener('statechange', (e) => {
@@ -148,6 +170,22 @@ function setupEngine(): void {
   });
   target.addEventListener('trackschange', (e) => {
     log(`trackschange ${String(e.tracks.length)} 軌 selected=${JSON.stringify(e.selected)}`);
+    resetCues(e.selected.subtitle);
+    renderTracks(e.tracks, e.selected);
+  });
+  target.addEventListener('cues', (e) => {
+    const first = e.cues[0];
+    const last = e.cues.at(-1);
+    log(
+      `cues ${e.trackId} ${String(e.cues.length)} 個` +
+        (first && last ? ` [${first.start.toFixed(3)}, ${last.end.toFixed(3)}]` : ''),
+    );
+    addCues(e.trackId, e.cues);
+  });
+  target.addEventListener('videoresize', (e) => {
+    log(
+      `videoresize ${e.size ? `${String(e.size.width)}×${String(e.size.height)} rotation=${String(e.size.rotation)}` : 'null'}`,
+    );
   });
   target.addEventListener('seeked', (e) => {
     log(`seeked ${e.currentTime.toFixed(3)}`);
@@ -187,6 +225,196 @@ function setupEngine(): void {
   });
   if (backgroundInput.checked) attachBackground();
   updateMediaSession();
+}
+
+// ───────────────────────────── 軌道 ─────────────────────────────
+
+/**
+ * 列出所有軌道（包括不支援的），各 kind 一個選單：選了就 `selectTracks()`。選單顯示 `selectedTracks`（生效的值），
+ * 被 reject 或被取代時回到它。E2E 以 `#select-<kind>` 的 value（track id，空字串是關閉）操作。
+ */
+const trackSelects = {
+  audio: element('select-audio', HTMLSelectElement),
+  video: element('select-video', HTMLSelectElement),
+  subtitle: element('select-subtitle', HTMLSelectElement),
+};
+const trackList = element('track-list', HTMLUListElement);
+
+function describeTrack(track: Track): string {
+  const parts = [track.id, track.codec];
+  if (track.origin === 'external') parts.push('外掛');
+  if (track.language) parts.push(track.language);
+  if (track.title) parts.push(`「${track.title}」`);
+  if (track.kind === 'audio') {
+    parts.push(
+      `${String(track.sampleRate)} Hz ${track.channelLayout ?? `${String(track.channels)}ch`}`,
+    );
+    if (track.sampleFormat) parts.push(track.sampleFormat);
+    if (track.offset !== 0) parts.push(`offset ${String(track.offset)} s`);
+  }
+  if (track.kind === 'video')
+    parts.push(`${String(track.codedWidth)}×${String(track.codedHeight)}`);
+  if (track.default) parts.push('default');
+  if (track.forced) parts.push('forced');
+  if (!track.supported) parts.push(`不支援（${track.unsupportedReason ?? '?'}）`);
+  return parts.join(' ');
+}
+
+function renderTracks(tracks: readonly Track[], selected: Readonly<TrackSelection>): void {
+  for (const kind of ['audio', 'video', 'subtitle'] as const) {
+    const select = trackSelects[kind];
+    select.replaceChildren(
+      new Option('關閉（null）', ''),
+      ...tracks.filter((t) => t.kind === kind).map((t) => new Option(describeTrack(t), t.id)),
+    );
+    select.value = selected[kind] ?? '';
+    select.disabled = tracks.length === 0;
+  }
+  renderOffsetTracks(tracks);
+  trackList.replaceChildren(
+    ...tracks.map((track) => {
+      const item = document.createElement('li');
+      item.dataset.id = track.id;
+      item.textContent = `${track.kind} ${describeTrack(track)}`;
+      return item;
+    }),
+  );
+}
+
+for (const [kind, select] of Object.entries(trackSelects) as [TrackKind, HTMLSelectElement][]) {
+  select.addEventListener('change', () => {
+    const id = select.value === '' ? null : select.value;
+    const target = engine;
+    command(`selectTracks({ ${kind}: ${JSON.stringify(id)} })`, () =>
+      target.selectTracks({ [kind]: id }).finally(() => {
+        // reject、被取代：選單回到生效的值。
+        if (engine === target) select.value = target.selectedTracks[kind] ?? '';
+      }),
+    );
+  });
+}
+
+// ───────────────────────────── 外掛音軌與音軌 offset ─────────────────────────────
+
+/**
+ * 外掛音軌的來源是測試媒體（`#external-media`）或 URL；`#offset-track` 列出所有音軌，供 setAudioOffset() 與
+ * removeExternalAudio()。E2E 以 log 的 `addExternalAudio(…) resolve`、`setAudioOffset(…) resolve` 等待。
+ */
+const externalMediaSelect = element('external-media', HTMLSelectElement);
+const externalUrlInput = element('external-url', HTMLInputElement);
+const externalOffsetInput = element('external-offset', HTMLInputElement);
+const offsetTrackSelect = element('offset-track', HTMLSelectElement);
+const offsetValueInput = element('offset-value', HTMLInputElement);
+/** 每條音軌目前的 offset，選了某條軌時填進 `#offset-value`。 */
+const trackOffsets = new Map<string, number>();
+
+function renderOffsetTracks(tracks: readonly Track[]): void {
+  const previous = offsetTrackSelect.value;
+  const audio = tracks.filter((t) => t.kind === 'audio');
+  trackOffsets.clear();
+  for (const track of audio) trackOffsets.set(track.id, track.offset);
+  offsetTrackSelect.replaceChildren(...audio.map((t) => new Option(describeTrack(t), t.id)));
+  if (audio.some((t) => t.id === previous)) offsetTrackSelect.value = previous;
+  offsetTrackSelect.disabled = audio.length === 0;
+  showOffset();
+}
+
+function showOffset(): void {
+  offsetValueInput.value = String(trackOffsets.get(offsetTrackSelect.value) ?? 0);
+}
+
+offsetTrackSelect.addEventListener('change', showOffset);
+
+/** 數字欄位的值；空白或不是數字時為 NaN（Engine 以 TypeError reject，log 裡看得到）。 */
+function numberOf(input: HTMLInputElement): number {
+  return input.value.trim() === '' ? NaN : Number(input.value);
+}
+
+element('add-external', HTMLElement).addEventListener('click', () => {
+  const url =
+    externalUrlInput.value.trim() ||
+    new URL(`/media/${externalMediaSelect.value}`, location.href).href;
+  const offset = numberOf(externalOffsetInput);
+  const label = fileName(url);
+  command(`addExternalAudio(${label}, { offset: ${String(offset)} })`, () =>
+    engine.addExternalAudio({ kind: 'http', url }, { offset, label }).then((track) => track.id),
+  );
+});
+
+element('set-offset', HTMLElement).addEventListener('click', () => {
+  const id = offsetTrackSelect.value;
+  const offset = numberOf(offsetValueInput);
+  command(`setAudioOffset(${JSON.stringify(id)}, ${String(offset)})`, () =>
+    engine.setAudioOffset(id, offset),
+  );
+});
+
+element('remove-external', HTMLElement).addEventListener('click', () => {
+  const id = offsetTrackSelect.value;
+  command(`removeExternalAudio(${JSON.stringify(id)})`, () => engine.removeExternalAudio(id));
+});
+
+renderTracks([], { audio: null, video: null, subtitle: null });
+
+// ───────────────────────────── 內嵌字幕 ─────────────────────────────
+
+/**
+ * 扮演 App 累積內嵌字幕的 cue：以 `id` 去重（seek 後可能重送），依開始時間排列；選中的字幕軌改變時清空。
+ * 「目前的 cue」在 render() 內依 `currentTime` 挑選；ASS 顯示 Dialogue 行（字幕的繪製由 App 負責）。
+ */
+const cueStore = new Map<string, SubtitleCue>();
+let cueTrack: string | null = null;
+let cueRepeats = 0;
+const cueLog = element('cue-log', HTMLOListElement);
+const cueCountText = element('cue-count', HTMLElement);
+const subtitleTrackText = element('subtitle-track', HTMLElement);
+const currentCueText = element('current-cue', HTMLElement);
+
+function cueText(cue: SubtitleCue): string {
+  return 'dialogue' in cue ? cue.dialogue : cue.text;
+}
+
+function resetCues(track: string | null): void {
+  if (track === cueTrack) return;
+  cueTrack = track;
+  cueStore.clear();
+  cueRepeats = 0;
+  cueLog.replaceChildren();
+  updateCueCount();
+}
+
+function addCues(trackId: string, cues: readonly SubtitleCue[]): void {
+  if (trackId !== cueTrack) return;
+  for (const cue of cues) {
+    if (cueStore.has(cue.id)) {
+      cueRepeats++;
+      continue;
+    }
+    cueStore.set(cue.id, cue);
+    const item = document.createElement('li');
+    item.dataset.id = cue.id;
+    item.dataset.start = String(cue.start);
+    item.textContent = `${cue.start.toFixed(3)}–${cue.end.toFixed(3)} ${cueText(cue)}`;
+    const after = [...cueLog.children].find(
+      (li) => Number((li as HTMLElement).dataset.start) > cue.start,
+    );
+    cueLog.insertBefore(item, after ?? null);
+  }
+  updateCueCount();
+}
+
+function updateCueCount(): void {
+  cueCountText.textContent =
+    cueTrack === null ? '—' : `${String(cueStore.size)} 個，重送 ${String(cueRepeats)} 個`;
+}
+
+function renderCues(time: number): void {
+  subtitleTrackText.textContent = cueTrack ?? '—';
+  const current = [...cueStore.values()]
+    .filter((cue) => cue.start <= time && time < cue.end)
+    .map(cueText)
+    .join('\n');
+  if (currentCueText.textContent !== current) currentCueText.textContent = current;
 }
 
 // ───────────────────────────── 背景播放模組 ─────────────────────────────
@@ -319,9 +547,17 @@ function mediaUrl(): string {
 element('load', HTMLElement).addEventListener('click', () => {
   const { name, title, source } = selectedSource();
   const paused = !autoplayInput.checked;
+  const subtitle = subtitleLangInput.value
+    .split(',')
+    .map((lang) => lang.trim())
+    .filter((lang) => lang !== '');
   mediaTitle = title;
-  command(`load ${name}${paused ? '' : '（paused: false）'}`, () =>
-    engine.load(source, { paused }).then((info) => info.format),
+  command(
+    `load ${name}${paused ? '' : '（paused: false）'}${subtitle.length > 0 ? ` 字幕偏好 ${subtitle.join(',')}` : ''}`,
+    () =>
+      engine
+        .load(source, { paused, ...(subtitle.length > 0 && { preferredLanguages: { subtitle } }) })
+        .then((info) => info.format),
   );
 });
 element('play', HTMLElement).addEventListener('click', () => {
@@ -409,6 +645,11 @@ element('rate-reset', HTMLElement).addEventListener('click', () => {
   log(`playbackRate = ${engine.playbackRate.toFixed(2)}`);
 });
 
+attachCanvasInput.addEventListener('change', () => {
+  engine.attachCanvas(attachCanvasInput.checked ? videoCanvas : null);
+  log(`attachCanvas(${attachCanvasInput.checked ? 'canvas' : 'null'})`);
+});
+
 // 選了本機檔案或填了 URL 之後，清掉另一個，避免不知道用的是哪一個。
 fileInput.addEventListener('change', () => {
   urlInput.value = '';
@@ -424,6 +665,7 @@ const pausedText = element('paused', HTMLElement);
 const unlockedText = element('audio-unlocked', HTMLElement);
 const currentTimeText = element('current-time', HTMLElement);
 const durationText = element('duration', HTMLElement);
+const videoSizeText = element('video-size', HTMLElement);
 const mediaText = element('media-info', HTMLElement);
 const errorText = element('error', HTMLElement);
 const audioStatsText = element('audio-stats', HTMLElement);
@@ -452,7 +694,8 @@ setInterval(() => {
         `${(cache.bytes / MiB).toFixed(2)}／${(cache.limitBytes / MiB).toFixed(0)} MiB，` +
         `預讀 ${(cache.aheadBytes / MiB).toFixed(2)}／${(cache.readaheadTarget / MiB).toFixed(2)} MiB` +
         `${cache.fetching ? '（抓取中）' : ''}，hits ${String(cache.hits)}／misses ${String(cache.misses)}，` +
-        `bufferAhead ${bufferAhead.toFixed(1)} s，封包佇列 ${packetQueue.audioSeconds.toFixed(1)} s`;
+        `bufferAhead ${bufferAhead.toFixed(1)} s，封包佇列 音訊 ${packetQueue.audioSeconds.toFixed(1)} s` +
+        `／影片 ${packetQueue.videoSeconds.toFixed(1)} s`;
       networkStatsText.textContent =
         `已讀 ${(network.bytesLoaded / MiB).toFixed(2)} MiB，進行中 ${String(network.inflight.length)} 個` +
         network.inflight
@@ -478,7 +721,12 @@ function render(): void {
   pausedText.textContent = String(engine.paused);
   unlockedText.textContent = String(engine.audioUnlocked);
   currentTimeText.textContent = engine.currentTime.toFixed(3);
+  renderCues(engine.currentTime);
   durationText.textContent = String(engine.duration);
+  const size = engine.videoSize;
+  videoSizeText.textContent = size
+    ? `${String(size.width)}×${String(size.height)} rotation=${String(size.rotation)}`
+    : '—';
   bufferedText.textContent =
     engine.buffered.map((r) => `[${r.start.toFixed(1)}, ${r.end.toFixed(1)}]`).join(' ') || '—';
   const duration = engine.duration;
@@ -517,6 +765,9 @@ async function listMedia(): Promise<void> {
       mediaSelect.append(group);
     }
     group.append(new Option(path, path, false, path === 'audio/flac.flac'));
+    externalMediaSelect.append(
+      new Option(path, path, false, path === 'video/external-audio-440.flac'),
+    );
   }
 }
 

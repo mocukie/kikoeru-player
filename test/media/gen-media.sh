@@ -121,6 +121,9 @@ ff -f lavfi -i "$video_src" -f lavfi -i "$audio_src" -c:v libx265 -preset ultraf
 ff -f lavfi -i "$video_src" -f lavfi -i "$audio_src" "${h264[@]}" -bf 0 -c:a libmp3lame -b:a 128k video/h264-mp3.avi
 # 只改 display matrix，不動畫面內容。
 ff -display_rotation 90 -i video/h264-aac.mp4 -c copy -movflags +faststart video/rotated-90.mp4
+# 非正方形的 pixel：SAR 2:1，顯示為 640×180（Matroska 的 DisplayWidth 與 H.264 的 VUI 都記錄）。
+ff -f lavfi -i "$(video 2 320 180),setsar=2" -f lavfi -i "$(stereo 2 880)" "${h264[@]}" \
+  -c:a aac -b:a 128k video/sar-2-1.mkv
 # 交錯不良：fragmented MP4，每 5 秒一個 fragment，fragment 內各軌的 sample 連續存放（影片在前、音訊在後），
 # 播放 0 秒的音訊之前要先讀過 5 秒的影片。影片以 2 Mbps CBR 撐大，5 秒的影片約 1.2 MB。
 ff -f lavfi -i "$video_src" -f lavfi -i "$audio_src" -c:v libx264 -preset veryfast -g 30 \
@@ -136,8 +139,31 @@ ff -f lavfi -i "$(video 20 320 180)" -f lavfi -i "$(stereo 20 880)" -f lavfi -i 
   -metadata:s:a:1 language=chi -metadata:s:a:1 title="beep 440 Hz" \
   -metadata:s:s:0 language=jpn -metadata:s:s:1 language=chi \
   video/multi-track.mkv
+# 多影片軌：10 秒；H.264 320×180（default）、VP9 640×360、HEVC 320×180（Chromium 與 Firefox 都不支援），
+# 三條軌的白框都與 beep 同步；一條 AAC 音軌。
+ff -f lavfi -i "$video_src" -f lavfi -i "$(video 10 640 360)" -f lavfi -i "$video_src" -f lavfi -i "$audio_src" \
+  -map 0:v -map 1:v -map 2:v -map 3:a \
+  -c:v:0 libx264 -preset veryfast -g 30 \
+  -c:v:1 libvpx-vp9 -b:v:1 0 -crf 40 -deadline realtime -cpu-used 8 -g 30 \
+  -c:v:2 libx265 -preset ultrafast -x265-params log-level=error:keyint=30:pools=none \
+  -c:a aac -b:a 128k \
+  -disposition:v:0 default -disposition:v:1 0 -disposition:v:2 0 \
+  -metadata:s:v:0 title="H.264 320x180" -metadata:s:v:1 title="VP9 640x360" -metadata:s:v:2 title="HEVC" \
+  video/multi-video.mkv
+# 其他字幕格式：2 秒。WebVTT 與 PGS（圖形字幕）在 MKV；mov_text 在 MP4。
+ff -f lavfi -i "$(video 2 320 180)" -f lavfi -i "$(stereo 2 880)" -i .work/short.vtt -i .work/short.sup \
+  -map 0:v -map 1:a -map 2 -map 3 "${h264[@]}" -c:a aac -b:a 128k -c:s:0 webvtt -c:s:1 copy \
+  video/subtitle-formats.mkv
+ff -f lavfi -i "$(video 2 320 180)" -f lavfi -i "$(stereo 2 880)" -i .work/short-mov-text.srt \
+  -map 0:v -map 1:a -map 2 "${h264[@]}" -c:a aac -b:a 128k -c:s mov_text -movflags +faststart \
+  video/mov-text.mp4
+# 純影片：沒有音軌，3 秒。
+ff -f lavfi -i "$(video 3 320 180)" "${h264[@]}" -movflags +faststart video/video-only.mp4
 # 外掛音軌：與 multi-track.mkv 同長，440 Hz。
 ff -f lavfi -i "$(stereo 20 440)" -c:a flac video/external-audio-440.flac
+# 外掛音軌的 0 點：非 default 的 440 Hz 從 0 秒開始；default 的 660 Hz 從 12 秒開始，超過 probe 範圍。
+ff -f lavfi -i "$(stereo 20 440)" -itsoffset 12 -f lavfi -i "$(stereo 8 660)" -map 0:a -map 1:a -c:a flac \
+  -disposition:a:0 0 -disposition:a:1 default video/external-audio-late-start.mkv
 
 # --- 壞檔 ---
 half() { head -c "$(($(wc -c < "$1") / 2))" "$1" > "$2"; } # half <來源> <輸出>：只留前一半的 bytes

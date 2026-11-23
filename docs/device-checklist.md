@@ -21,6 +21,9 @@ Demo 頁的「測試媒體」來自 `test/media/out/`：`pnpm media:gen` 產生 
 - [ ] **沒有 gesture 的 load（paused: false）**：重新整理後不點擊頁面，在 console 執行上一項的 load，resolve 時 state 為 `ready`、`paused` 為 true、`audioUnlocked` 為 false，事件 log 沒有出現 `playing`。
 - [ ] **長時間暫停**：播放中按 pause，等 40 秒以上（Engine 在 30 秒時 suspend `AudioContext`），再按 play：事件 log 出現 `beforeaudiostart cause=resume`，能正常恢復播放。另外在 console 以 `setTimeout(() => engine.play(), 0)` 從 gesture 之外恢復，記下是否需要 gesture（ADR-0004 待確認：iOS 上被 suspend 之後 `resume()` 不需要 gesture）。
 - [ ] **CI 組的純音訊檔**：`audio/` 每一個檔案都能 load、play、pause、播到結尾（`ended`），聲音沒有破音、斷續或忽快忽慢。
+- [ ] **CI 組的影片**：`video/` 的每個檔案 load 後 canvas 立即畫出第一張 frame；播放時左上的白框與 beep 同時出現（看起來沒有先後），拖曳 seek 之後也一樣。`rotated-90.mp4` 顯示為直立的 180×320、白框在左下；`hevc-aac.mp4` 只播音訊，`media` 一列的影片軌標為不支援。
+- [ ] **切到背景再回來（桌面）**：播放 `video/multi-track.mkv`（或手動組的 `long-30min-720p.mkv`）時切到其他分頁，等 10 秒以上再切回來；再以最小化視窗重做一次。背景中聲音不中斷（事件 log 有 `visibilitychange hidden`，log 等級 info 時有 `[video] info 頁面切到背景：暫停影片解碼`，沒有 `buffering`）；回到前景後畫面在一瞬間跟上聲音，左上的白框仍與 beep 同時出現，事件 log 沒有 `error`。手機上切到背景與回到前景的驗證屬於 `engine-platforms`（#73），v1 不執行（[ADR-0008](adr/0008-v1-desktop-chromium-firefox-only.md)）。
+- [ ] **硬體解碼與 dropped**：以手動組的 `long-30min-720p.mkv` 播放 5 分鐘、來回 seek 幾次：畫面流暢，Demo 頁「wasm／video」一列的 dropped 只在 seek 與剛開始時增加，`openVideoFrames` 不持續增長。自動化的瀏覽器沒有 GPU，只涵蓋軟體 decoder（例如 Chromium 的硬體 decoder 在 frame 沒有及時 close 時會停住）。
 - [ ] **取樣率**：`audio/flac-44100.flac`、`flac-96000.flac`、`flac-192000.flac` 的音高與 `audio/flac.flac` 相同（重採樣到 `AudioContext.sampleRate`）。
 - [ ] **多聲道**：`audio/flac-5.1.flac` 以 stereo 播出，各聲道的 beep 都聽得到。
 - [ ] **ring buffer 的預設水位**：播放時事件 log 沒有出現 `buffering`（`audioBuffer` 的平台預設值不會 starved）；有的話記下媒體與頻率。

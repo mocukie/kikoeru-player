@@ -1,11 +1,6 @@
 // media Worker 的診斷 log：在送出端依 init 的 logLevel 過濾，只有通過的才跨執行緒傳到主執行緒。
 
-import type {
-  WireLogLevel,
-  WireLogScope,
-  WorkerLogMessage,
-  WorkerToMainMessage,
-} from '../protocol/index.js';
+import type { WireLogLevel, WireLogScope, WorkerLogMessage } from '../protocol/index.js';
 
 /** log 等級的高低（Worker 不能 import 主執行緒的程式碼，與主執行緒、worklet 各有一份）。 */
 const rank: Readonly<Record<WireLogLevel, number>> = { debug: 0, info: 1, warn: 2, error: 3 };
@@ -35,7 +30,7 @@ export const silentLogger: Logger = {
  */
 export function createWorkerLogger(
   level: WireLogLevel | null,
-  post: (message: WorkerToMainMessage) => void,
+  post: (message: WorkerLogMessage) => void,
   now: () => number = () => performance.timeOrigin + performance.now(),
 ): Logger {
   if (level === null) return silentLogger;

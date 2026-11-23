@@ -13,6 +13,7 @@ export interface TestHost extends HostTypes {
   wasmModule: WebAssembly.Module;
   messagePort: MessagePort;
   blob: Blob;
+  videoFrame: VideoFrame;
 }
 
 type Received = MainToWorkerMessage<TestHost>;
@@ -108,6 +109,8 @@ export function emptyWorkerStats(): WorkerStats {
     network: { bytesLoaded: 0, inflight: [] },
     packetQueue: { audioSeconds: 0, videoSeconds: 0, bytes: 0 },
     wasmHeapBytes: 0,
+    video: null,
+    openVideoFrames: 0,
   };
 }
 

@@ -6,6 +6,7 @@ import { userEvent } from 'vitest/browser';
 import { mediaUrl } from '../../test/media-worker-harness.js';
 import { createEngine, type Engine, type LogEntry } from '../index.js';
 import { attachBackgroundPlayback } from './index.js';
+import { until } from '../../test/until.js';
 
 const source = { kind: 'http', url: mediaUrl('audio/flac.flac') } as const;
 
@@ -32,14 +33,6 @@ afterEach(async () => {
   Reflect.deleteProperty(navigator, 'audioSession');
   document.body.replaceChildren();
 });
-
-async function until(predicate: () => boolean, timeoutMs = 8000): Promise<void> {
-  const deadline = performance.now() + timeoutMs;
-  while (!predicate()) {
-    if (performance.now() > deadline) throw new Error('等待逾時');
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-}
 
 function anchor(): HTMLAudioElement {
   const last = anchors.at(-1);

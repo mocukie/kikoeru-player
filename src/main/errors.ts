@@ -1,3 +1,4 @@
+import type { WireError } from '../protocol/index.js';
 import type { EngineErrorCode } from './types.js';
 
 /**
@@ -60,4 +61,21 @@ export function isAbortError(error: unknown): boolean {
     error !== null &&
     (error as { name?: unknown }).name === 'AbortError'
   );
+}
+
+/**
+ * Worker 回報的 `WireError` 轉成 `EngineError`：`fatal` 由主執行緒決定（不沿用 Worker 的），`message` 省略時沿用 Worker
+ * 的，`detail` 與 Worker 的合併。
+ */
+export function fromWireError(
+  error: WireError,
+  init: { fatal: boolean; position: number; message?: string; detail?: EngineError['detail'] },
+): EngineError {
+  const detail = { ...error.detail, ...init.detail };
+  return new EngineError(error.code, {
+    fatal: init.fatal,
+    position: init.position,
+    message: init.message ?? error.message,
+    ...(Object.keys(detail).length > 0 && { detail }),
+  });
 }

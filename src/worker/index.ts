@@ -5,8 +5,8 @@ import type { WorkerHost } from './host.js';
 import { MediaWorker } from './media-worker.js';
 
 const worker = new MediaWorker({
-  postMessage: (message) => {
-    self.postMessage(message);
+  postMessage: (message, transfer) => {
+    self.postMessage(message, transfer ?? []);
   },
 });
 

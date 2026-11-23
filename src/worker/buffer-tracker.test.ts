@@ -121,4 +121,22 @@ describe('BufferTracker', () => {
     tracker.onDemux(1, 0.5, false);
     expect(posted).toEqual([{ type: 'buffer', epoch: 1, end: 8, eof: true, fetching: false }]);
   });
+
+  test('bytes／blob 來源且未指定 duration（外掛音軌）：終點是 Infinity，不污染合併進度', () => {
+    const local: ByteSource = { size: 100, read: () => Promise.resolve(new Uint8Array()) };
+    const posted: WorkerBufferMessage[] = [];
+    const tracker = new BufferTracker({
+      source: local,
+      size: 100,
+      duration: NaN,
+      byteRate: 10,
+      readaheadSeconds: 60,
+      post: (m) => posted.push(m),
+    });
+    tracker.start(1, 0);
+    tracker.onDemux(1, 0.5, false);
+    expect(posted).toEqual([
+      { type: 'buffer', epoch: 1, end: Infinity, eof: true, fetching: false },
+    ]);
+  });
 });

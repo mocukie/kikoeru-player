@@ -11,6 +11,8 @@ export interface HostTypes {
   messagePort: unknown;
   /** `Blob`。 */
   blob: unknown;
+  /** `VideoFrame`。 */
+  videoFrame: unknown;
 }
 
 /** 送進 media Worker 的來源描述，對應公開的 `Source`；URL 一律轉成字串。 */
@@ -83,6 +85,30 @@ export interface ProbedSubtitleTrack extends ProbedTrackBase {
   kind: 'subtitle';
   format: 'ass' | 'ssa' | 'subrip' | 'webvtt' | 'mov_text' | 'bitmap';
   header?: string;
+}
+
+/** 內嵌字幕的一個 cue；`trackId` 由主執行緒補上。欄位的意義同公開的 `SubtitleCue`。 */
+export type WireCue = WireTextCue | WireAssCue;
+
+/** 各種 cue 共有的欄位。 */
+export interface WireCueBase {
+  id: string;
+  start: number;
+  end: number;
+}
+
+/** 文字字幕的 cue。 */
+export interface WireTextCue extends WireCueBase {
+  format: 'subrip' | 'webvtt' | 'mov_text';
+  text: string;
+}
+
+/** ASS／SSA 字幕的 cue。 */
+export interface WireAssCue extends WireCueBase {
+  format: 'ass' | 'ssa';
+  raw: string;
+  readOrder: number;
+  dialogue: string;
 }
 
 /** media Worker 會回報的錯誤種類，是公開 `EngineErrorCode` 的子集。 */
