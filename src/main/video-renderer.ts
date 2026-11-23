@@ -25,6 +25,15 @@ export interface VideoRendererOptions {
 interface Entry {
   frame: RenderableFrame;
   source: unknown;
+  /** 畫出時決定的尺寸與方向；還沒畫出時為 null。 */
+  layout: FrameLayout | null;
+}
+
+/** 一張 frame 怎麼畫：旋轉之後的顯示尺寸，與旋轉之前畫進 canvas 的寬高。 */
+interface FrameLayout {
+  size: VideoSize;
+  width: number;
+  height: number;
 }
 
 /** 時鐘與 pts 比較的容許誤差（秒）：pts 以 µs 表示，時鐘是浮點數。 */
@@ -82,7 +91,7 @@ export class VideoRenderer {
 
   /** 收到 Worker 送來的 frame；過期的 epoch 或沒有選用影片軌時直接 close。 */
   push(epoch: number, frame: RenderableFrame, source: unknown): void {
-    const entry = { frame, source };
+    const entry: Entry = { frame, source, layout: null };
     if (epoch !== this.#epoch || !this.#track) {
       this.#close([entry]);
       return;
@@ -109,26 +118,29 @@ export class VideoRenderer {
     const old = this.#shown ? [this.#shown, ...skipped] : skipped;
     this.#shown = next;
     this.#close(old);
-    this.#present(next.frame);
+    this.#present(next);
   }
 
   /** 換繪製目標；有畫面上的 frame 時立即畫到新的 canvas。null 表示不再繪製。 */
   attach(canvas: HTMLCanvasElement | null): void {
     this.#canvas = canvas;
-    if (this.#shown && canvas && this.#size) this.#draw(canvas, this.#shown.frame, this.#size);
+    const shown = this.#shown;
+    if (shown?.layout && canvas) this.#draw(canvas, shown.frame, shown.layout);
   }
 
-  #present(frame: RenderableFrame): void {
-    const size = this.#sizeOf(frame);
-    this.#setSize(size);
-    if (this.#canvas) this.#draw(this.#canvas, frame, size);
+  #present(entry: Entry): void {
+    const layout = this.#layoutOf(entry.frame);
+    entry.layout = layout;
+    this.#setSize(layout.size);
+    if (this.#canvas) this.#draw(this.#canvas, entry.frame, layout);
   }
 
   /**
    * 顯示尺寸：容器記錄了 SAR（軌道的 display 與 coded 的比例不同）時，以容器的比例拉伸 visible 尺寸；否則沿用瀏覽器
-   * 套用 bitstream SAR 之後的 `displayWidth`／`displayHeight`。旋轉取自容器的 display matrix。
+   * 套用 bitstream SAR 之後的 `displayWidth`／`displayHeight`。旋轉取自容器的 display matrix。回傳旋轉之後的 `size`
+   * 與旋轉之前（畫進 canvas 時）的寬高。
    */
-  #sizeOf(frame: RenderableFrame): VideoSize {
+  #layoutOf(frame: RenderableFrame): FrameLayout {
     const track = this.#track;
     const rotation = track?.display.rotation ?? 0;
     const swap = rotation === 90 || rotation === 270;
@@ -146,10 +158,12 @@ export class VideoRenderer {
         height = Math.round((visible.height * displayHeight) / track.codedHeight);
       }
     }
-    return swap ? { width: height, height: width, rotation } : { width, height, rotation };
+    const size = swap ? { width: height, height: width, rotation } : { width, height, rotation };
+    return { size, width, height };
   }
 
-  #draw(canvas: HTMLCanvasElement, frame: RenderableFrame, size: VideoSize): void {
+  #draw(canvas: HTMLCanvasElement, frame: RenderableFrame, layout: FrameLayout): void {
+    const { size, width, height } = layout;
     if (canvas.width !== size.width) canvas.width = size.width;
     if (canvas.height !== size.height) canvas.height = size.height;
     const context = canvas.getContext('2d');
@@ -159,9 +173,6 @@ export class VideoRenderer {
       context.drawImage(image, 0, 0, size.width, size.height);
       return;
     }
-    const swap = size.rotation === 90 || size.rotation === 270;
-    const width = swap ? size.height : size.width;
-    const height = swap ? size.width : size.height;
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.translate(size.width / 2, size.height / 2);
     context.rotate((size.rotation * Math.PI) / 180);

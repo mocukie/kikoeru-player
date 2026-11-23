@@ -19,6 +19,16 @@ export class WorkerError extends Error {
   }
 }
 
+/**
+ * 音軌的 decoder 建立或開啟失敗（`CODEC_UNSUPPORTED`）。換音軌時是非致命的：主執行緒換回原本的軌。
+ */
+export class AudioDecoderError extends WorkerError {
+  constructor(message: string, options: { cause?: unknown } = {}) {
+    super('CODEC_UNSUPPORTED', message, options);
+    this.name = 'AudioDecoderError';
+  }
+}
+
 /** 轉成 `WireError`；沒有分類的錯誤是 fatal 的 `INTERNAL`。 */
 export function toWireError(error: unknown): WireError {
   if (error instanceof WorkerError) {

@@ -3,10 +3,10 @@
 /** 指令的執行內容；`signal` 在指令被取代、失敗或佇列關閉時 abort，reason 為 reject 的錯誤。 */
 export type CommandRun<T> = (signal: AbortSignal) => Promise<T>;
 
-interface Entry<K> {
+interface Entry<K, T> {
   readonly kind: K;
   /** `enqueue()` 的 `tag`，交給較新指令的 `supersedes` 判斷。 */
-  readonly tag: unknown;
+  readonly tag: T | undefined;
   readonly run: CommandRun<unknown>;
   readonly controller: AbortController;
   readonly result: Deferred<unknown>;
@@ -37,15 +37,16 @@ export function deferred<T>(): Deferred<T> {
 }
 
 /**
- * 串行的指令佇列。佇列頭的指令在 `enqueue()` 內同步開始執行，完成後下一個指令接著開始。
+ * 串行的指令佇列。佇列頭的指令在 `enqueue()` 內同步開始執行，完成後下一個指令接著開始。`K` 是指令的種類，`T` 是
+ * 指令可以帶的 `tag` 的型別（不用 tag 時省略）。
  *
  * 取代：新指令取代 `supersedes` 為 true 的所有尚未完成的指令（包括執行中的），它們以 AbortError reject。`supersedes`
  * 收到舊指令的 kind 與 `tag`（例如 selectTracks 以 tag 判斷它要改的 kind 是否都已被較新的呼叫接手）。
  * 被取代的包括執行中的指令時，新指令接手它的位置並立即開始執行（例如執行中的 seek 被新的 seek 取代，
  * 不能等排在後面的 play 先完成）；否則新指令照呼叫順序排在尾端。
  */
-export class CommandQueue<K extends string> {
-  readonly #entries: Entry<K>[] = [];
+export class CommandQueue<K extends string, T = never> {
+  readonly #entries: Entry<K, T>[] = [];
   #closed: (() => Error) | null = null;
   readonly #onSuperseded: ((kind: K, by: K, started: boolean) => void) | null;
 
@@ -54,15 +55,15 @@ export class CommandQueue<K extends string> {
     this.#onSuperseded = onSuperseded ?? null;
   }
 
-  enqueue<T>(
+  enqueue<R>(
     kind: K,
-    run: CommandRun<T>,
-    supersedes: (kind: K, tag: unknown) => boolean = () => false,
-    tag?: unknown,
-  ): Promise<T> {
+    run: CommandRun<R>,
+    supersedes: (kind: K, tag: T | undefined) => boolean = () => false,
+    tag?: T,
+  ): Promise<R> {
     if (this.#closed) return Promise.reject(this.#closed());
 
-    const entry: Entry<K> = {
+    const entry: Entry<K, T> = {
       kind,
       tag,
       run,
@@ -80,7 +81,7 @@ export class CommandQueue<K extends string> {
       this.#remove(e, abortError());
     }
     this.#pump();
-    return entry.result.promise as Promise<T>;
+    return entry.result.promise as Promise<R>;
   }
 
   /** 以 `error` reject 所有尚未完成的指令；之後仍可加入新的指令。 */
@@ -94,7 +95,7 @@ export class CommandQueue<K extends string> {
     this.fail(abortError());
   }
 
-  #remove(entry: Entry<K>, reason: Error): void {
+  #remove(entry: Entry<K, T>, reason: Error): void {
     const index = this.#entries.indexOf(entry);
     if (index !== -1) this.#entries.splice(index, 1);
     if (!entry.settled) {
@@ -126,7 +127,7 @@ export class CommandQueue<K extends string> {
     );
   }
 
-  #finish(entry: Entry<K>, settle: () => void): void {
+  #finish(entry: Entry<K, T>, settle: () => void): void {
     if (entry.settled) return;
     entry.settled = true;
     this.#entries.splice(this.#entries.indexOf(entry), 1);

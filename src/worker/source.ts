@@ -340,7 +340,7 @@ function httpErrorCode(status: number): WorkerErrorCode {
 }
 
 /** 等 `ms` 毫秒；`signal` 中止時立即以它的 reason reject。 */
-function sleep(ms: number, signal: AbortSignal): Promise<void> {
+export function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return abortable(
     new Promise<void>((resolve) => {
       const timer = setTimeout(resolve, ms);

@@ -372,26 +372,68 @@ describe('reload()', () => {
     expect(r.changes).toHaveLength(0);
   });
 
-  it('外掛音軌重新開檔失敗：reload reject 致命的錯誤，state 進入 error', async () => {
+  it('選用中的外掛音軌重新開檔失敗：非致命的 error，該軌移除、改選容器內的預設音軌，reload 照常完成', async () => {
     const r = await withExternals();
+    const errors: EngineError[] = [];
+    r.engine.addEventListener('error', (e) => errors.push(e.error));
     await r.next.probe(media);
-    const [add] = r.next.messages('addaudio');
+    const [first, second] = r.next.messages('addaudio');
     r.next.reply({
       type: 'audioerror',
-      id: add?.id ?? '',
+      id: first?.id ?? '',
       error: { code: 'SOURCE_UNAUTHORIZED', fatal: true, message: 'HTTP 401' },
     });
-    await expect(r.reloading).rejects.toMatchObject({ code: 'SOURCE_UNAUTHORIZED', fatal: true });
-    expect(r.engine.state).toBe('error');
+    r.next.reply({ type: 'audioprobe', id: second?.id ?? '', track: externalTrack });
+    const start = await r.next.next('start');
+    expect(start).toMatchObject({ audio: 0, video: 1 });
+    expect(start.audioSource).toBeUndefined();
+    frame(r.next, 0);
+    r.deps.audio.reply({ type: 'paused' });
+    const info = await r.reloading;
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ code: 'SOURCE_UNAUTHORIZED', fatal: false });
+    expect(errors[0]?.detail).toMatchObject({ trackId: r.first });
+    expect(info.tracks.some((t) => t.id === r.first)).toBe(false);
+    expect(r.engine.tracks.map((t) => t.id)).toEqual([
+      id.audioMain,
+      id.video,
+      id.audioSecond,
+      r.second,
+    ]);
+    expect(r.engine.selectedTracks.audio).toBe(id.audioMain);
+    expect(r.engine.state).toBe('ready');
+    expect(r.engine.error).toBeNull();
+    expect(r.changes.at(-1)?.selected.audio).toBe(id.audioMain);
+    // 之後再 reload 不再加入移除的軌。
+    const again = r.engine.reload();
+    const third = r.deps.workers.last;
+    await third.probe(media);
+    expect(third.messages('addaudio').map((m) => m.id)).toEqual([r.second]);
+    third.reply({ type: 'audioprobe', id: r.second, track: externalTrack });
+    await third.next('start');
+    frame(third, 0);
+    r.deps.audio.reply({ type: 'paused' });
+    await again;
   });
 
-  it('外掛音軌的組成改變：reject 致命的 SOURCE_CHANGED', async () => {
+  it('外掛音軌的組成改變：非致命的 SOURCE_CHANGED，該軌移除，reload 照常完成', async () => {
     const r = await withExternals();
+    const errors: EngineError[] = [];
+    r.engine.addEventListener('error', (e) => errors.push(e.error));
     await r.next.probe(media);
     for (const add of r.next.messages('addaudio')) {
       r.next.reply({ type: 'audioprobe', id: add.id, track: { ...externalTrack, codec: 'mp3' } });
     }
-    await expect(r.reloading).rejects.toMatchObject({ code: 'SOURCE_CHANGED', fatal: true });
+    await r.next.next('start');
+    frame(r.next, 0);
+    r.deps.audio.reply({ type: 'paused' });
+    await r.reloading;
+    expect(errors.map((e) => [e.code, e.fatal])).toEqual([
+      ['SOURCE_CHANGED', false],
+      ['SOURCE_CHANGED', false],
+    ]);
+    expect(r.engine.tracks.some((t) => t.origin === 'external')).toBe(false);
+    expect(r.engine.selectedTracks.audio).toBe(id.audioMain);
   });
 
   it('unload() 之後外掛音軌一併移除', async () => {
@@ -399,6 +441,91 @@ describe('reload()', () => {
     await addExternal(l);
     await l.engine.unload();
     expect(l.engine.tracks).toEqual([]);
+  });
+});
+
+describe('播放中外掛音軌失敗', () => {
+  /** 加入外掛音軌並選用它。 */
+  async function withSelected() {
+    const l = await loaded();
+    const ext = await addExternal(l);
+    const selecting = l.engine.selectTracks({ audio: ext });
+    const select = await l.worker.next('select');
+    outputReady(l);
+    await selecting;
+    l.changes.length = 0;
+    const errors: EngineError[] = [];
+    l.engine.addEventListener('error', (e) => errors.push(e.error));
+    return { ...l, ext, epoch: select.epoch, errors };
+  }
+
+  it('選用中的軌讀取或解碼失敗：非致命的 error，移除該軌並切回容器內的預設音軌（一次 trackschange），主媒體繼續', async () => {
+    const l = await withSelected();
+    l.worker.reply({
+      type: 'audiofailed',
+      epoch: l.epoch,
+      source: l.ext,
+      error: { code: 'FORMAT_CORRUPT', fatal: false, message: 'demux 失敗' },
+    });
+    expect(l.errors).toHaveLength(1);
+    expect(l.errors[0]).toMatchObject({ code: 'FORMAT_CORRUPT', fatal: false });
+    expect(l.errors[0]?.detail).toMatchObject({ trackId: l.ext });
+    expect(l.engine.state).toBe('ready');
+    expect(l.engine.error).toBeNull();
+
+    const select = await l.worker.next('select', 2);
+    expect(select).toMatchObject({ audio: 0, video: 1 });
+    expect(select.audioSource).toBeUndefined();
+    outputReady(l);
+    await settle();
+    expect(l.engine.selectedTracks.audio).toBe(id.audioMain);
+    expect(l.engine.tracks.some((t) => t.id === l.ext)).toBe(false);
+    expect(l.changes).toHaveLength(1);
+    expect(l.worker.received.at(-1)).toEqual({ type: 'removeaudio', id: l.ext });
+  });
+
+  it('過期 epoch 的 audiofailed 不處理', async () => {
+    const l = await withSelected();
+    const seeking = l.engine.seek(1);
+    await l.worker.next('seek');
+    l.worker.reply({
+      type: 'audiofailed',
+      epoch: l.epoch,
+      source: l.ext,
+      error: { code: 'FORMAT_CORRUPT', fatal: false, message: 'demux 失敗' },
+    });
+    outputReady(l);
+    await seeking;
+    await settle();
+    expect(l.errors).toHaveLength(0);
+    expect(l.engine.selectedTracks.audio).toBe(l.ext);
+  });
+
+  it('切換到外掛音軌途中失敗：reject 非致命的錯誤，保留原本的軌，該軌移除', async () => {
+    const l = await loaded();
+    const ext = await addExternal(l);
+    l.changes.length = 0;
+    const selecting = l.engine.selectTracks({ audio: ext });
+    const result = selecting.catch((e: unknown) => e);
+    const select = await l.worker.next('select');
+    l.worker.reply({
+      type: 'audiofailed',
+      epoch: select.epoch,
+      source: ext,
+      error: { code: 'CODEC_UNSUPPORTED', fatal: false, message: '無法開啟音訊 decoder' },
+    });
+    const revert = await l.worker.next('select', 2);
+    expect(revert).toMatchObject({ audio: 0, video: 1 });
+    expect(revert.audioSource).toBeUndefined();
+    outputReady(l);
+    const error = await result;
+    expect(error).toBeInstanceOf(EngineError);
+    expect(error).toMatchObject({ code: 'CODEC_UNSUPPORTED', fatal: false });
+    expect(l.engine.selectedTracks.audio).toBe(id.audioMain);
+    expect(l.engine.tracks.some((t) => t.id === ext)).toBe(false);
+    expect(l.changes).toHaveLength(1);
+    expect(l.worker.messages('removeaudio')).toEqual([{ type: 'removeaudio', id: ext }]);
+    expect(l.engine.state).toBe('ready');
   });
 });
 

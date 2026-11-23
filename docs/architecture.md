@@ -50,6 +50,7 @@ test/
   fakes/           假 media Worker、假音訊輸出、記憶體 Source
   media-worker-harness.ts  browser mode 測試以協定驅動 media Worker 的 helper（wasm 資產、測試媒體、訊號分析）
   audio-capture.ts  browser mode 測試錄下送到 destination 的聲音（capture.worklet.ts）
+  until.ts         browser mode 測試共用的輪詢等待（真實的 Worker、AudioContext 沒有可以 await 的完成點）
   e2e/             Playwright 測試（*.spec.ts），對 Demo 頁的 dev server 執行；容差常數在 tolerances.ts
   smoke/           不屬於任何原始碼的 browser mode smoke test，例如 CI 的音訊環境
   docker/          Playwright image 加 PulseAudio，pnpm verify:docker 與 CI browser job 的執行環境

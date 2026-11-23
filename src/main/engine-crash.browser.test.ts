@@ -13,6 +13,7 @@ import { detectPlatform } from './platform.js';
 import type { Engine } from './types.js';
 import { documentVisibility } from './visibility.js';
 import { loadWasmAssets } from './wasm.js';
+import { until } from '../../test/until.js';
 
 const source = { kind: 'http', url: mediaUrl('audio/flac.flac') } as const;
 
@@ -23,14 +24,6 @@ afterEach(async () => {
   await engine?.destroy();
   engine = null;
 });
-
-async function until(predicate: () => boolean, timeoutMs = 8000): Promise<void> {
-  const deadline = performance.now() + timeoutMs;
-  while (!predicate()) {
-    if (performance.now() > deadline) throw new Error('等待逾時');
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-}
 
 function engineWith(createWorker: EngineDeps['createWorker']): Engine {
   return createEngineWith({

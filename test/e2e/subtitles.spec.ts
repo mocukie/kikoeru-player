@@ -1,6 +1,7 @@
 // Demo 頁的內嵌字幕（#49）：選中的字幕軌隨播放送出 cue，Demo 頁依 `currentTime` 顯示目前的 cue；seek 之後重送的 cue
 // 以 id 去重。multi-track.mkv 的 cue 每整秒開始、長 0.5 秒（test/media/README.md）。
 import { expect, test, type Page } from '@playwright/test';
+import { CUE_EDGE_MARGIN } from './tolerances.js';
 
 /** 頁面上的 Engine 只用到的部分（Demo 頁以 `engine` 放在 globalThis）。 */
 interface PageEngine {
@@ -13,12 +14,6 @@ interface PageEngine {
 interface E2EWindow {
   engine: PageEngine;
 }
-
-/**
- * 讀取 Demo 頁顯示的 cue 時，`currentTime` 要離 cue 的起訖至少這麼遠（秒）：畫面在 rAF 內更新，讀取與更新之間
- * 最多差一個 rAF，再加上 cue 的起點因 `start_time` 平移的幾十 ms。
- */
-const EDGE_MARGIN = 0.12;
 
 async function loadWithSubtitle(page: Page, language: string): Promise<void> {
   await page.goto(`/demo/?background=0&subtitleLang=${language}`);
@@ -69,9 +64,9 @@ test('SRT：播放中依 currentTime 顯示目前的 cue，cue 之間沒有字�
   await expect(page.locator('#state')).toHaveText('playing');
 
   for (let i = 0; i < 2; i++) {
-    const shown = await cueWhile(page, EDGE_MARGIN, 0.5 - EDGE_MARGIN);
+    const shown = await cueWhile(page, CUE_EDGE_MARGIN, 0.5 - CUE_EDGE_MARGIN);
     expect(shown.text).toBe(`[embedded srt] ${String(shown.n)}秒目、ビープ音が鳴りました。`);
-    const hidden = await cueWhile(page, 0.5 + EDGE_MARGIN, 1 - EDGE_MARGIN);
+    const hidden = await cueWhile(page, 0.5 + CUE_EDGE_MARGIN, 1 - CUE_EDGE_MARGIN);
     expect(hidden.text).toBe('');
   }
   await expect(page.locator('#log')).toContainText('cues s:');

@@ -11,6 +11,7 @@ import type {
 } from '../protocol/index.js';
 import { createWebAudioOutput } from './audio-output.js';
 import { AssetLoadError, type AudioOutput, type AudioOutputHandlers } from './deps.js';
+import { until } from '../../test/until.js';
 
 const audioBuffer = { targetMs: 150, refillMs: 75, capacityMs: 400 };
 
@@ -90,14 +91,6 @@ function feed(
     sent.set(data.epoch, offset);
     if (offset >= total) post({ type: 'eof', epoch: data.epoch });
   };
-}
-
-async function until(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
-  const deadline = performance.now() + timeoutMs;
-  while (!predicate()) {
-    if (performance.now() > deadline) throw new Error('等待逾時');
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
 }
 
 const reported = (type: WorkletToMainMessage['type'], epoch: number) => () =>

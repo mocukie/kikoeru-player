@@ -191,6 +191,36 @@ describe('背景（suspendVideoWhenHidden）', () => {
     expect(engine.state).toBe('playing');
     expect(states).toEqual([]);
   });
+
+  it('音軌比影片短、音訊已經送完（audioend）時回到前景：與純影片相同，從目前位置重新 seek', async () => {
+    const { engine, deps, worker } = await playing();
+    const [start] = worker.messages('start');
+    deps.visibility.setHidden(true);
+    worker.reply({ type: 'audioend', epoch: start?.epoch ?? NaN });
+    clock(deps, 6);
+    deps.visibility.setHidden(false);
+    const seek = await worker.next('seek');
+    expect(seek.time).toBeCloseTo(6, 6);
+    deps.audio.reply({ type: 'paused', epoch: seek.epoch });
+    frame(worker, 6, seek.epoch);
+    deps.audio.reply({ type: 'playing', epoch: seek.epoch });
+    await settle();
+    expect(engine.state).toBe('playing');
+  });
+
+  it('過期 epoch 的 audioend 不算：回到前景時不重新 seek（聲音不中斷）', async () => {
+    const { deps, worker, engine } = await playing();
+    const [start] = worker.messages('start');
+    const seeking = engine.seek(2);
+    const seek = await worker.next('seek');
+    worker.reply({ type: 'audioend', epoch: start?.epoch ?? NaN });
+    frame(worker, 2, seek.epoch);
+    deps.audio.reply({ type: 'playing', epoch: seek.epoch });
+    await seeking;
+    deps.visibility.setHidden(true);
+    deps.visibility.setHidden(false);
+    expect(worker.messages('seek')).toHaveLength(1);
+  });
 });
 
 describe('播放中解碼失敗，退回只播音訊', () => {

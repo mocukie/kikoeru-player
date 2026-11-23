@@ -43,6 +43,18 @@ export const THROTTLE_SLACK_MS = 20;
  */
 export const LEAK_HEAP_GROWTH_BYTES = 4 * 1024 * 1024;
 
+/**
+ * leak 測試：播放影片時還沒 close 的 VideoFrame 的上限。media Worker 在還沒 close 的 frame 加上 decode 佇列到 8 張時
+ * 停止送進 decoder，decoder 內部（B-frame 的重排）暫存的之後仍會輸出，再加上畫面上的那一張。
+ */
+export const MAX_OPEN_VIDEO_FRAMES = 13;
+
+/**
+ * 讀取 Demo 頁顯示的 cue 時，`currentTime` 要離 cue 的起訖至少這麼遠（秒）：畫面在 rAF 內更新，讀取與更新之間
+ * 最多差一個 rAF，再加上 cue 的起點因 `start_time` 平移的幾十 ms。
+ */
+export const CUE_EDGE_MARGIN = 0.12;
+
 /** 改變 volume／muted 之後，等 GainNode（time constant 約 10 ms）趨近新值再開始錄音的時間（ms）。 */
 export const GAIN_SETTLE_MS = 100;
 

@@ -6,6 +6,7 @@ import { amplitudeAt, beepOnsets, mediaUrl } from '../../test/media-worker-harne
 import { createEngine } from './engine.js';
 import type { CuesEvent, StateChangeEvent } from './events.js';
 import type { Engine } from './types.js';
+import { until } from '../../test/until.js';
 
 let capture: DestinationCapture;
 let engine: Engine | null = null;
@@ -21,14 +22,6 @@ afterEach(async () => {
   document.body.replaceChildren();
   vi.restoreAllMocks();
 });
-
-async function until(predicate: () => boolean, timeoutMs = 8000): Promise<void> {
-  const deadline = performance.now() + timeoutMs;
-  while (!predicate()) {
-    if (performance.now() > deadline) throw new Error('等待逾時');
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-}
 
 /** `promise` 進行中每 10 ms 記下 currentTime。 */
 async function sampleTimes(target: Engine, promise: Promise<unknown>): Promise<number[]> {

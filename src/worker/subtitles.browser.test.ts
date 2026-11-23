@@ -152,6 +152,14 @@ describe('multi-track.mkv', () => {
     await driver.decode(streamOf(media, 'audio'), { video: streamOf(media, 'video') });
     expect(driver.messages.some((m) => m.type === 'cues')).toBe(false);
   });
+
+  test('音軌與影片軌都不選、只選字幕軌：音訊立即 eof，字幕照常送出', async () => {
+    const { driver, media } = await open('video/multi-track.mkv');
+    const srt = subtitle(media, 'subrip');
+    await driver.decode(null, { subtitle: srt.streamIndex });
+    await expect.poll(() => driver.cues(1).length).toBe(20);
+    expectSchedule(driver.cues(1), range(0, 20));
+  });
 });
 
 describe('其他格式', () => {

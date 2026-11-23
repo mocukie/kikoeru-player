@@ -139,6 +139,31 @@ describe('外掛音軌的輸出', () => {
     expect(amplitudeAt(seeked.left, RATE, 440, 0.7 * RATE + 480, 2400)).toBeGreaterThan(0.3);
   });
 
+  test('選外掛音軌、不選影片軌：主來源只為字幕 demux，cue 隨音訊的進度送出', async () => {
+    const { driver } = await withExternal();
+    // multi-track.mkv 的 stream 3 是 SRT 字幕（每整秒一個 cue）。
+    driver.post({
+      type: 'start',
+      epoch: 1,
+      time: 2,
+      audio: 0,
+      audioSource: 'ext:1',
+      video: null,
+      subtitle: 3,
+    });
+    const pcm = await driver.collect(1, RATE);
+    expectOnsets(onsets(pcm), [0]);
+    await expect.poll(() => driver.cues(1).map((c) => Math.round(c.start))).toContain(4);
+    // 主來源不會一口氣 demux 到結尾：字幕只比外掛音軌的 demux 進度（約 2 秒的佇列加上一次讀取）超前一小段。
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const starts = driver.cues(1).map((c) => Math.round(c.start));
+    expect(Math.min(...starts)).toBe(2);
+    expect(Math.max(...starts)).toBeLessThan(17);
+    // 音訊播到結尾時字幕也送到最後一個。
+    await driver.collect(1);
+    await expect.poll(() => driver.cues(1).map((c) => Math.round(c.start))).toContain(19);
+  });
+
   test('seek 到外掛音軌的 0 點之前：從來源開頭解碼，到 0 點之前都是靜音', async () => {
     const { driver } = await withExternal();
     driver.post({
@@ -200,6 +225,46 @@ describe('容器內音軌的 offset', () => {
     expect(Math.abs((first ?? NaN) - 0.3)).toBeLessThan(0.0015);
     const { frames } = await driver.videoDone(1);
     expect(frames[0]?.time).toBeCloseTo(4.5, 1);
+  });
+
+  test('offset 的絕對值很大、同時解碼影片：音軌另開 instance demux，封包佇列不因 offset 增長', async () => {
+    // 硬上限 64 KiB：與影片共用 demuxer 時，影片的 lane 要多存 15 秒的封包，會超過上限。
+    const driver = await WorkerDriver.init(inPage(), { limits: { packetQueueBytes: 64 * 1024 } });
+    // 扮演影片照音訊時鐘消耗的主執行緒：frame 不 close，影片的解碼停在 frame 的上限。
+    driver.autoCloseFrames = false;
+    await driver.load(await bytes(MAIN));
+    driver.post({
+      type: 'start',
+      epoch: 1,
+      time: 0,
+      audio: 1,
+      audioOffset: -15,
+      video: 0,
+      subtitle: null,
+    });
+    // 媒體 0 秒是來源 15 秒。
+    const pcm = await driver.collect(1, 2 * RATE);
+    expect(pcm.time).toBe(0);
+    const [first] = onsets(pcm);
+    expect(Math.abs(first ?? NaN)).toBeLessThan(0.0015);
+    const stats = await driver.stats();
+    expect(stats.libavInstances).toBe(2);
+    expect(stats.packetQueue.bytes).toBeLessThan(64 * 1024);
+    await expect.poll(() => driver.frames[0]?.time).toBe(0);
+    driver.releaseFrames();
+
+    // offset 回到小的值：回到共用的 demuxer，丟掉另開的 instance。
+    driver.post({
+      type: 'select',
+      epoch: 2,
+      time: 1,
+      audio: 1,
+      audioOffset: 0.5,
+      video: 0,
+      subtitle: null,
+    });
+    await driver.collect(2, RATE);
+    expect((await driver.stats()).libavInstances).toBe(1);
   });
 });
 
@@ -282,5 +347,51 @@ describe('兩個 instance 的讀取互不阻塞', () => {
     expect(frames.at(-1)?.time).toBeGreaterThan(19.9);
     await expect.poll(() => external.stalled.length).toBeGreaterThan(0);
     expect(driver.worklet.some((m) => m.type === 'eof')).toBe(false);
+  });
+});
+
+describe('外掛音軌在輸出中失敗', () => {
+  test('讀取失敗：非致命的 audiofailed、送出 eof、丟掉 instance，主來源的影片照常解碼到結尾', async () => {
+    const main = stallable(new Uint8Array(await mediaBytes(MAIN)));
+    const data = new Uint8Array(await mediaBytes(EXTERNAL));
+    let failing = false;
+    const external: ByteSource = {
+      size: data.length,
+      read: (offset, length) =>
+        failing
+          ? Promise.reject(new Error('讀取失敗'))
+          : Promise.resolve(data.subarray(offset, offset + length)),
+    };
+    const { driver } = await withExternal(MAIN, {
+      openSource: (wire) =>
+        Promise.resolve(wire.kind === 'bytes' && wire.name === EXTERNAL ? external : main.source),
+    });
+    failing = true;
+    driver.post({
+      type: 'start',
+      epoch: 1,
+      time: 1,
+      audio: 0,
+      audioSource: 'ext:1',
+      video: 0,
+      subtitle: null,
+    });
+    driver.need(1, 20 * RATE);
+    expect(await driver.waitFor((m) => m.type === 'audiofailed')).toMatchObject({
+      epoch: 1,
+      source: 'ext:1',
+      error: { fatal: false },
+    });
+    await expect
+      .poll(() => driver.worklet.some((m) => m.type === 'eof' && m.epoch === 1))
+      .toBe(true);
+    const { end, frames } = await driver.videoDone(1);
+    expect(end.type).toBe('videoend');
+    expect(frames.at(-1)?.time).toBeGreaterThan(19.9);
+    expect((await driver.stats()).libavInstances).toBe(1);
+    // 之後的輸出不再有音訊。
+    const seeked = await driver.seek(2, 2);
+    expect(seeked.left).toHaveLength(0);
+    expect(driver.messages.some((m) => m.type === 'error' || m.type === 'crash')).toBe(false);
   });
 });

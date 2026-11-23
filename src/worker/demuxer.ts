@@ -58,6 +58,11 @@ export interface DemuxerOptions<P> {
    * 直接交給 `onPackets`。停下之後讀到的那一批不交出。
    */
   sparse?: { streams: readonly number[]; onPackets: (packets: P[]) => void };
+  /**
+   * 只用來推進 demux 進度的軌：封包推進 `end` 後直接丟掉，不進封包佇列。只 demux 稀疏軌時以它讓 demux 有進度、
+   * 每次讀取有上限（稀疏軌的封包很小，單靠它們一次讀取會讀過一大段）。
+   */
+  progress?: readonly number[];
   /** 這個 epoch 的起點（秒）：demux 進度的初始值。 */
   startTime: number;
   epoch: number;
@@ -67,6 +72,11 @@ export interface DemuxerOptions<P> {
   onDemux?: (end: number, eof: boolean) => void;
   /** demux 結尾與 demux 失敗的 log；省略時不記錄。 */
   log?: Logger;
+  /**
+   * 每次讀取之前等它 resolve（`end` 是目前的 demux 進度）：只有稀疏軌的 demux 沒有封包佇列讓它停下，以它控制
+   * demux 不超前太多。`stop` 時以它的 reason reject。
+   */
+  pace?: (end: number, stop: AbortSignal) => Promise<void>;
 }
 
 /** 省略 `queueLimits` 時的上限（桌面的硬上限）。 */
@@ -81,15 +91,21 @@ export class Demuxer<P> {
   readonly #packets: PacketQueue<P>;
   readonly #streams: ReadonlySet<number>;
   readonly #sparse: ReadonlySet<number>;
+  readonly #progress: ReadonlySet<number>;
   /** 封包佇列超過硬上限：所有供料立即結束（`MEMORY_LIMIT`）。 */
   readonly #fatal = new AbortController();
   /** 已 demux 的封包的結尾（媒體時間）。 */
   #end: number;
+  /** demux 到了結尾。 */
+  #ended = false;
+  /** demux 失敗。 */
+  #failed = false;
 
   constructor(options: DemuxerOptions<P>) {
     this.#options = options;
     this.#streams = new Set(options.streams);
     this.#sparse = new Set(options.sparse?.streams);
+    this.#progress = new Set(options.progress);
     this.#end = options.startTime;
     const measure = (p: P) => options.reader.measure(p);
     this.#packets = new PacketQueue<P>(
@@ -120,6 +136,19 @@ export class Demuxer<P> {
     return this.#end;
   }
 
+  /** demux 到了結尾（之後 `end` 不再改變）。 */
+  get ended(): boolean {
+    return this.#ended;
+  }
+
+  /**
+   * 等到 demux 到結尾或失敗；被中止時以 signal 的 reason reject。沒有供料取用 lane（只有稀疏軌）時，以它決定 demux
+   * 何時停止。
+   */
+  async settled(signal: AbortSignal): Promise<void> {
+    while (!this.#ended && !this.#failed) await this.#packets.changed(signal);
+  }
+
   /** 一條軌在佇列中的下一個封包的媒體時間（秒）；沒有封包、沒有時間戳或不是選用中的軌時為 null。 */
   headTime(stream: number): number | null {
     return this.#streams.has(stream) ? this.#packets.headTime(stream) : null;
@@ -148,10 +177,11 @@ export class Demuxer<P> {
    * 取完才回報，錯誤的位置接近實際播放到的地方），封包佇列超過硬上限則 abort `fatal`。不會 reject。
    */
   async run(stop: AbortSignal): Promise<void> {
-    const { reader, onDemux, log, epoch, sparse } = this.#options;
+    const { reader, onDemux, log, epoch, sparse, pace } = this.#options;
     try {
       for (;;) {
         await this.#packets.space(stop);
+        await pace?.(this.#end, stop);
         const { packets, eof } = await reader.read();
         if (stop.aborted) return;
         const byStream = new Map<number, P[]>();
@@ -162,8 +192,10 @@ export class Demuxer<P> {
             sparsePackets.push(packet);
             continue;
           }
-          if (!this.#streams.has(stream)) continue;
+          const progress = this.#progress.has(stream);
+          if (!progress && !this.#streams.has(stream)) continue;
           this.#end = time === null ? this.#end + duration : Math.max(this.#end, time + duration);
+          if (progress) continue;
           const lane = byStream.get(stream) ?? [];
           lane.push(packet);
           byStream.set(stream, lane);
@@ -173,6 +205,7 @@ export class Demuxer<P> {
         onDemux?.(this.#end, eof);
         if (eof) {
           log?.log('debug', 'demux', 'demux 到結尾', { epoch, end: this.#end });
+          this.#ended = true;
           this.#packets.end();
           return;
         }
@@ -185,6 +218,7 @@ export class Demuxer<P> {
         `demux 失敗：${error instanceof Error ? error.message : String(error)}`,
         { epoch, end: this.#end },
       );
+      this.#failed = true;
       this.#packets.fail(error);
       if (error instanceof WorkerError && error.code === 'MEMORY_LIMIT') this.#fatal.abort(error);
     }

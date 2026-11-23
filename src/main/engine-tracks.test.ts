@@ -148,6 +148,58 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe('偏好語言', () => {
+  /** 以 `options` 建立 Engine、load，回傳 start 選用的 stream。 */
+  async function started(
+    options: Parameters<typeof createEngineWith>[1],
+    loadOptions: LoadOptions = {},
+  ) {
+    const deps = createFakeDeps();
+    const engine = createEngineWith(deps, options);
+    const loading = engine.load(source, loadOptions);
+    const worker = deps.workers.last;
+    await worker.probe(media);
+    const start = await worker.next('start');
+    frame(worker, 0);
+    deps.audio.reply({ type: 'paused' });
+    await loading;
+    return { engine, start };
+  }
+
+  it('createEngine() 的 preferredLanguages 是預設值：音軌與字幕依它選', async () => {
+    const { engine, start } = await started({
+      preferredLanguages: { audio: ['zh'], subtitle: ['zh'] },
+    });
+    expect(start).toMatchObject({ audio: 2, subtitle: 6 });
+    expect(engine.selectedTracks).toEqual({
+      audio: id.audioZh,
+      video: id.video1,
+      subtitle: id.ass,
+    });
+  });
+
+  it('load() 的 preferredLanguages 依 kind 覆蓋預設值，沒給的 kind 沿用預設值', async () => {
+    const { engine, start } = await started(
+      { preferredLanguages: { audio: ['zh'], subtitle: ['zh'] } },
+      { preferredLanguages: { audio: ['ja'] } },
+    );
+    expect(start).toMatchObject({ audio: 0, subtitle: 6 });
+    expect(engine.selectedTracks).toEqual({
+      audio: id.audioJa,
+      video: id.video1,
+      subtitle: id.ass,
+    });
+  });
+
+  it('load() 給空的偏好語言：不依語言選，音軌回到 default 旗標、字幕關閉', async () => {
+    const { engine } = await started(
+      { preferredLanguages: { audio: ['zh'], subtitle: ['zh'] } },
+      { preferredLanguages: { audio: [], subtitle: [] } },
+    );
+    expect(engine.selectedTracks).toEqual({ audio: id.audioJa, video: id.video1, subtitle: null });
+  });
+});
+
 describe('切換音軌', () => {
   it('以新的 epoch 從目前位置重新供料；新軌出聲之前 selectedTracks 不變，之後才更新並發出 trackschange', async () => {
     const { engine, deps, worker, changes } = await loaded();
@@ -295,6 +347,53 @@ describe('切換影片軌', () => {
     await expect(engine.selectTracks({ video: id.video2 })).rejects.toMatchObject({
       code: 'CODEC_UNSUPPORTED',
     });
+  });
+
+  it('新音軌的 decoder 開啟失敗：該軌改為不支援並發出 trackschange，換回原本的軌，reject 非致命的 CODEC_UNSUPPORTED', async () => {
+    const { engine, deps, worker, changes } = await loaded();
+    const errors: unknown[] = [];
+    engine.addEventListener('error', (e) => errors.push(e.error));
+    const result = engine.selectTracks({ audio: id.audioZh }).catch((e: unknown) => e);
+    const select = await worker.next('select');
+    worker.reply({
+      type: 'audiofailed',
+      epoch: select.epoch,
+      source: null,
+      error: { code: 'CODEC_UNSUPPORTED', fatal: false, message: '無法開啟音訊 decoder' },
+    });
+    const revert = await worker.next('select', 2);
+    expect(revert).toMatchObject({ audio: 0, video: 1 });
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.tracks.find((t) => t.id === id.audioZh)).toMatchObject({
+      supported: false,
+      unsupportedReason: 'codec',
+    });
+    frame(worker, 0);
+    deps.audio.reply({ type: 'paused' });
+    const error = await result;
+    expect(error).toBeInstanceOf(EngineError);
+    expect(error).toMatchObject({ code: 'CODEC_UNSUPPORTED', fatal: false });
+    expect(engine.selectedTracks.audio).toBe(id.audioJa);
+    expect(engine.state).toBe('ready');
+    expect(engine.error).toBeNull();
+    expect(errors).toHaveLength(0);
+  });
+
+  it('不是換音軌時主來源的音軌 decoder 失敗（例如 load）：致命', async () => {
+    const deps = createFakeDeps();
+    const engine = createEngineWith(deps);
+    const loading = engine.load(source);
+    const worker = deps.workers.last;
+    await worker.probe(media);
+    const start = await worker.next('start');
+    worker.reply({
+      type: 'audiofailed',
+      epoch: start.epoch,
+      source: null,
+      error: { code: 'CODEC_UNSUPPORTED', fatal: false, message: '無法開啟音訊 decoder' },
+    });
+    await expect(loading).rejects.toMatchObject({ code: 'CODEC_UNSUPPORTED', fatal: true });
+    expect(engine.state).toBe('error');
   });
 
   it('只換音軌時目前的影片軌播放中解碼失敗：照常退回只播音訊，換軌生效時 video 為 null', async () => {

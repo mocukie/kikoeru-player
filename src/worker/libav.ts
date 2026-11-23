@@ -12,7 +12,7 @@ import {
   type DecodedAudio,
 } from './audio-pipeline.js';
 import { Demuxer, type DemuxerOptions, type HoldableLane, type PacketReader } from './demuxer.js';
-import { crashReason, WorkerError } from './errors.js';
+import { AudioDecoderError, crashReason, WorkerError } from './errors.js';
 import type { RawMedia, RawStream } from './probe.js';
 import type { ByteSource } from './source.js';
 import type { SubtitlePacket } from './subtitles.js';
@@ -255,11 +255,17 @@ export class LibavMedia {
     const libav = this.#libav;
     const streams = [options.audio, options.video].filter((s): s is number => s !== null);
     const subtitle = options.subtitle;
-    const demuxed = subtitle ? [...streams, subtitle.stream] : streams;
+    // 只 demux 字幕軌：另外 demux 一條音軌（沒有時影片軌）推進 demux 進度，封包直接丟掉（見 `DemuxerOptions.progress`）。
+    const progress = streams.length === 0 && subtitle ? this.#progressStream() : null;
+    const demuxed = [
+      ...streams,
+      ...(subtitle ? [subtitle.stream] : []),
+      ...(progress === null ? [] : [progress]),
+    ];
     for (const index of demuxed) {
       if (!this.#streams[index]) throw new WorkerError('INTERNAL', `沒有 stream ${String(index)}`);
     }
-    const selection = [options.audio, options.video, subtitle?.stream ?? null].join(',');
+    const selection = [options.audio, options.video, subtitle?.stream ?? null, progress].join(',');
     if (selection !== this.#selection) {
       for (const s of this.#streams) {
         await libav.AVStream_discard_s(
@@ -337,6 +343,7 @@ export class LibavMedia {
       ...demuxOptions,
       reader,
       streams,
+      ...(progress !== null && { progress: [progress] }),
       ...(subtitle && {
         sparse: {
           streams: [subtitle.stream],
@@ -370,6 +377,14 @@ export class LibavMedia {
       audio,
       video: options.video === null ? null : this.#videoLane(demuxer, options.video),
     };
+  }
+
+  /** 推進 demux 進度用的軌：位元率最低的音軌，沒有音軌時第一條影片軌；都沒有時為 null。 */
+  #progressStream(): number | null {
+    const audio = this.raw.streams
+      .filter((s) => s.type === 'audio')
+      .sort((a, b) => a.bitRate - b.bitRate);
+    return (audio[0] ?? this.raw.streams.find((s) => s.type === 'video'))?.index ?? null;
   }
 
   /**
@@ -591,7 +606,7 @@ class LibavAudioDecoder implements AudioDecoder<Packet> {
     sampleRate: number,
   ): Promise<LibavAudioDecoder> {
     const inputRate = await libav.AVCodecParameters_sample_rate(stream.codecpar);
-    if (!(inputRate > 0)) throw new WorkerError('CODEC_UNSUPPORTED', '音軌沒有取樣率');
+    if (!(inputRate > 0)) throw new AudioDecoderError('音軌沒有取樣率');
     let opened: [number, number, number, number];
     try {
       // 封包與 frame 的時間戳都換成 1/輸入取樣率，與 filter graph 的 abuffer 一致。
@@ -600,7 +615,7 @@ class LibavAudioDecoder implements AudioDecoder<Packet> {
         time_base: [1, inputRate],
       });
     } catch (error) {
-      throw new WorkerError('CODEC_UNSUPPORTED', '無法開啟音訊 decoder', { cause: error });
+      throw new AudioDecoderError('無法開啟音訊 decoder', { cause: error });
     }
     const [, ctx, pkt, frame] = opened;
     await libav.AVCodecContext_pkt_timebase_s(ctx, 1, inputRate);

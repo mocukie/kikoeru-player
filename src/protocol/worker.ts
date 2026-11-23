@@ -71,31 +71,39 @@ export interface WorkerLoadMessage<H extends HostTypes> {
   source: WireSource<H>;
 }
 
-/**
- * probe 之後開始輸出：只讀選用的音軌、影片軌與字幕軌（其餘 discard），從 `time`（秒）開始供料，精準度同 `seek`。
- * Worker 依 worklet 的 `need` 送出這個 epoch 的 PCM，音訊到結尾時送出 `eof`；影片解出的 frame 以 `frame` 送出，
- * 全部送出後送 `videoend`；字幕軌的 cue 隨 demux 的進度以 `cues` 送出。每個 load 只送一次；之後改變位置經由 `seek`。
- */
-export interface WorkerStartMessage {
-  type: 'start';
-  epoch: number;
-  time: number;
-  /** 選用音軌的 stream index；null 表示不輸出音訊：Worker 立即送出 `eof`，worklet 以靜音推進時鐘。 */
+/** `start`／`select` 選用的各軌；Worker 記住它，之後的 `seek`、`port` 沿用。 */
+export interface WorkerTrackSelection {
+  /**
+   * 選用音軌的 stream index；null 表示不輸出音訊：Worker 立即送出 `eof`，worklet 以靜音推進時鐘（影片軌與字幕軌照常
+   * 輸出）。
+   */
   audio: number | null;
   /**
    * `audio` 所在的外掛音軌（`addaudio` 的 `id`）；省略時 `audio` 是主來源的 stream。外掛音軌在它自己的 libav instance
-   * demux 與解碼，主來源只 demux 影片軌與字幕軌（沒有影片軌時字幕也不送）。
+   * demux 與解碼，主來源只 demux 影片軌與字幕軌；只為字幕 demux 時不超前外掛音軌的 demux 進度太多。
    */
   audioSource?: string;
   /**
    * 音軌 offset（秒），省略時為 0：在 stretcher 之前套用 `sourceTime = mediaTime − offset`，正值時起點前補靜音，負值時
    * 跳過來源開頭。音訊從 `time − offset` demux（小於 0 時從頭開始）；外掛音軌的 0 點是它自己的第一個可播放 sample。
+   * 容器內音軌的 |offset| 超過 2 秒且同時解碼影片時，音軌在同一個來源另開的 instance demux，封包佇列不因 offset 增長。
    */
   audioOffset?: number;
   /** 選用影片軌的 stream index（probe 時 supported 的軌）；null 表示不解碼影片。 */
   video: number | null;
   /** 選用字幕軌的 stream index（probe 時 supported 的軌）；null 表示不送 cue。 */
   subtitle: number | null;
+}
+
+/**
+ * probe 之後開始輸出：只讀選用的音軌、影片軌與字幕軌（其餘 discard），從 `time`（秒）開始供料，精準度同 `seek`。
+ * Worker 依 worklet 的 `need` 送出這個 epoch 的 PCM，音訊到結尾時送出 `eof`；影片解出的 frame 以 `frame` 送出，
+ * 全部送出後送 `videoend`；字幕軌的 cue 隨 demux 的進度以 `cues` 送出。每個 load 只送一次；之後改變位置經由 `seek`。
+ */
+export interface WorkerStartMessage extends WorkerTrackSelection {
+  type: 'start';
+  epoch: number;
+  time: number;
 }
 
 /**
@@ -110,25 +118,15 @@ export interface WorkerSeekMessage {
 }
 
 /**
- * 換軌（`selectTracks()`）：選用的各軌改為這裡的值（之後的 `seek`、`port` 沿用），以新的 epoch 從 `time`（秒）重新供料，
- * 其餘同 `seek`。換了影片軌時關閉舊軌的 `VideoDecoder`、為新軌建立新的，從 `time` 之前的 keyframe 解碼；`video` 為 null 時
- * 關閉 decoder。新的影片軌 configure 或首個 keyframe 失敗時送出 `videoerror`（`beforeFirstFrame: true`），之後不再選用它。
- * `start` 之前收到的 select 不處理。
+ * 換軌（`selectTracks()`）與改音軌 offset：選用的各軌改為這裡的值（之後的 `seek`、`port` 沿用），以新的 epoch 從 `time`
+ *（秒）重新供料，其餘同 `seek`。換了影片軌時關閉舊軌的 `VideoDecoder`、為新軌建立新的，從 `time` 之前的 keyframe 解碼；
+ * `video` 為 null 時關閉 decoder。新的影片軌 configure 或首個 keyframe 失敗時送出 `videoerror`（`beforeFirstFrame: true`），
+ * 之後不再選用它；新音軌的 decoder 開不起來時送出 `audiofailed`。`start` 之前收到的 select 不處理。
  */
-export interface WorkerSelectMessage {
+export interface WorkerSelectMessage extends WorkerTrackSelection {
   type: 'select';
   epoch: number;
   time: number;
-  /** 選用音軌的 stream index；null 表示不輸出音訊（同 `start`）。 */
-  audio: number | null;
-  /** 同 `start`。 */
-  audioSource?: string;
-  /** 同 `start`；改 offset 也經由 `select`。 */
-  audioOffset?: number;
-  /** 選用影片軌的 stream index；null 表示不解碼影片。 */
-  video: number | null;
-  /** 選用字幕軌的 stream index；null 表示不送 cue。 */
-  subtitle: number | null;
 }
 
 /**
@@ -213,6 +211,8 @@ export type WorkerToMainMessage<H extends HostTypes = HostTypes> =
   | WorkerProbeMessage
   | WorkerAudioProbeMessage
   | WorkerAudioErrorMessage
+  | WorkerAudioFailedMessage
+  | WorkerAudioEndMessage
   | WorkerErrorMessage
   | WorkerCrashMessage
   | WorkerStatsMessage
@@ -251,6 +251,29 @@ export interface WorkerAudioErrorMessage {
   type: 'audioerror';
   id: string;
   error: WireError;
+}
+
+/**
+ * 這個 epoch 的音軌無法輸出（`error.fatal` 為 false），由主執行緒決定怎麼處理：
+ *
+ * - `source` 為 null：主來源音軌的 decoder 建立或開啟失敗（`CODEC_UNSUPPORTED`），這個 epoch 的主來源輸出停止。
+ * - `source` 為外掛音軌的 id：外掛音軌在輸出中開啟 decoder、seek、讀取、demux 或解碼失敗。Worker 丟掉它的 instance
+ *   （之後選用它時不輸出音訊），送出這個 epoch 的 `eof`（worklet 以靜音推進時鐘），主來源的影片與字幕照常輸出。
+ */
+export interface WorkerAudioFailedMessage {
+  type: 'audiofailed';
+  epoch: number;
+  source: string | null;
+  error: WireError;
+}
+
+/**
+ * 這個 epoch 的音訊送完了（`eof` 已送給 worklet）：音軌播到結尾，或沒有音訊可送。音軌比影片短時，之後的影片 demux
+ * 不再受音訊的進度約束。
+ */
+export interface WorkerAudioEndMessage {
+  type: 'audioend';
+  epoch: number;
 }
 
 /** Worker 內可分類的錯誤；fatal 時主執行緒進入 `'error'`。 */
@@ -350,8 +373,8 @@ export interface WorkerStatsMessage {
 /** media Worker 內的計數，主執行緒彙整進 `getStats()`。 */
 export interface WorkerStats {
   /**
-   * 目前存在的 libav instance 數（主來源與外掛音軌各一個）：建立 instance 時加一，被取代、移除或 open／probe 失敗而
-   * 丟棄時減一。
+   * 目前存在的 libav instance 數（主來源與外掛音軌各一個，另開給 offset 很大的容器內音軌的也算一個）：建立 instance 時
+   * 加一，被取代、移除、不再需要或 open／probe 失敗而丟棄時減一。
    */
   libavInstances: number;
   /** Range 快取，公開的 `EngineStats.cache` 沿用這個型別；沒有 http 來源時 bytes 等為 0。 */

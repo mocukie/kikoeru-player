@@ -4,7 +4,7 @@
 // 進行中的請求；
 // 最後數 Worker target，並在 GC 後量 JS heap（Chromium 的 CDP）。Firefox 跑不了 CDP 的部分。
 import { expect, test, type Page } from '@playwright/test';
-import { LEAK_HEAP_GROWTH_BYTES } from './tolerances.js';
+import { LEAK_HEAP_GROWTH_BYTES, MAX_OPEN_VIDEO_FRAMES } from './tolerances.js';
 
 /** 頁面上的 Engine 只用到的部分（Demo 頁以 `engine` 放在 globalThis）。 */
 interface PageEngine {
@@ -43,12 +43,6 @@ const FILES = [
   'audio/vorbis.ogg',
   'audio/pcm-s16.wav',
 ];
-
-/**
- * 播放影片時還沒 close 的 VideoFrame 的上限：media Worker 在還沒 close 的 frame 加上 decode 佇列到 8 張時停止送進
- * decoder，decoder 內部（B-frame 的重排）暫存的之後仍會輸出，再加上畫面上的那一張。
- */
-const MAX_OPEN_VIDEO_FRAMES = 13;
 
 const LOADS = 100;
 

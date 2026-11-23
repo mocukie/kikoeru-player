@@ -352,24 +352,14 @@ export class VideoDecoding<P, F extends DecodedFrame> {
       while (this.#suspended) {
         signal.throwIfAborted();
         if (played) this.#trim(packets, played());
-        await new Promise<void>((resolve, reject) => {
+        // lane 有變化時也醒來，再 trim 一次。
+        await untilWoken(current, signal, (wake) => {
+          if (!played) return () => undefined;
           const watch = new AbortController();
-          const done = () => {
+          packets.changed(watch.signal).then(wake, () => undefined);
+          return () => {
             watch.abort();
-            signal.removeEventListener('abort', onAbort);
-            current.wake = () => undefined;
           };
-          const onAbort = () => {
-            done();
-            reject(signal.reason as Error);
-          };
-          const wake = () => {
-            done();
-            resolve();
-          };
-          current.wake = wake;
-          signal.addEventListener('abort', onAbort, { once: true });
-          if (played) packets.changed(watch.signal).then(wake, () => undefined);
         });
       }
       signal.throwIfAborted();
@@ -452,24 +442,8 @@ export class VideoDecoding<P, F extends DecodedFrame> {
       credit.open + decoder.decodeQueueSize >= MAX_OPEN_FRAMES;
     while (full() && !current.error) {
       current.signal.throwIfAborted();
-      await new Promise<void>((resolve, reject) => {
-        const done = () => {
-          off();
-          current.signal.removeEventListener('abort', onAbort);
-          current.wake = () => undefined;
-        };
-        const onAbort = () => {
-          done();
-          reject(current.signal.reason as Error);
-        };
-        const wake = () => {
-          done();
-          resolve();
-        };
-        const off = credit.onRelease(wake);
-        current.wake = wake;
-        current.signal.addEventListener('abort', onAbort, { once: true });
-      });
+      // frame 被 close（credit 釋放）時也醒來。
+      await untilWoken(current, current.signal, (wake) => credit.onRelease(wake));
     }
     current.signal.throwIfAborted();
   }
@@ -514,4 +488,34 @@ export class VideoDecoding<P, F extends DecodedFrame> {
     pending.close();
     this.#options.credit.release(1);
   }
+}
+
+/**
+ * 等到 `holder.wake()` 被呼叫（decoder 的 `ondequeue`、`resume()` 等），或 `subscribe` 註冊的另一個來源呼叫它給的 wake；
+ * `signal` 中止時以它的 reason reject。結束時 `holder.wake` 回到 no-op，並以 `subscribe` 回傳的函式取消註冊。
+ */
+function untilWoken(
+  holder: { wake: () => void },
+  signal: AbortSignal,
+  subscribe: (wake: () => void) => () => void,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let off: () => void = () => undefined;
+    const done = () => {
+      off();
+      signal.removeEventListener('abort', onAbort);
+      holder.wake = () => undefined;
+    };
+    const onAbort = () => {
+      done();
+      reject(signal.reason as Error);
+    };
+    const wake = () => {
+      done();
+      resolve();
+    };
+    holder.wake = wake;
+    signal.addEventListener('abort', onAbort, { once: true });
+    off = subscribe(wake);
+  });
 }

@@ -5,6 +5,7 @@ import { captureDestination, type DestinationCapture } from '../../test/audio-ca
 import { amplitudeAt, beepOnsets, mediaUrl } from '../../test/media-worker-harness.js';
 import { createEngine } from './engine.js';
 import type { Engine } from './types.js';
+import { until } from '../../test/until.js';
 
 let capture: DestinationCapture;
 let engine: Engine | null = null;
@@ -18,14 +19,6 @@ afterEach(async () => {
   engine = null;
   capture.restore();
 });
-
-async function until(predicate: () => boolean, timeoutMs = 8000): Promise<void> {
-  const deadline = performance.now() + timeoutMs;
-  while (!predicate()) {
-    if (performance.now() > deadline) throw new Error('等待逾時');
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-}
 
 /** 從現在起錄 `seconds` 秒，回傳每個 beep 在 440 Hz 與 880 Hz 的振幅。 */
 async function beepsFor(seconds: number): Promise<{ hz440: number; hz880: number }[]> {

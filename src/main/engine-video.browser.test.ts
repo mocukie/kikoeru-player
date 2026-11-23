@@ -1,10 +1,23 @@
 // Engine 的影片繪製（#50）：真實的 media Worker、WebCodecs 與 2D canvas。CI 組的影片左上 64×64 的框在每整秒開始的
 // 3 個 frame 是白色，其餘時候是黑色（test/media/README.md）；讀 canvas 的 pixel 確認畫出的 frame 與方向。
 // Chromium 的 VideoFrame 是 I420、Firefox 是 BGRX，兩種格式都經過同一條 drawImage 路徑。
+// 注入壞的影片封包的測試把 media Worker 放在頁面內執行（才能換掉它的 VideoDecoder）。
 import { afterEach, expect, test, vi } from 'vitest';
 import { mediaUrl } from '../../test/media-worker-harness.js';
-import { createEngine } from './engine.js';
+import type { WorkerToMainMessage } from '../protocol/index.js';
+import { MediaWorker as InPageMediaWorker, type MediaWorkerDeps } from '../worker/media-worker.js';
+import type { VideoChunk, VideoDecoderInit, VideoDecoderLike } from '../worker/video-pipeline.js';
+import { createWebVideoDecoder } from '../worker/webcodecs.js';
+import { createWebAudioOutput } from './audio-output.js';
+import type { MainHost, MediaWorker, MediaWorkerHandlers } from './deps.js';
+import { EngineError } from './errors.js';
+import { createEngine, createEngineWith } from './engine.js';
+import type { TracksChangeEvent } from './events.js';
+import { detectPlatform } from './platform.js';
 import type { Engine, VideoSize } from './types.js';
+import { documentVisibility } from './visibility.js';
+import { loadWasmAssets } from './wasm.js';
+import { until } from '../../test/until.js';
 
 let engine: Engine | null = null;
 
@@ -43,14 +56,6 @@ function luma(target: HTMLCanvasElement, x: number, y: number): number {
   if (!context) throw new Error('沒有 2D context');
   const [r = 0, g = 0, b = 0] = context.getImageData(x, y, 1, 1).data;
   return (r + g + b) / 3;
-}
-
-async function until(predicate: () => boolean, timeoutMs = 8000): Promise<void> {
-  const deadline = performance.now() + timeoutMs;
-  while (!predicate()) {
-    if (performance.now() > deadline) throw new Error('等待逾時');
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
 }
 
 /** 影片軌被瀏覽器支援時才測（Firefox 沒有系統的 H.264 decoder 時標為 platform）。 */
@@ -195,4 +200,118 @@ test('背景（visibilitychange）：停止解碼、聲音繼續；回到前景�
     expect(draw.clock - draw.pts).toBeLessThan(1 / 30 + 1 / 60);
   }
   expect((await engine.getStats()).video?.decoded).toBeGreaterThan(decodedAtHide);
+});
+
+/** 真實的 WebCodecs decoder，pts ≥ `from`（µs）的 chunk 只送前一半的 bytes（壞掉的影片封包）。 */
+function corruptingDecoders(from: number) {
+  let created = 0;
+  const create = (init: VideoDecoderInit<VideoFrame>): VideoDecoderLike => {
+    created++;
+    const inner = createWebVideoDecoder(init);
+    const corrupt = (chunk: VideoChunk): VideoChunk =>
+      chunk.timestamp >= from
+        ? { ...chunk, data: chunk.data.slice(0, chunk.data.length >> 1) }
+        : chunk;
+    return {
+      get state() {
+        return inner.state;
+      },
+      get decodeQueueSize() {
+        return inner.decodeQueueSize;
+      },
+      get ondequeue() {
+        return inner.ondequeue;
+      },
+      set ondequeue(handler) {
+        inner.ondequeue = handler;
+      },
+      configure: (config) => {
+        inner.configure(config);
+      },
+      decode: (chunk) => {
+        inner.decode(corrupt(chunk));
+      },
+      flush: () => inner.flush(),
+      reset: () => {
+        inner.reset();
+      },
+      close: () => {
+        inner.close();
+      },
+    };
+  };
+  return { create, created: () => created };
+}
+
+/** 在頁面內執行的 media Worker（訊息與真實的 Worker 一樣非同步送達）。 */
+function inPageWorker(deps: Omit<MediaWorkerDeps, 'postMessage'>) {
+  return (handlers: MediaWorkerHandlers): MediaWorker => {
+    let terminated = false;
+    const worker = new InPageMediaWorker({
+      ...deps,
+      postMessage: (message: WorkerToMainMessage<MainHost>) => {
+        setTimeout(() => {
+          if (!terminated) handlers.message(message);
+        }, 0);
+      },
+    });
+    return {
+      post: (message) => {
+        setTimeout(() => {
+          if (!terminated) worker.handle(message);
+        }, 0);
+      },
+      terminate: () => {
+        terminated = true;
+      },
+    };
+  };
+}
+
+test('播放中注入壞的影片封包：重新設定 decoder 後仍然失敗，退回只播音訊，發出 trackschange 與非致命的 error', async () => {
+  // 1 秒之後的封包都是壞的：重新設定的 decoder 從下一個 keyframe（2 秒）開始也失敗。VP9 在兩個瀏覽器都支援。
+  const decoders = corruptingDecoders(1_000_000);
+  engine = createEngineWith(
+    {
+      platform: detectPlatform(navigator),
+      loadWasm: () => loadWasmAssets(),
+      createWorker: inPageWorker({ createVideoDecoder: decoders.create }),
+      createAudioOutput: createWebAudioOutput,
+      visibility: documentVisibility(),
+    },
+    { canvas: canvas() },
+  );
+  const target = engine;
+  const changes: TracksChangeEvent[] = [];
+  const errors: EngineError[] = [];
+  target.addEventListener('trackschange', (e) => changes.push(e));
+  target.addEventListener('error', (e) => errors.push(e.error));
+  const info = await target.load({ kind: 'http', url: mediaUrl('video/vp9-opus.webm') });
+  const video = info.tracks.find((t) => t.kind === 'video');
+  if (!video?.supported) return;
+  expect(target.selectedTracks.video).toBe(video.id);
+  await target.play().catch(() => undefined);
+  if (target.state !== 'playing') return;
+
+  await until(() => errors.length > 0);
+  // 至少重新設定過一次。Firefox 的 VP9 decoder 對截半的封包不一定立即 error（重新設定後又解出 frame 會再重試），
+  // 所以不比對確切的次數。
+  expect(decoders.created()).toBeGreaterThanOrEqual(2);
+  expect(errors).toHaveLength(1);
+  expect(errors[0]).toBeInstanceOf(EngineError);
+  expect(errors[0]).toMatchObject({ code: 'DECODE_FAILED', fatal: false });
+  expect(errors[0]?.detail.trackId).toBe(video.id);
+  const change = changes.at(-1);
+  expect(change?.selected.video).toBeNull();
+  expect(change?.tracks.find((t) => t.id === video.id)).toMatchObject({
+    supported: false,
+    unsupportedReason: 'platform',
+  });
+  expect(target.selectedTracks.video).toBeNull();
+  expect(target.error).toBeNull();
+  expect(target.state).toBe('playing');
+  // 聲音照常播放：音訊時鐘繼續前進。
+  const at = target.currentTime;
+  await until(() => target.currentTime > at + 0.3);
+  expect(target.state).toBe('playing');
 });

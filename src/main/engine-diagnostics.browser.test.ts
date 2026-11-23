@@ -12,6 +12,7 @@ import { detectPlatform } from './platform.js';
 import type { Engine, EngineOptions, LogEntry } from './types.js';
 import { documentVisibility } from './visibility.js';
 import { loadWasmAssets } from './wasm.js';
+import { until } from '../../test/until.js';
 
 const source = { kind: 'http', url: mediaUrl('audio/flac.flac') } as const;
 const scopes = ['io', 'demux', 'audio', 'video', 'subtitle', 'command', 'worker', 'background'];
@@ -25,14 +26,6 @@ afterEach(async () => {
   await engine?.destroy();
   engine = null;
 });
-
-async function until(predicate: () => boolean, timeoutMs = 8000): Promise<void> {
-  const deadline = performance.now() + timeoutMs;
-  while (!predicate()) {
-    if (performance.now() > deadline) throw new Error('等待逾時');
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-}
 
 /** 真實的 deps，另外記下 media Worker 送到主執行緒的 log 訊息的等級（跨執行緒傳送的量）。 */
 function countingEngine(options: EngineOptions) {

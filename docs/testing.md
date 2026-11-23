@@ -39,7 +39,7 @@
   容差寫成常數集中在 `test/e2e/` 的一個檔案，flaky 時只調那裡。
 - **leak 測試**：連續 load 100 次，混入被取代的 load、播放中 destroy、外掛音軌，使用 CI 組的短檔。斷言：
   - 以 CDP 數 Worker target，並在 GC 後量 JS heap。
-  - `getStats().resources = { workers, libavInstances, openVideoFrames }`：destroy 後全為 0；換檔後 `workers` 為 1、`libavInstances` 等於來源數。
+  - `getStats().resources = { workers, libavInstances, openVideoFrames }`：destroy 後全為 0；換檔後 `workers` 為 1、`libavInstances` 等於來源數（測試不設容器內音軌的 offset；超過 2 秒時那條音軌另開一個 instance，見 `setAudioOffset()` 的 TSDoc）。
   - destroy 後 `network.inflight` 為空；換檔後進行中的請求都屬於目前的媒體（預讀）。
 
 ## 瀏覽器

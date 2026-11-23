@@ -140,7 +140,8 @@ export type EngineState =
  * - getter 顯示「已生效」的值，例如 `selectTracks()` 進行中，`selectedTracks` 仍是舊軌，新軌出聲後才更新。
  *   唯一的例外是 `paused`，它是使用者意圖。
  * - `tracks` 在 `load()` 之後只因指令或降級改變（`addExternalAudio()`、`removeExternalAudio()`、
- *   `setAudioOffset()`、`selectTracks()` 發現 codec 實際不支援、播放中影片解碼失敗而退回只播音訊）。
+ *   `setAudioOffset()`、`selectTracks()` 發現 codec 實際不支援、播放中影片解碼失敗而退回只播音訊、外掛音軌在播放中或
+ *   `reload()` 時失敗而被移除）。
  *   播放中才出現的軌道只記 log、不加入。
  *
  * **指令**（`load`、`reload`、`play`、`pause`、`seek`、`selectTracks`、`addExternalAudio`、
@@ -255,9 +256,11 @@ export interface Engine extends EventTarget {
   /**
    * 以同一份媒體重新開檔，用於 session 失效等錯誤之後的接續；`'ready'` 以後的任何狀態與 `'error'` 都可呼叫。
    * 保留位置（`'error'` 時取 `error.position`）、`paused`、軌道選擇、外掛音軌、各音軌 offset、音量與速度；
-   * track id 不變。重新開檔後軌道的組成（軌道數、各軌的 kind 與 codec，外掛音軌選用的音軌）與先前不同時 reject 致命的
-   * `EngineError('SOURCE_CHANGED')`，state 變為 `'error'`。外掛音軌也重新開檔，失敗時 reload 以該錯誤碼的致命
-   * `EngineError` reject（例如 `SOURCE_UNAUTHORIZED`），state 變為 `'error'`。
+   * track id 不變。重新開檔後軌道的組成（軌道數、各軌的 kind 與 codec）與先前不同時 reject 致命的
+   * `EngineError('SOURCE_CHANGED')`，state 變為 `'error'`。外掛音軌也重新開檔；開檔失敗或選用的音軌（codec、stream）與
+   * 先前不同時不影響 reload：發出非致命的 `error` 事件（開檔失敗的錯誤碼，例如 `SOURCE_UNAUTHORIZED`；組成不同時
+   * `SOURCE_CHANGED`；`detail.trackId` 是該軌），該軌從 `tracks` 移除，選用中時改選容器內的預設音軌（同
+   * `removeExternalAudio()`）。
    *
    * 執行期間 state 為 `'loading'`，`media`、`tracks`、`selectedTracks` 維持原狀，期間的 `seek()` 改寫起點；
    * resolve 時 state 同 `load()`：`paused` 時為 `'ready'`，否則為 `'playing'`。最近一次 `load()` 沒有完成就失敗時
@@ -312,9 +315,10 @@ export interface Engine extends EventTarget {
    * 同一 kind 連續呼叫只保留最後一個：較早的呼叫要改的 kind 都被較新的呼叫接手時，以 AbortError reject（執行中的也是）；
    * 還有自己負責的 kind 時照常執行，只套用那些 kind。選擇與目前生效的相同時立即 resolve。
    *
-   * 一個呼叫內的 kind 一起生效或一起不生效：選到 `supported: false` 的軌，或新軌 configure／首個 keyframe 失敗時，
-   * reject 非致命的 `EngineError('CODEC_UNSUPPORTED')` 並保留原本的軌；後者會把該軌改為 `supported: false` 並發出
-   * `trackschange`，換回原本的軌之後才 reject。id 不存在或不是該 kind 的軌時 reject `RangeError`。執行時沒有媒體
+   * 一個呼叫內的 kind 一起生效或一起不生效：選到 `supported: false` 的軌，或新的影片軌 configure／首個 keyframe 失敗、
+   * 新的音軌的 decoder 開不起來時，reject 非致命的 `EngineError('CODEC_UNSUPPORTED')` 並保留原本的軌；後兩者會把該軌改為
+   * `supported: false`（影片軌 `'platform'`，音軌 `'codec'`）並發出 `trackschange`，換回原本的軌之後才 reject。新的外掛
+   * 音軌在生效之前失敗時，以它的錯誤碼 reject 非致命的 `EngineError`，並把它從 `tracks` 移除（見 `addExternalAudio()`）。id 不存在或不是該 kind 的軌時 reject `RangeError`。執行時沒有媒體
    *（state 為 `'idle'` 或 `'error'`）則以 `DOMException`（name `'InvalidStateError'`）reject；loading 期間呼叫時等
    * load 完成才執行。
    */
@@ -332,6 +336,10 @@ export interface Engine extends EventTarget {
    *
    * 載入失敗時 reject 非致命的 `EngineError`（錯誤碼同 `load()`，例如 `SOURCE_NOT_FOUND`；來源沒有可播的音軌時
    * `CODEC_UNSUPPORTED`），主媒體繼續播放。
+   *
+   * 選用中的外掛音軌在播放中讀取、demux 或解碼失敗時也不影響主媒體：發出非致命的 `error` 事件（`detail.trackId` 是該軌），
+   * 它在失敗處以靜音接續，再與 `removeExternalAudio()` 一樣從 `tracks` 移除、切回容器內的預設音軌。不是標成
+   * `supported: false`：外掛音軌由 App 加入，失敗的來源留在 `tracks` 也無法再選用。
    * 每份媒體最多 4 條外掛音軌，超過時 reject 非致命的 `EngineError('MEMORY_LIMIT')`。
    * `options.offset` 不是有限數時 reject `TypeError`；執行時沒有媒體（state 為 `'idle'` 或 `'error'`）則以
    * `DOMException`（name `'InvalidStateError'`）reject；loading 期間呼叫時等 load 完成才執行。
@@ -357,8 +365,8 @@ export interface Engine extends EventTarget {
    * 每條音軌各自記住，之後選用該軌、seek 與 `reload()` 都沿用。改的是目前選中的軌時立即重新同步：從目前位置以新的
    * offset 重新供料，state 短暫進入 `'seeking'`（同 `seek()`，完成時發出 `seeked`），完成後 `tracks` 才是新值並發出
    * `trackschange`；其他軌立即更新並發出 `trackschange`。值與目前相同時什麼都不做。
-   * 容器內的音軌與影片軌在同一個 demuxer：offset 的絕對值很大時，封包佇列要多存這段時間的影片封包（或音訊封包），
-   * 超過硬上限時是致命的 `MEMORY_LIMIT`。
+   * 容器內的音軌平常與影片軌在同一個 demuxer；同時播放影片而 offset 的絕對值超過 2 秒時，該音軌改以同一個來源另開的
+   * libav instance demux（共用 Range 快取，`getStats().resources.libavInstances` 多一個），封包佇列不會因 offset 增長。
    *
    * `offset` 不是有限數時 reject `TypeError`；`trackId` 不是音軌時 reject `RangeError`；執行時沒有媒體則以
    * `DOMException`（name `'InvalidStateError'`）reject。
@@ -514,8 +522,8 @@ export interface TrackBase {
   /** WebCodecs 的 codec string（只有影片軌），例如 `'avc1.640028'`。 */
   codecString?: string;
   /**
-   * false 時無法選用，原因見 `unsupportedReason`。播放中發現實際無法解碼時（影片的 configure、首個 keyframe 失敗，
-   * 或播放中重新設定 decoder 之後仍然失敗）會改為 false 並發出 `trackschange`。
+   * false 時無法選用，原因見 `unsupportedReason`。播放中發現實際無法解碼時（換音軌時 decoder 開不起來，影片的
+   * configure、首個 keyframe 失敗，或播放中重新設定 decoder 之後仍然失敗）會改為 false 並發出 `trackschange`。
    */
   supported: boolean;
   /**
@@ -811,7 +819,8 @@ export interface EngineStats {
   wasmHeapBytes: number;
   /**
    * 存活中的資源數，用於診斷 leak：`destroy()` 後全為 0；換檔後 `workers` 為 1、
-   * `libavInstances` 等於來源數（主來源加外掛音軌）。`workers` 是建立之後還沒 terminate 的 media Worker 數；
+   * `libavInstances` 等於來源數（主來源加外掛音軌）。例外是播放影片時選用的容器內音軌 offset 超過 2 秒：那條音軌另開
+   * 一個 instance（見 `setAudioOffset()`），多一個。`workers` 是建立之後還沒 terminate 的 media Worker 數；
    * `openVideoFrames` 是還沒 close 的 `VideoFrame`（主執行緒畫面上與等待顯示的，加上 media Worker 內暫留的），
    * 播放影片時最多十幾張。
    */
