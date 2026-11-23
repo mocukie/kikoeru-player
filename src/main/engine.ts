@@ -1238,8 +1238,12 @@ class EngineImpl extends EventTarget implements Engine {
     const epoch = this.#epoch;
     this.#publishMedia(media, { ...this.#selected, audio: null });
     if (!same()) return;
-    // trackschange 的 listener 可能已經換軌或 seek（遞增了 epoch）：不再以舊選擇蓋掉新的輸出。
+    // trackschange 的 listener 可能已經換軌或 seek（遞增了 epoch）：換了音軌就不覆寫；只是 seek（仍輸出失敗的軌）
+    // 時補送 audio: null，避免 Worker 與 #audioTrackId 仍沿用失敗的軌。
     if (this.#epoch === epoch) this.#applySelection(switching ? switching.next : this.#selected);
+    else if (this.#audioTrackId === trackId) {
+      this.#applySelection({ ...this.#outputSelection(), audio: null });
+    }
     const engineError = fromWireError(error, {
       fatal: false,
       position: this.currentTime,

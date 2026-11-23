@@ -298,6 +298,27 @@ describe('probe 與選軌', () => {
     expect(driver.messages.some((m) => m.type === 'error' || m.type === 'crash')).toBe(false);
   });
 
+  test('主來源音軌 decoder 失敗後立刻收到 seek：不自行清除 #tracks.audio，新 epoch 仍回報 audiofailed', async () => {
+    const driver = await WorkerDriver.init(inPage());
+    await driver.load({
+      kind: 'bytes',
+      data: await mediaBytes('video/multi-track.mkv'),
+    });
+    // stream 0 是影片軌：當成音軌時 decoder 開不起來。
+    driver.post({ type: 'start', epoch: 1, time: 0, audio: 0, video: 0, subtitle: null });
+    expect(await driver.waitFor((m) => m.type === 'audiofailed' && m.epoch === 1)).toMatchObject({
+      source: null,
+      error: { code: 'CODEC_UNSUPPORTED', fatal: false },
+    });
+    // 主執行緒在收到 audiofailed(1) 前送出 seek(2)：Worker 應重試同一條音軌並回報 audiofailed(2)，不應靜默 eof。
+    driver.post({ type: 'seek', epoch: 2, time: 2 });
+    expect(await driver.waitFor((m) => m.type === 'audiofailed' && m.epoch === 2)).toMatchObject({
+      source: null,
+      error: { code: 'CODEC_UNSUPPORTED', fatal: false },
+    });
+    expect(driver.worklet.some((m) => m.type === 'eof' && m.epoch === 2)).toBe(false);
+  });
+
   test('容器的 start_time 換算到媒體時間軸：MP3 的第一個 sample 在 0', async () => {
     const { media, pcm } = await decodeFile('audio/mp3.mp3');
     expect(media).toMatchObject({ format: 'mp3', duration: 10 });

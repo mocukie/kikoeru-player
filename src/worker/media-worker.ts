@@ -589,9 +589,6 @@ export class MediaWorker {
     error: AudioDecoderError,
   ): void {
     this.#log.log('warn', 'audio', error.message, { epoch });
-    if (this.#tracks?.audio?.source === null) {
-      this.#tracks = { ...this.#tracks, audio: null };
-    }
     if (this.#output === output) {
       // 這個 epoch 的主來源輸出停止（含另開 instance 失敗時正在 demux 影片的 runMain）。
       this.#stopOutput();

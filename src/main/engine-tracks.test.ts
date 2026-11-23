@@ -705,6 +705,31 @@ describe('主來源音軌的 decoder 開不起來（不是換軌）', () => {
     expect(engine.selectedTracks).toEqual({ audio: id.audioZh, video: id.video1, subtitle: null });
   });
 
+  it('已經發布媒體之後、trackschange 的 listener 內 seek：從 seek 落點補送 audio: null，後續 setAudioOffset 不會重開失敗的軌', async () => {
+    const { engine, deps, worker } = await loaded();
+    const seeking: Promise<number>[] = [];
+    engine.addEventListener(
+      'trackschange',
+      () => {
+        seeking.push(engine.seek(5));
+      },
+      { once: true },
+    );
+    const [start] = worker.messages('start');
+    worker.reply({ type: 'audiofailed', epoch: start?.epoch ?? NaN, source: null, error: failure });
+    expect(worker.messages('seek')).toHaveLength(1);
+    expect(worker.messages('seek')[0]).toMatchObject({ time: 5 });
+    const select = await worker.next('select');
+    expect(select).toMatchObject({ audio: null, video: 1, time: 5 });
+    frame(worker, 5, select.epoch);
+    deps.audio.reply({ type: 'paused' });
+    expect(await seeking[0]).toBe(5);
+    expect(engine.selectedTracks).toEqual({ audio: null, video: id.video1, subtitle: null });
+    // #audioTrackId 已是 null：調整這條已失敗音軌的 offset 不應重新輸出它。
+    await engine.setAudioOffset(id.audioJa, 0.5);
+    expect(worker.messages('select')).toHaveLength(1);
+  });
+
   it('只換影片軌途中原本的音軌失敗：更新換軌中的選擇為 audio: null，保留新的影片軌', async () => {
     const { engine, deps, worker } = await loaded();
     const selecting = engine.selectTracks({ video: id.video2 });
