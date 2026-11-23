@@ -1,6 +1,6 @@
 {
   "name": "kikoeru-player",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "kikoeru 前端使用的 headless 播放引擎",
   "license": "MIT",
   "repository": {
